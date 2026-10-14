@@ -44,7 +44,8 @@ actually linked -- `lapack-mkl`, not a label chosen when the row was written.
 
 ## run.yaml
 
-Validated against `schemas/benchmark-run.schema.json` before it is written. It
+Validated against the run schema shipped by `campaign-toolkit`
+(`campaign_toolkit/schemas/benchmark-run.schema.json`) before it is written. It
 records:
 
 - the profile, suite, suite file and its hash, timestamp and the exact command;
@@ -143,7 +144,7 @@ changed after the measurement, so the two have to be compared by hand. "The whol
 declared spec for that arm" is the two faer rows the declaration names plus that
 arm's own LAPACK row: vendor arms are mutually exclusive binaries, so no single
 run could measure two of them, and measuring the projection is what makes a vendor
-cell full instead of partial for ever. `scripts/campaign.py` holds that
+cell full instead of partial for ever. `campaign_toolkit/campaign.py` holds that
 projection, and the recorder and the validator both call it, so the two cannot
 disagree about what coverage means. A partial or declaration-changed page never
 displaces a full-coverage one, and `publish_report.py` checks that the page

@@ -59,6 +59,26 @@ and distinct crate identities even though both declare `[lib] name = "faer"`. Th
 two vendor arms cannot share a process (they own the same symbols), so a vendor
 arm is its own build, its own run and its own page.
 
+## Tooling
+
+The seven `scripts/*.py` entry points are thin shims over
+[`campaign-toolkit`](https://github.com/tensor4all/campaign-toolkit), the shared
+package the campaigns now have in common. `requirements.txt` pins it by git
+revision; `benchmarks/campaign.yaml` is this campaign's descriptor, naming the
+measured fork, the upstream baseline, the two vendor arms, the `order` case axis
+and every other value the toolkit needs. The `schemas/` copies are gone: the
+toolkit supplies them.
+
+`scripts/setup_extern_deps.sh` materialises `extern/t4a-faer` and
+`extern/upstream-faer` from the pins, which is what `gen_index.py --check` needs to
+say whether a recorded page is current.
+
+For local development, install the toolkit from a checkout instead of from git:
+
+```bash
+pip install -e ../campaign-toolkit
+```
+
 ## What this repository is not
 
 It is not the fork's per-PR gate; the fork's CI is a build, and this repository
