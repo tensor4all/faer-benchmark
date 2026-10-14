@@ -127,7 +127,26 @@ case "$VENDOR" in
     # `DYNAMIC_ARCH=1` compiles several cores and dispatches on CPUID with the required features
     # checked per core; on this host that dispatcher still selects COOPERLAKE, and the manifest
     # records the kernel it dispatched to.
-    VENDOR_BUILD_ENV="OPENBLAS_DYNAMIC_ARCH=1"
+    #
+    # OpenBLAS's LAPACK is Fortran, so the build needs a Fortran compiler, and which one built
+    # the vendor library is part of its identity. `gfortran` is the first choice; where it is not
+    # installed the oneAPI Fortran compiler is, at a versioned path, and OpenBLAS builds against
+    # Intel Fortran as well. Whichever is used is put on `PATH` for the build and recorded in
+    # `BUILD_ENV`, because a page that names a vendor library has to say what compiled it.
+    if command -v gfortran >/dev/null; then
+      OPENBLAS_FC="$(command -v gfortran)"
+    else
+      OPENBLAS_FC="$(newest_dir "/opt/intel/oneapi/compiler/*/bin/ifx")"
+      [[ -n "$OPENBLAS_FC" ]] || {
+        echo "ERROR: no Fortran compiler for the OpenBLAS source build: neither gfortran nor" \
+             "oneAPI ifx was found; install one or record the MKL arm only" >&2; exit 1; }
+    fi
+    export FC="$OPENBLAS_FC"
+    # `FC` alone is not enough for an Intel front end: OpenBLAS's own Makefile picks its
+    # `F_COMPILER` from `FC`'s basename, and the oneAPI runtime has to be reachable at run time
+    # for the build's own test programs.
+    OPENBLAS_FC="$(readlink -f "$OPENBLAS_FC")"
+    VENDOR_BUILD_ENV="OPENBLAS_DYNAMIC_ARCH=1 FC=$OPENBLAS_FC"
     ;;
   mkl)
     FEATURES="fbench/link-mkl"
