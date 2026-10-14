@@ -300,8 +300,15 @@ macro_rules! define_backend {
                             let qr = mref(a0, s.m, s.n, s.order).qr();
                             let recon = to_layout(qr.reconstruct().as_ref(), s.m, s.n, s.order);
                             within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "qr_factor")?;
-                            let q = to_layout(qr.compute_Q().as_ref(), s.m, s.m, s.order);
-                            within::<T>(gram_residual(&q, s.m, s.m, s.order), 1.0, s.m, "qr Q")?;
+                            // Only the first `size` columns of Q enter A = QR; the
+                            // remaining columns of the full Q are an arbitrary unitary
+                            // completion that the reconstruction above never touches, so
+                            // orthonormality of the compact Q is the factorization's own
+                            // acceptance criterion. Checking the full Q costs O(m^2 size)
+                            // to form and O(m^3) to reduce here, which is what made a
+                            // 4096x256 verify run for minutes.
+                            let q = to_layout(qr.compute_thin_Q().as_ref(), s.m, s.size, s.order);
+                            within::<T>(gram_residual(&q, s.m, s.size, s.order), 1.0, s.m, "qr Q")?;
                         }
                         Ok(())
                     },
@@ -356,8 +363,12 @@ macro_rules! define_backend {
                             let qr = mref(a0, s.m, s.n, s.order).qr();
                             let recon = to_layout(qr.reconstruct().as_ref(), s.m, s.n, s.order);
                             within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "qr")?;
-                            let q = to_layout(qr.compute_Q().as_ref(), s.m, s.m, s.order);
-                            within::<T>(gram_residual(&q, s.m, s.m, s.order), 1.0, s.m, "qr Q")?;
+                            // Same acceptance criterion as `qr_factor`: the compact Q is
+                            // the factor that multiplies R, and the full Q's remaining
+                            // columns are an arbitrary completion.
+                            let size = s.m.min(s.n);
+                            let q = to_layout(qr.compute_thin_Q().as_ref(), s.m, size, s.order);
+                            within::<T>(gram_residual(&q, s.m, size, s.order), 1.0, s.m, "qr Q")?;
                         }
                         Ok(())
                     },
