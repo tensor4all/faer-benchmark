@@ -42,6 +42,32 @@ and its own vendor identity. The vendor is in the page name because it is part o
 what was measured, and the engine rows are named after the vendor the binary
 actually linked -- `lapack-mkl`, not a label chosen when the row was written.
 
+## What a vendor arm needs at build time
+
+An arm is one build into one target directory, and the build environment is part of
+the arm's identity because it decides what the vendor library actually is:
+
+- **MKL** is linked from the installed tree, named by versioned path (`MKLROOT`) and
+  with its threading runtime named explicitly (`MKL_THREADING_LIB`). A moving
+  `latest` symlink records nothing a reader can act on, so the script resolves both
+  through `pwd -P` / `readlink -f`.
+- **OpenBLAS** is built from source, and its LAPACK is Fortran, so the build needs a
+  Fortran compiler. The script takes `gfortran` when it is on `PATH` and otherwise
+  the oneAPI Fortran compiler that ships with the installed compiler
+  (`/opt/intel/oneapi/compiler/<version>/bin/ifx`, resolved through `readlink -f`),
+  which OpenBLAS builds against as `F_COMPILER=INTEL`. Whichever is used is exported
+  for the build and recorded in the manifest's build environment as `FC=<path>`,
+  because a page that names a vendor library has to say what compiled it. Neither
+  present is a loud error rather than a build that silently produces a BLAS-only
+  library — the vendor rows need LAPACK.
+- `OPENBLAS_DYNAMIC_ARCH=1` is declared rather than inherited: without it the
+  from-source build guesses a target from the build host, and a guessed target is not
+  one the run-time CPU is obliged to execute.
+
+The arm's own account of what it linked — version, configuration, threading
+implementation, and the kernel its runtime dispatched to where the library reports
+one — is what the page prints and what `validate_run.py` refuses a vendor arm without.
+
 ## run.yaml
 
 Validated against the run schema shipped by `campaign-toolkit`
