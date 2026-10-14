@@ -2,6 +2,20 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-14 — the MKL `qr`/`qr_factor` wide shapes asked `orgqr` for too many columns
+
+With the QR cost fixed, the first full-declaration verify reached `linalg-wide`
+and stopped there: the `lapack-mkl` row's `qr_factor` and `qr` returned
+`orgqr returned -3` for `64x1024` and `256x4096` (both orders, both dtypes; 16
+`MISMATCH` lines). The guard log carried `Intel oneMKL INTERNAL ERROR: Condition
+-2 detected in function DORGQR`. The vendor op called `dorgqr(m, n, k, ...)` with
+`s.n` the matrix width; when `m < n` that asks Q for more columns than it has
+(Q is `m x min(m, n)`) and LAPACK rejects the call. It now asks for
+`r = min(m, n)` columns, which is exactly the `m x r` Q the check consumes; the
+buffer keeps its `m x n` leading dimension, so tall and square shapes are
+unchanged. After: the wide population verifies clean, `all comparisons within
+tolerance`.
+
 ## 2026-10-14 — `qr_factor`/`qr` verify: the full-`Q` orthonormality check is O(m^3)
 
 **What was observed.** The MKL arm's first full-declaration verify sat on one
