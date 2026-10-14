@@ -1,0 +1,416 @@
+schema_version: 1
+target_profile: zen5-cpu
+suite_id: faer-kernels
+suite_file: benchmarks/suites/faer-kernels.yaml
+suite_sha256: c98f91f069b1a8b04ff6a880e60b01ae77151fda00b0e37c2489ae68092cfd6d
+timestamp: '2026-10-14T07:22:30.244909Z'
+command: scripts/record_run.py zen5-cpu faer-kernels --checkout /tmp/fork-rec --upstream
+  /tmp/upstream-rec --vendor mkl --label first-page-mkl
+library:
+  url: https://github.com/tensor4all/faer
+  commit: bfe4041cd9918815e3b3f766ac0332b792badb7d
+  dirty: false
+  features:
+  - fbench/link-mkl
+  measured_path: /tmp/fork-rec
+  version: 0.24.4
+upstream:
+  url: https://codeberg.org/sarah-quinones/faer
+  commit: 0539947ffb757a739d7e703a7d2fa0c792a909c1
+  version: 0.24.4
+  ref: faer-v0.24.4
+  dirty: false
+  measured_path: /tmp/upstream-rec
+vendor:
+  name: mkl
+  linkage: shared
+  version: '2026.1'
+  config: null
+  corename: null
+  parallel: null
+  procs: null
+  build_env: MKLROOT=/opt/intel/oneapi/mkl/2026.1 MKL_THREADING_LIB=/opt/intel/oneapi/compiler/2026.1/lib/libiomp5.so
+harness:
+  commit: ca0ca08d41c78328b97aad2b8d7d3a89c773e2e8
+  dirty: false
+host:
+  hostname: shinaoka-EVO-X1Pro
+  cpu: AMD Ryzen AI 9 HX 470
+  os: Linux 7.0.0-38-generic
+  arch: x86_64
+  logical_cpus: 24
+  l3: 24 MiB (2 instances)
+  l3_domains: '0-3: 16 MiB shared; 4-11: 8 MiB shared'
+  notes: 'AMD Ryzen AI 9 HX 470 (Zen5 mobile APU), 12 physical / 24 logical cores.
+    Heterogeneous L3: CPUs 0-3 share 16 MiB, CPUs 4-11 share 8 MiB, so a thread set
+    must be stated together with the domain it sits in. SMT siblings of CPUs 4-11
+    are 16-23; the idle gate checks them too, because a busy sibling contends with
+    the physical core being measured.'
+threads:
+  counts:
+  - 1
+  - 4
+  - 8
+  cpu_sets:
+    '1': '4'
+    '4': 4-7
+    '8': 4-11
+  env:
+    OPENBLAS_NUM_THREADS: null
+    MKL_NUM_THREADS: null
+    MKL_DOMAIN_NUM_THREADS: null
+    MKL_INTERFACE_LAYER: null
+    MKL_THREADING_LAYER: null
+    MKL_DYNAMIC: null
+    MKL_ENABLE_INSTRUCTIONS: null
+    MKL_CBWR: null
+    OMP_NUM_THREADS: null
+    OMP_THREAD_LIMIT: null
+    OMP_PROC_BIND: null
+    OMP_PLACES: null
+    KMP_AFFINITY: null
+    GOMP_CPU_AFFINITY: null
+    RAYON_NUM_THREADS: null
+  note: the vendor's budget is set by the harness from the row's thread count and
+    read back before each measurement; these variables were removed from the measured
+    process's environment so it cannot inherit a different one
+timing_policy:
+  version: 1
+  minimum_untimed_priming_ms: 500
+  statistic: best
+  repetitions: 5
+  notes: 'priming is time-based, not a call count: after an idle gate this host reads
+    low for the first second or two of sustained work'
+guards:
+  idle_window_seconds: 3
+  max_busy_percent: 5.0
+  attempts: 6
+  sibling_aware: true
+  logs:
+  - run0-gemm-large-1t.guard
+  - run0-gemm-large-4t.guard
+  - run0-gemm-large-8t.guard
+  - run0-gemm-medium-1t.guard
+  - run0-gemm-medium-4t.guard
+  - run0-gemm-medium-8t.guard
+  - run0-gemm-small-1t.guard
+  - run0-gemm-small-4t.guard
+  - run0-gemm-small-8t.guard
+  - run0-gemm-tall-1t.guard
+  - run0-gemm-tall-4t.guard
+  - run0-gemm-tall-8t.guard
+  - run0-gemm-wide-1t.guard
+  - run0-gemm-wide-4t.guard
+  - run0-gemm-wide-8t.guard
+  - run0-linalg-large-1t.guard
+  - run0-linalg-large-4t.guard
+  - run0-linalg-large-8t.guard
+  - run0-linalg-medium-1t.guard
+  - run0-linalg-medium-4t.guard
+  - run0-linalg-medium-8t.guard
+  - run0-linalg-small-1t.guard
+  - run0-linalg-small-4t.guard
+  - run0-linalg-small-8t.guard
+  - run0-linalg-tall-1t.guard
+  - run0-linalg-tall-4t.guard
+  - run0-linalg-tall-8t.guard
+  - run0-linalg-wide-1t.guard
+  - run0-linalg-wide-4t.guard
+  - run0-linalg-wide-8t.guard
+  - verify-gemm-large-1t.guard
+  - verify-gemm-large-4t.guard
+  - verify-gemm-large-8t.guard
+  - verify-gemm-medium-1t.guard
+  - verify-gemm-medium-4t.guard
+  - verify-gemm-medium-8t.guard
+  - verify-gemm-small-1t.guard
+  - verify-gemm-small-4t.guard
+  - verify-gemm-small-8t.guard
+  - verify-gemm-tall-1t.guard
+  - verify-gemm-tall-4t.guard
+  - verify-gemm-tall-8t.guard
+  - verify-gemm-wide-1t.guard
+  - verify-gemm-wide-4t.guard
+  - verify-gemm-wide-8t.guard
+  - verify-linalg-large-1t.guard
+  - verify-linalg-large-4t.guard
+  - verify-linalg-large-8t.guard
+  - verify-linalg-medium-1t.guard
+  - verify-linalg-medium-4t.guard
+  - verify-linalg-medium-8t.guard
+  - verify-linalg-small-1t.guard
+  - verify-linalg-small-4t.guard
+  - verify-linalg-small-8t.guard
+  - verify-linalg-tall-1t.guard
+  - verify-linalg-tall-4t.guard
+  - verify-linalg-tall-8t.guard
+  - verify-linalg-wide-1t.guard
+  - verify-linalg-wide-4t.guard
+  - verify-linalg-wide-8t.guard
+providers:
+- name: faer-fork
+  version: null
+  commit: null
+  path: null
+  note: the provider in the measured revision; see library and upstream above
+- name: faer-upstream
+  version: null
+  commit: null
+  path: null
+  note: the provider in the measured revision; see library and upstream above
+- name: mkl
+  version: '2026.1'
+  commit: null
+  path: null
+  note: linked shared, kernel not reported by the vendor
+invalidated_by:
+- faer/src/**
+- faer-traits/src/**
+- faer-macros/src/**
+- Cargo.toml
+- Cargo.lock
+result_files:
+- run0-gemm-small-1t.csv
+- run0-gemm-small-4t.csv
+- run0-gemm-small-8t.csv
+- run0-gemm-medium-1t.csv
+- run0-gemm-medium-4t.csv
+- run0-gemm-medium-8t.csv
+- run0-gemm-large-1t.csv
+- run0-gemm-large-4t.csv
+- run0-gemm-large-8t.csv
+- run0-gemm-tall-1t.csv
+- run0-gemm-tall-4t.csv
+- run0-gemm-tall-8t.csv
+- run0-gemm-wide-1t.csv
+- run0-gemm-wide-4t.csv
+- run0-gemm-wide-8t.csv
+- run0-linalg-small-1t.csv
+- run0-linalg-small-4t.csv
+- run0-linalg-small-8t.csv
+- run0-linalg-medium-1t.csv
+- run0-linalg-medium-4t.csv
+- run0-linalg-medium-8t.csv
+- run0-linalg-large-1t.csv
+- run0-linalg-large-4t.csv
+- run0-linalg-large-8t.csv
+- run0-linalg-tall-1t.csv
+- run0-linalg-tall-4t.csv
+- run0-linalg-tall-8t.csv
+- run0-linalg-wide-1t.csv
+- run0-linalg-wide-4t.csv
+- run0-linalg-wide-8t.csv
+run_spec:
+  populations:
+  - regime: gemm-small
+    families:
+    - gemm
+    n:
+    - 4x4x4
+    - 8x8x8
+    - 16x16x16
+    - 32x32x32
+    - 64x64x64
+    batch:
+    - 1
+  - regime: gemm-medium
+    families:
+    - gemm
+    n:
+    - 256x256x256
+    batch:
+    - 1
+  - regime: gemm-large
+    families:
+    - gemm
+    n:
+    - 512x512x512
+    batch:
+    - 1
+  - regime: gemm-tall
+    families:
+    - gemm
+    n:
+    - 4096x64x64
+    - 16x4096x240
+    - 4096x16x240
+    batch:
+    - 1
+  - regime: gemm-wide
+    families:
+    - gemm
+    n:
+    - 64x64x4096
+    batch:
+    - 1
+  - regime: linalg-small
+    families:
+    - lu
+    - full_piv_lu
+    - cholesky
+    - triangular_solve
+    - solve
+    - qr_factor
+    - qr
+    - svd_values
+    - svd_thin
+    - eigh
+    - eig
+    - upgrade_factor
+    - householder_apply
+    n:
+    - '4'
+    - '8'
+    - '16'
+    - '32'
+    - '64'
+    batch:
+    - 1
+    skipped:
+    - eig/16
+    - eig/32
+    - eig/4
+    - eig/64
+    - eig/8
+    - full_piv_lu/16
+    - full_piv_lu/32
+    - full_piv_lu/4
+    - full_piv_lu/64
+    - full_piv_lu/8
+    - householder_apply/16
+    - householder_apply/32
+    - householder_apply/4
+    - householder_apply/64
+    - householder_apply/8
+    - triangular_solve/16
+    - triangular_solve/32
+    - triangular_solve/4
+    - triangular_solve/64
+    - triangular_solve/8
+    - upgrade_factor/16
+    - upgrade_factor/32
+    - upgrade_factor/4
+    - upgrade_factor/64
+    - upgrade_factor/8
+  - regime: linalg-medium
+    families:
+    - lu
+    - full_piv_lu
+    - cholesky
+    - triangular_solve
+    - solve
+    - qr_factor
+    - qr
+    - svd_values
+    - svd_thin
+    - eigh
+    - eig
+    - upgrade_factor
+    - householder_apply
+    n:
+    - '256'
+    batch:
+    - 1
+    skipped:
+    - eig/256
+    - full_piv_lu/256
+    - householder_apply/256
+    - triangular_solve/256
+    - upgrade_factor/256
+  - regime: linalg-large
+    families:
+    - lu
+    - full_piv_lu
+    - cholesky
+    - triangular_solve
+    - solve
+    - qr_factor
+    - qr
+    - svd_values
+    - svd_thin
+    - eigh
+    n:
+    - '512'
+    batch:
+    - 1
+    skipped:
+    - full_piv_lu/512
+    - triangular_solve/512
+  - regime: linalg-tall
+    families:
+    - lu
+    - full_piv_lu
+    - cholesky
+    - triangular_solve
+    - solve
+    - qr_factor
+    - qr
+    - svd_values
+    - svd_thin
+    - eigh
+    - upgrade_factor
+    - householder_apply
+    n:
+    - 1024x64
+    - 4096x256
+    batch:
+    - 1
+    skipped:
+    - cholesky/1024x64
+    - cholesky/4096x256
+    - eigh/1024x64
+    - eigh/4096x256
+    - full_piv_lu/1024x64
+    - full_piv_lu/4096x256
+    - householder_apply/1024x64
+    - householder_apply/4096x256
+    - lu/1024x64
+    - lu/4096x256
+    - solve/1024x64
+    - solve/4096x256
+    - triangular_solve/1024x64
+    - triangular_solve/4096x256
+    - upgrade_factor/1024x64
+    - upgrade_factor/4096x256
+  - regime: linalg-wide
+    families:
+    - lu
+    - full_piv_lu
+    - cholesky
+    - triangular_solve
+    - solve
+    - qr_factor
+    - qr
+    - svd_values
+    - svd_thin
+    - eigh
+    n:
+    - 64x1024
+    - 256x4096
+    batch:
+    - 1
+    skipped:
+    - cholesky/256x4096
+    - cholesky/64x1024
+    - eigh/256x4096
+    - eigh/64x1024
+    - full_piv_lu/256x4096
+    - full_piv_lu/64x1024
+    - lu/256x4096
+    - lu/64x1024
+    - solve/256x4096
+    - solve/64x1024
+    - triangular_solve/256x4096
+    - triangular_solve/64x1024
+  dtypes:
+  - f64
+  - c64
+  order:
+  - c
+  - f
+  engines:
+  - faer-fork
+  - faer-upstream
+  - lapack-mkl
+  aa: 1
+  covers_declared_suite: true
