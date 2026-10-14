@@ -146,7 +146,15 @@ case "$VENDOR" in
     # `F_COMPILER` from `FC`'s basename, and the oneAPI runtime has to be reachable at run time
     # for the build's own test programs.
     OPENBLAS_FC="$(readlink -f "$OPENBLAS_FC")"
-    VENDOR_BUILD_ENV="OPENBLAS_DYNAMIC_ARCH=1 FC=$OPENBLAS_FC"
+    # The build runs OpenBLAS's own test programs, and the Fortran runtime they link is loaded
+    # dynamically: without the directory it lives in on the loader path they die with
+    # "error while loading shared libraries: libimf.so" and the build is reported as failed
+    # *after* it has compiled the whole library. The loader path is recorded beside the compiler
+    # for the same reason the compiler is: that pair is what the vendor library's LAPACK was
+    # built and checked with.
+    OPENBLAS_FC_LIB="$(cd "$(dirname "$OPENBLAS_FC")/../lib" && pwd -P)"
+    export LD_LIBRARY_PATH="$OPENBLAS_FC_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    VENDOR_BUILD_ENV="OPENBLAS_DYNAMIC_ARCH=1 FC=$OPENBLAS_FC LD_LIBRARY_PATH=$OPENBLAS_FC_LIB"
     ;;
   mkl)
     FEATURES="fbench/link-mkl"
