@@ -1,21 +1,24 @@
-# Placeholder manifest for the measurement harness `fbench`. The harness author
-# owns this crate: `info`, `verify` and `run`, with the flags --threads --n
-# --batch --dtype --family --regime --reps --prime-ms --csv, plus a path-based
-# link to a faer checkout. It is deliberately *not* written here and there is no
-# `src/`, so the real manifest replaces this file wholesale.
+# Measurement harness `fbench`.
 #
-# The two faer dependencies will be declared as registry dependencies and patched
-# to the checkouts `scripts/build_for_faer_rev.sh` is given (see the "path
-# injection" section there): the fork is package `t4a-faer` and the baseline is
-# package `faer`, and both declare `[lib] name = "faer"` while remaining distinct
-# dependency keys -- `faer_fork = { package = "t4a-faer" }` and
-# `faer_upstream = { package = "faer" }` -- and therefore distinct Rust crate
-# identities. Their `Mat`, `Par` and trait types are not interchangeable, so every
-# adapter is written per arm.
+# The harness owns `info`, `verify` and `run` over the faer entry points the
+# suite declares, with the flags the recorder calls it with: --threads --n
+# --batch --dtype --family --regime --reps --prime-ms --csv.
 #
-# The features below are the vendor-arm contract the build script selects
-# (`--features fbench/link-openblas` or `fbench/link-mkl`): one binary links one
-# vendor library, so an arm is its own build.
+# The two faer libraries are linked *by path*: `scripts/build_for_faer_rev.sh`
+# patches the registry entries below to the checkouts it is given. They are
+# ordinary registry dependencies here, named `t4a-faer` (the fork, the measured
+# library) and `faer` (upstream, the baseline), so a `cargo build` resolves them
+# from crates.io unless the build script patches them. Both declare `[lib] name =
+# "faer"` but they are distinct dependency keys and therefore distinct Rust crate
+# identities; their `Mat`, `Par` and trait types are not interchangeable, so the
+# adapter in `src/backend.rs` is a macro expanded once per crate.
+#
+# One binary links one vendor library -- MKL and OpenBLAS define the same
+# symbols -- so an arm is its own build and its own feature. `link-openblas`
+# links OpenBLAS statically (`openblas-src/static`) so the recorder can execute
+# the binary directly with no loader search path; `link-mkl` links the installed
+# Intel oneAPI MKL, whose versioned paths the build script resolves and exports
+# as `MKLROOT`/`MKL_THREADING_LIB`.
 [package]
 name = "fbench"
 version = "0.1.0"
@@ -23,5 +26,34 @@ edition = "2021"
 publish = false
 
 [features]
-link-openblas = []
-link-mkl = []
+default = []
+link-openblas = [
+    "dep:blas-src",
+    "dep:lapack-src",
+    "dep:openblas-src",
+    "blas-src/openblas",
+    "lapack-src/openblas",
+    "openblas-src/static",
+]
+link-mkl = [
+    "dep:blas-src",
+    "dep:lapack-src",
+    "blas-src/intel-mkl-dynamic-parallel",
+    "lapack-src/intel-mkl-dynamic-parallel",
+]
+
+[dependencies]
+faer_fork = { package = "t4a-faer", version = "0.24", default-features = false, features = ["std", "rayon"] }
+faer_upstream = { package = "faer", version = "0.24", default-features = false, features = ["std", "rayon"] }
+# The complex scalar type the two faer crates also re-export. Declared directly so
+# the provider-independent reference math in `src/shared.rs` does not have to name
+# one of the two faer crates.
+num-complex = { version = "0.4", default-features = false, features = ["std"] }
+
+# The vendor source crates only emit the native link flags; the harness declares
+# the CBLAS/LAPACKE symbols it calls itself (see `src/lapack.rs`). `blas-src` and
+# `lapack-src` mirror each other's backend features, and `openblas-src` is named
+# directly only to reach its `static` feature.
+blas-src = { version = "0.14", default-features = false, optional = true }
+lapack-src = { version = "0.13", default-features = false, optional = true }
+openblas-src = { version = "0.10", optional = true }

@@ -2,6 +2,130 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-14 — `fbench` lands: `info`, `verify`, `run`, with a measured subset
+
+**What is implemented.** The harness crate `fbench` replaces the placeholder
+manifest: `Cargo.toml` (two crates-io faer dependencies named `faer_fork =
+{ package = "t4a-faer" }` and `faer_upstream = { package = "faer" }`, plus the
+`link-openblas`/`link-mkl` vendor features), `build.rs`, and `src/` split into
+`main.rs` (CLI, CSV writer), `shared.rs` (scalar trait, layout-aware reference
+math), `op.rs` (prepare/run/check closures), `timing.rs` (wall-clock priming,
+best of `reps`), `vendor.rs` (the linked vendor's identity and thread budget),
+`backend.rs` (a macro expanded once per faer crate so the same family logic runs
+against both, whose `Mat`/`Par`/trait types are not interchangeable), and
+`lapack.rs` (the hand-written CBLAS/LAPACKE `extern "C"` bindings).
+
+`fbench info` prints `vendor.name`/`vendor.linkage` and, per arm, the fields the
+library reports: OpenBLAS gets `version`, `config`, `corename`, `parallel`,
+`procs`; MKL gets only `version` (2026.1), because it reports no kernel and no
+processor count. `fbench verify` checks each provider against its own contract
+with provider-independent reference math (residuals, orthonormality, the
+Frobenius norm identity, no NaN), never one provider against another, and ends
+with exactly `all comparisons within tolerance`; every failure prints `MISMATCH`
+and exits non-zero. `fbench run` writes the nine-declared-column CSV, one row per
+`(case, order, arm)`, with `order` measured as an axis and `k` empty for every
+non-`gemm` family.
+
+**Families measured.** The faer arms implement `gemm`, `qr_factor`, `qr`, `lu`,
+`cholesky`, `solve`, `triangular_solve`, `svd_values`, `svd_thin`, `eigh`,
+`full_piv_lu` and `householder_apply`. The vendor arm implements `gemm`,
+`qr_factor`, `qr`, `lu`, `cholesky`, `solve`, `svd_values`, `svd_thin` and `eigh`.
+
+**Deliberately not implemented, and recorded as `skipped`.** `upgrade_factor`
+(no faer or LAPACK route written yet: a valid blocked-tau layout has to be built
+by hand to measure and check it honestly) and `eig` (the non-symmetric solver is
+outside this first version). The vendor arm has no route for
+`triangular_solve`, `full_piv_lu` or `householder_apply`. A family a provider
+cannot take is written with `status=skipped` and a truthful note; a number is
+never fabricated for it.
+
+**Two vendor-arm details this host forced.** (1) `mkl_set_num_threads` and
+`mkl_set_num_threads_local` segfault in this MKL 2026.1 install before any
+computational call — reproduced with a plain C program linked
+the same way — so the budget is set through the Intel OpenMP layer MKL is linked
+against (`omp_set_num_threads`) and read back with `mkl_get_max_threads`. (2)
+`intel-mkl-src` emits `-L`/`-l` but no rpath, and the linker's `--as-needed`
+default drops `mkl_intel_thread`, `mkl_core` and `iomp5` (the harness's own
+undefined symbols are all in `mkl_intel_lp64`), so `build.rs` records the
+versioned directories as rpath and forces the chain back in after
+`--no-as-needed`. Without either the recorder could not execute the binary with
+no loader path.
+
+**Acceptance, actually run on this host** (fork `22f23cfd4238`, upstream
+`ddbd2ae52808`, `AMD Ryzen AI 9 HX 470`, MKL 2026.1):
+
+1. `scripts/build_for_faer_rev.sh --checkout /home/shinaoka/projects/tensor4all/faer
+   --upstream /tmp/faer-rs --vendor mkl --out /tmp/fbench-mkl.env --bin fbench` →
+   `built fbench for fork 22f23cfd42383fe8d9d2f5816ea49e045f0d0ef5 and upstream
+   ddbd2ae5280825fe97f86735618fed2f6f4eb0b3 (dirty=false/false) in
+   .../target/faer-rev/22f23cfd4238-mkl/release`.
+2. `fbench info` → `vendor.name=mkl`, `vendor.linkage=shared`,
+   `vendor.version=2026.1`, `harness.name=fbench`, `host.logical_cpus=24`.
+3. `fbench verify --threads 1 --n 128,256 --batch 1 --dtype f64,c64 --family
+   gemm,qr_factor,qr,lu,cholesky,svd_values,svd_thin,eigh,householder_apply,upgrade_factor`
+   → 241 lines, 32 `skip`, 0 `MISMATCH`, last line exactly
+   `all comparisons within tolerance`, exit 0 (4.5 s).
+4. `fbench run --threads 1 --n 128 --batch 1 --dtype f64,c64 --family
+   gemm,qr_factor,qr,lu,cholesky,svd_values,eigh --regime medium --reps 3
+   --prime-ms 200 --csv /tmp/fbench.csv` → header
+   `regime,family,dtype,order,m,n,k,batch,row,threads,total_ms,per_item_us,status,note`;
+   e.g. `medium,gemm,f64,c,128,128,128,1,faer-fork,1,0.073217,73.217000,ok,`,
+   `medium,qr_factor,f64,c,128,128,,1,lapack-mkl,1,0.140044,140.044000,ok,`,
+   `medium,eigh,c64,f,128,128,,1,faer-upstream,1,...,ok,`; all seven families
+   present; 84 rows, all `ok`.
+5. `python3 -c "import csv;r=list(csv.DictReader(open('/tmp/fbench.csv')));print(len(r))"`
+   → `84`; the reader reports exactly the 14 declared columns and no non-numeric
+   `total_ms` on any non-`skipped` row. A second run with `--family
+   lu,upgrade_factor,svd_values` shows the `skipped` path: `upgrade_factor` is
+   written for all three arms with `status=skipped` and an empty `total_ms`.
+6. `cargo fmt --all -- --check` inside `fbench/` is clean. From the repository
+   root, `cargo clippy -p fbench --features fbench/link-mkl --config
+   patch.crates-io.t4a-faer.path=... --config patch.crates-io.faer.path=... -- -D
+   warnings` is clean for `fbench` (exit 0). The only warnings in the build are
+   pre-existing ones in the two measured crates themselves: `unused import:
+   crate::prelude::*` in each `src/io.rs`, and the never-read `re`/`im` fields of
+   `ComplexDistribution` in each `src/stats/mod.rs` (2 per crate).
+7. End-to-end recorder, exactly as written in the task:
+   `python3 scripts/record_run.py zen5-cpu faer-kernels --checkout
+   /home/shinaoka/projects/tensor4all/faer --upstream /tmp/faer-rs --vendor mkl
+   --regimes medium --threads 1 --families gemm,qr_factor --dtypes f64 --reps 3
+   --prime-ms 200` **fails before any measurement**, verbatim:
+
+   ```
+   FAIL .../data/results/zen5-cpu/faer-kernels/20261014T022823Z/run.yaml
+     schema: $.run_spec.populations: [] is too short
+
+   ERROR: run.yaml does not validate; nothing published
+   ```
+
+   The cause is the flag, not the harness: the suite's populations are labelled
+   `gemm-medium` and `linalg-medium`, so `--regimes medium` selects no
+   population and `record_run.py` records an empty `run_spec`. With the labels
+   the suite actually declares, the same pipeline completes:
+   `--regimes gemm-medium,linalg-medium --families gemm,qr_factor` → `ok
+   .../run.yaml` from `validate_run.py`, `wrote .../report.md from 12 rows`,
+   `published result/zen5-cpu/faer-kernels/22f23cfd4238-ddbd2ae52808-mkl.md
+   (coverage=partial)`, `wrote result/INDEX.md`. That is a `medium`-regime run
+   covering `gemm` and `qr_factor` at 1T; it is a scan, not an A/A comparison.
+   Its `data/results/` and `result/` artifacts were **not committed**: this
+   repository's CI validates every committed `run.yaml` by resolving its library
+   commits in `extern/` checkouts, which CI does not clone, so committing a
+   manifest measured from `/home/...` and `/tmp/...` would redden the required
+   `index` job. The run is reported here and can be re-recorded on the measuring
+   host.
+
+**Known gaps.** `upgrade_factor` and `eig`; a vendor route for
+`triangular_solve`/`full_piv_lu`/`householder_apply`; `householder_apply` is a
+single timed row (the block apply) with the sequence form verified against it,
+not a second timed row, because the CSV has no sub-family column and two rows
+under one `(family, shape, arm)` key would be merged by the report; `f32`/`c32`
+are not accepted; and the harness commit still has no pin of its own, as the
+skeleton entry notes. The OpenBLAS arm was **compile-checked, not measured**:
+`cargo check -p fbench --features fbench/link-openblas` (with the two `--config
+patch...` arguments, `OPENBLAS_DYNAMIC_ARCH=1`) built `openblas-src` from source
+and finished in 2 m 46 s with 0 errors, so the feature compiles, but no OpenBLAS
+number was taken and no `openblas` run was recorded.
+
 ## 2026-10-14 — the repository is created, skeleton only, no run recorded yet
 
 **Scope.** A campaign for the tensor4all faer fork at faer's own API, on the model
