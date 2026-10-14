@@ -2,6 +2,30 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-14 — the campaign's first page is recorded
+
+With both harness fixes in place the MKL arm's whole declaration built, verified,
+timed and published:
+
+- page: `result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md`
+- harness `ca0ca08`, fork `bfe4041`, upstream `faer-v0.24.4`, MKL 2026.1, coverage `full`
+- raw data: `data/results/zen5-cpu/faer-kernels/20261014T062509Z-first-page-mkl/`
+
+The verify grid — all 10 populations at 1T/4T/8T, no subset — passed
+`all comparisons within tolerance` before any timing began. That includes
+`linalg-tall`, whose `4096x256` `qr_factor`/`qr` verify is what had blocked the
+first attempt, and `linalg-wide`, which the `orgqr` fix unblocked. The 30 pinned
+invocations all report a valid idle window before and after; 11 needed a second
+attempt (never a third) because a sibling build briefly touched CPUs 4-11, and
+the configured retry budget was raised to 6 for the run. Because the machine was
+shared, that budget is recorded in the manifest (`guards.attempts`).
+
+**How it was run.** From the harness worktree `fix/verify-cost` rather than the
+main working tree: `scripts/` there is main's own (the toolkit shims), byte for
+byte, but the run needs `fbench/src/{backend,lapack}.rs` from this branch, which
+main does not carry yet. The runner would otherwise have built main's unfixed
+harness and hit the same cost again.
+
 ## 2026-10-14 — the MKL `qr`/`qr_factor` wide shapes asked `orgqr` for too many columns
 
 With the QR cost fixed, the first full-declaration verify reached `linalg-wide`
