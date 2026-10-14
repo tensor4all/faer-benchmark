@@ -1,0 +1,166 @@
+schema_version: 1
+id: faer-benchmark
+
+# The measured project. The harness (`fbench`) lives in *this* repository -- faer has
+# no `benchmarks/` directory and the fork's AGENTS.md forbids adding one, because
+# campaign infrastructure there would be a rebase cost -- and links both libraries by
+# path out of their checkouts. So the recorded commits describe the libraries, and the
+# harness revision is recorded separately, per run.
+measured:
+  name: t4a-faer
+  url: https://github.com/tensor4all/faer
+  pin_file: pins/t4a-faer.rev
+  extern_dir: extern/t4a-faer
+  build_script: scripts/build_for_faer_rev.sh
+  binary: fbench
+  # One binary links one vendor library, so the arm decides the feature. The two arms
+  # are mutually exclusive binaries, built into separate target directories.
+  features:
+    openblas: fbench/link-openblas
+    mkl: fbench/link-mkl
+  # How the recorder invokes the build script: both checkouts are named, because the
+  # harness links the measured fork and the upstream baseline by path.
+  build_argv:
+    - "{build_script}"
+    - "--checkout"
+    - "{checkout}"
+    - "--upstream"
+    - "{upstream}"
+    - "--vendor"
+    - "{vendor}"
+    - "--out"
+    - "{out}"
+    - "--bin"
+    - "{binary}"
+  # The variable names scripts/build_for_faer_rev.sh writes, including the two libraries'
+  # versions and the upstream ref the checkout sits on.
+  pin_env:
+    rev: FAER_FORK_REV
+    dirty: FAER_FORK_DIRTY
+    dir: FAER_FORK_DIR
+    version: FAER_FORK_VERSION
+    features: BUILD_FEATURES
+    env: BUILD_ENV
+    bin_dir: BIN_DIR
+  # The timing protocol belongs to the harness, and the harness lives here.
+  protocol: campaign
+
+# The second recorded identity: the upstream faer release the fork is based on, linked
+# by path in the same binary as the fork row. `pins/upstream-faer.rev` holds the release
+# *tag* (`faer-v0.24.4`), not a revision: a tag is what a reader can check against the
+# release, and the run records the commit the tag resolved to.
+upstream:
+  name: faer
+  url: https://codeberg.org/sarah-quinones/faer
+  pin_file: pins/upstream-faer.rev
+  extern_dir: extern/upstream-faer
+  pin_env:
+    rev: FAER_UPSTREAM_REV
+    dirty: FAER_UPSTREAM_DIRTY
+    dir: FAER_UPSTREAM_DIR
+    version: FAER_UPSTREAM_VERSION
+    ref: FAER_UPSTREAM_REF
+
+# Two measured revisions from one binary: the fork and its baseline. Either one moving
+# produces a different page rather than overwriting one.
+identities: [library, upstream]
+
+profiles_file: benchmarks/profiles.yaml
+suites_dir: benchmarks/suites
+data_dir: data/results
+result_dir: result
+
+# `order` is a declared axis, not an annotation: faer's gemm and Householder paths
+# dispatch differently on layout, so a C-order cell and an F-order cell are two cells and
+# are never pooled in one table.
+case_axes: [order]
+case_label: "`{family}/{dims}/b{batch}` {order} {threads}T {row}"
+
+# Engine name the harness emits -> provider. Both faer rows are measured in one binary:
+# the fork (package `t4a-faer`) and upstream (package `faer`) are distinct dependency keys
+# and therefore distinct engines, so their providers are the fork and upstream
+# themselves. A vendor arm names its vendor twice: once here, and once in the engine
+# string itself, because the harness derives it from the vendor library it linked.
+engines:
+  faer-fork: faer-fork
+  faer-upstream: faer-upstream
+  lapack-openblas: openblas
+  lapack-mkl: mkl
+
+# Providers that own the BLAS/LAPACK symbols; they are mutually exclusive in one process,
+# so they are the axis a run -- and a page -- is split on.
+vendor_providers: [openblas, mkl]
+
+# `<fork12>-<upstream12>[-<vendor>][-dirty]`: the two revisions that name a *comparison*.
+# The harness revision is recorded in the manifest and repeated in the page header; it is
+# not in the name because the harness does not change what is being compared.
+page_name: "{library12}-{upstream12}{vendor}{dirty}"
+
+default_invalidated_by:
+  - faer/src/**
+  - faer-traits/src/**
+  - faer-macros/src/**
+  - Cargo.toml
+  - Cargo.lock
+
+# Thread-budget and tuning variables that belong to a vendor library, not to the
+# measurement. The harness sets the budget from the row's thread count and reads it back,
+# so an inherited value must not reach the measured process.
+vendor_env:
+  - OPENBLAS_NUM_THREADS
+  - MKL_NUM_THREADS
+  - MKL_DOMAIN_NUM_THREADS
+  - MKL_INTERFACE_LAYER
+  - MKL_THREADING_LAYER
+  - MKL_DYNAMIC
+  - MKL_ENABLE_INSTRUCTIONS
+  - MKL_CBWR
+  - OMP_NUM_THREADS
+  - OMP_THREAD_LIMIT
+  - OMP_PROC_BIND
+  - OMP_PLACES
+  - KMP_AFFINITY
+  - GOMP_CPU_AFFINITY
+  - RAYON_NUM_THREADS
+
+# The columns fbench's CSV carries, as the report and the comparison read them. `order`
+# is `c` or `f`; `k` is the contraction dimension of a three-index `gemm` shape and is
+# empty for every other family.
+csv_columns:
+  - regime
+  - family
+  - dtype
+  - order
+  - m
+  - n
+  - k
+  - batch
+  - row
+  - threads
+  - total_ms
+  - per_item_us
+  - status
+  - note
+
+# The strings the generated index and report headers print.
+report:
+  library_label: t4a-faer (fork, measured) commit
+  library_version_label: t4a-faer version
+  upstream_label: upstream faer commit
+  upstream_ref_label: upstream faer ref/version
+  provider_label: faer rows
+  harness_label: harness commit
+  index_generator: scripts/gen_index.py
+  setup_script: scripts/setup_extern_deps.sh
+  # What the page says about the verify pass above its tables. faer's checks are per provider
+  # against that provider's own contract -- residual, reconstruction, orthonormality and no
+  # NaN -- never provider against provider, and the order axis is part of the cell identity
+  # because it decides which path each provider takes.
+  verify_note: |
+    Every row below passed `{binary} verify` on the same grid before timing: each provider's
+    factorizations are checked against that provider's documented convention
+    (residual, reconstruction, orthonormality, no NaN), never against another provider's
+    floating-point output. Times are milliseconds, the best wall time per case and engine
+    row; with more than one complete set repeat the table shows the best repeat, and the
+    A/A spread is reported at its foot. C and F order are separate cells, because the order
+    decides which path each provider takes.

@@ -32,17 +32,10 @@ here.
 | file here | source | note |
 |---|---|---|
 | `benchmarks/profiles.yaml` | same path | `zen5-cpu` verbatim, including the heterogeneous-L3 wording; the "unknown profile = schema error" rule and `schema_version` kept |
-| `schemas/benchmark-suite.schema.json` | same path | copied, then extended (see below) |
-| `schemas/benchmark-run.schema.json` | same path | copied, then extended (see below) |
-| `scripts/campaign.py` | same path | provider map and arm projection adapted to the faer engine names; page identity now carries two revisions |
-| `scripts/record_run.py` | same path | binary `fbench`, two checkouts, two pins, protocol scripts from this repository |
-| `scripts/validate_run.py` | same path | resolves both recorded commits, validates the `order` axis |
-| `scripts/gen_index.py` | same path | two reference revisions and two checkouts; currency is the worse of the two |
-| `scripts/publish_report.py` | same path | copied unchanged (it reads `campaign.py`) |
-| `scripts/report_run.py` | same path | fork/upstream/harness header, `order` and `k` in the cell identity |
-| `scripts/compare_runs.py` | same path | refuses a comparison across two upstream baselines or two harnesses |
+| `benchmarks/campaign.yaml` | new | this campaign's descriptor: the measured fork, the upstream baseline, the two vendor arms, the `order` case axis and the page name. It replaced the campaign-specific constants the scripts had carried |
+| `scripts/{campaign,record_run,validate_run,gen_index,publish_report,report_run,compare_runs}.py` | same paths | thin shims over `campaign-toolkit`. The logic they carried -- the faer engine names and arm projection, two checkouts and two pins, the `order`/`k` cell identity, the two-revision page identity, the refusal to compare across two baselines -- was contributed to the toolkit and is pinned by revision in `requirements.txt`. The toolkit's own `docs/extraction.md` records what it took from which campaign |
 | `scripts/build_for_faer_rev.sh` | `scripts/build_for_tlinalg_rev.sh` | rewritten for a path-linked measured library and two checkouts |
-| `requirements.txt` | same path | `jsonschema>=4`, `pyyaml>=6` |
+| `requirements.txt` | same path | `campaign-toolkit` pinned by git revision |
 | `docs/timing-policy.md` | same path | policy kept; identities and the measured-noise section adapted |
 | `README.md`, `AGENTS.md`, `docs/results.md`, `docs/worklog.md` | same paths | structure and rules adopted; content rewritten for three identities |
 | `.gitignore`, `.github/workflows/ci.yml` | same paths | adapted paths; the one `index` job kept, no smoke build |
@@ -66,16 +59,28 @@ in the files.
 
 ## Deliberate extensions of the copied schemas
 
-Neither extension removes a check; both add a declared axis the sibling's suites
-do not have.
+Neither extension removes a check; both add a shape the sibling's suites do not have.
+They are no longer copies in this repository: the schemas are the toolkit's
+(`campaign_toolkit/schemas/`), and the toolkit takes the `identities` a campaign
+declares to decide whether a second library revision is allowed rather than required.
 
-- `benchmark-suite.schema.json`: `runs[].order` is required, and the shape
-  pattern is widened from `^[0-9]+(x[0-9]+)?$` to `^[0-9]+(x[0-9]+){0,2}$` so a
-  three-index `gemm` shape can be written. Every shape the original pattern
-  accepted is still accepted.
-- `benchmark-run.schema.json`: `upstream` is required (the second recorded
-  library identity), and `run_spec.order` is required and validated. Every
-  existing required field is kept.
+- `benchmark-suite.schema.json`, `benchmark-run.schema.json`: the shape pattern is
+  widened from `^[0-9]+(x[0-9]+)?$` to `^[0-9]+(x[0-9]+){0,2}$`, so a three-index
+  `gemm` shape can be written. Every shape the original pattern accepted is still
+  accepted.
+- `benchmark-run.schema.json`: `upstream` is allowed as an optional second recorded
+  library identity, and a run may record the `order` axis it covered.
+
+## The tooling lives in `campaign-toolkit`
+
+The seven `scripts/*.py` entry points are shims over
+[`campaign-toolkit`](https://github.com/tensor4all/campaign-toolkit), which
+`requirements.txt` pins by git revision; `benchmarks/campaign.yaml` is this
+campaign's descriptor. The `schemas/` copies that used to live here are gone: the
+toolkit ships them, and `benchmarks/campaign.yaml` names the profiles, the engine map
+and the cell label the toolkit reads. This campaign's additions to the shared tooling
+-- a declared `case_axes` axis, a three-index shape, and the second recorded identity
+in the report header and the coverage comparison -- are on the toolkit's `main`.
 
 ## Determined, not copied
 
