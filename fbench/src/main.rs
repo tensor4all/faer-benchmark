@@ -52,6 +52,10 @@ const ALL_FAMILIES: &[&str] = &[
     "full_piv_lu",
     "upgrade_factor",
     "householder_apply",
+    // Declared by the suite and not implemented yet: every `run` emits a `skipped` row
+    // for it rather than omitting it, which is the contract the recorder reads. It has
+    // to be *known* here for that to happen -- an unrecognised name is a usage error.
+    "eig",
 ];
 
 #[derive(Clone, Copy)]
