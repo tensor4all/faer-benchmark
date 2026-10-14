@@ -1,0 +1,215 @@
+schema_version: 1
+id: faer-kernels
+description: >-
+  The faer entry points themselves, measured at faer's own API: the fork
+  (`t4a-faer`, lib name `faer`) and upstream `faer` are separate dependency keys
+  in the harness, so they are separate engine rows in one binary, and the
+  LAPACK/BLAS vendor arms link their own separate binaries. Rows are declared as
+  populations (regime x family group x shape grid x order x thread budget), not
+  one Cartesian product over every family and size, because a universal product
+  is dominated by priming alone. Each family names the call it makes, so two runs
+  of the same family measure the same work:
+  `gemm` is `linalg::matmul::matmul` into a caller-prepared destination with
+  `Accum::Replace`; `qr_factor` is the compact `qr_in_place`; `qr` is the
+  composite returning explicit Q and R; `upgrade_factor` is the public but
+  `#[doc(hidden)]` `upgrade_householder_factor`; `householder_apply` is the
+  block apply with an explicit basis/target width plus the sequence form, as two
+  rows; the rest are the corresponding public composite.
+# Only paths in the *measured* fork whose change can alter a measured result. The
+# harness and the timing protocol live in this repository, not in the fork, so
+# they cannot appear here; see docs/results.md for how a harness change is
+# recorded. Deliberately not `docs/**` or `tests/**`: an edit there does not make
+# a measurement stale.
+invalidated_by:
+  - faer/src/**
+  - faer-traits/src/**
+  - faer-macros/src/**
+  - Cargo.toml
+  - Cargo.lock
+stale_after: 20
+# Empty until the first (zen5-cpu, faer-kernels) cell exists: `missing` is a
+# normal state for a cell with no run, and it becomes an error only for a profile
+# listed as required. The first recorded cell moves `zen5-cpu` in here.
+required_profiles: []
+optional_profiles:
+  - zen5-cpu
+
+# Family groups. A group is a set of families worth measuring on the same shape
+# grid; the runs below say which groups are measured per regime. A family whose
+# declared shape a provider cannot take is emitted by the harness as `skipped`
+# and recorded in the run's own CSV, never dropped silently.
+family_groups:
+  gemm:
+    - gemm
+  factor:
+    - lu
+    - full_piv_lu
+    - cholesky
+    - triangular_solve
+    - solve
+  decompose:
+    - qr_factor
+    - qr
+    - svd_values
+    - svd_thin
+    - eigh
+  heavy:
+    - eig
+  householder:
+    - upgrade_factor
+    - householder_apply
+
+# What the workload is, in a form the result page can print.
+workloads:
+  name: faer dense kernels and decompositions
+  description: >-
+    Direct calls into one faer revision: square and rectangular dense matrices,
+    C (row-major) and F (column-major) order, `f64` and `c64`. A shape is `N` for
+    square, `MxN` for rectangular, or `MxKxN` for `gemm`, which is a three-index
+    operation and cannot be written as two. Sizes are the matrix dimensions, not
+    a memory budget, so a case name says exactly what was factored. `gemm`
+    measures `linalg::matmul::matmul` into a caller-prepared destination with
+    `Accum::Replace`; there is no operator path, so one shape is one work.
+  source: >-
+    The fork's own public API (`faer/src/linalg`): `matmul`, the QR factor and
+    composite, `upgrade_householder_factor`, the block/sequence Householder
+    apply, LU and full-pivot LU, Cholesky, triangular solve, solve, thin SVD,
+    singular values and the symmetric/nonsymmetric eigensolvers. Inputs are
+    seeded from the case, so `verify` and `run` measure the same matrices and a
+    rerun is reproducible.
+  known_blind_spots:
+    - "Only the faer entry points are measured. tlinalg's packing, batch loop and lane policy, tenferro's tensor construction and dtype dispatch, and the small-`m` decode-projection shapes are other repositories' rows (tlinalg-benchmark, tenferro-benchmark)."
+    - "The C-order vendor route is per family and is resolved by the harness, not here: a row-major LAPACK driver is a different operation from its transpose, so a vendor C-order cell is either a native row-major route, a timed adaptation, or an explicitly labelled prepared-layout comparison, and the manifest records which."
+    - "`gemm` covers the tall class's two Householder legs (a 16-wide basis and a 240-column target over 4096 rows: the reduction and the write-back) beside a vendor `?gemm` on the same leg. A single leg beside a vendor gemm is a diagnostic reference, not the equivalent implementation of the whole update, and the row is labelled accordingly."
+    - "`householder_apply` measures the block apply with an explicit basis width and target width, and the sequence form, as two rows; a reflector count the suite does not declare is not covered."
+    - "Allocation performed inside the measured call stays inside the clock. The fork's two row splits allocate their partial buffers inside the public call, and the public scratch function does not expose them; the campaign reports that as it is instead of changing faer's API to make the boundary look cleaner."
+    - "`f32`/`c32`, the large regime's 1024 shapes, BLIS, sparse, iterative and GPU arms are later declarations, not machinery built now."
+    - "A vendor arm records the library it linked. Only OpenBLAS reports the kernel its runtime dispatched to; MKL names no kernel and no processor count, so its manifest leaves both empty rather than inferring them."
+
+# One entry per engine name the harness emits. A result page explains every
+# column from this, so a reader needs no context beyond the page.
+engines_doc:
+  faer-fork:
+    provider: faer-fork
+    summary: >-
+      The measured library: the tensor4all fork (`t4a-faer`, `[lib] name = "faer"`)
+      at the checkout the harness linked by path. This is the row the campaign
+      exists for; the fork's three perf experiments and the two correctness
+      changes land here.
+    identity: >-
+      the fork revision in this run's manifest (`library.commit`), pinned by
+      `pins/t4a-faer.rev`
+    caveat: >-
+      Both faer crates declare `[lib] name = "faer"`. They are distinct dependency
+      keys (`faer_fork = { package = "t4a-faer" }`, `faer_upstream = { package =
+      "faer" }`) and therefore distinct Rust crate identities, but their `Mat`,
+      `Par` and trait types are not interchangeable: every adapter is written per
+      arm, and shared transitive dependencies can unify Cargo features, so both
+      arms declare equivalent feature sets and the resolved lock is recorded.
+  faer-upstream:
+    provider: faer-upstream
+    summary: >-
+      Upstream `faer` at the tag the fork is based on, in the same binary as the
+      fork row. The baseline that says whether a fork change moved the number.
+    identity: >-
+      the upstream revision in this run's manifest (`upstream.commit`), pinned by
+      `pins/upstream-faer.rev`
+    caveat: >-
+      Same crate-name and feature-unification caveat as `faer-fork`. A change to
+      upstream at a fixed fork revision produces a different page rather than
+      overwriting one.
+  lapack-openblas:
+    provider: openblas
+    summary: >-
+      CBLAS `?gemm` plus LAPACK drivers linked against OpenBLAS: vendor calls and
+      their marshalling, vendor-owned threading. The vendor's own thread budget
+      is set by the harness before the row and read back, and the vendor identity
+      and the dispatched kernel are recorded in the manifest.
+    identity: the OpenBLAS build recorded in this run's manifest (`providers[openblas]`)
+    caveat: >-
+      LAPACK and BLAS own their threading, so this row's thread budget is the
+      vendor's, not the harness pool's. Where a family has no LAPACK route the
+      row is absent and the CSV says the case was skipped for it.
+  lapack-mkl:
+    provider: mkl
+    summary: >-
+      The same calls against Intel oneAPI MKL, linked from the installation
+      `MKLROOT` names. One binary links one vendor library, so this row is
+      measured by its own build of the harness and recorded as its own run; no
+      page carries two vendor arms. The LP64 interface layer and the threading
+      layer are pinned by the harness before the first MKL call, because MKL
+      otherwise lets the environment choose them and the interface layer is an ABI.
+    identity: the MKL build recorded in this run's manifest (`providers[mkl]`)
+    caveat: >-
+      MKL reports no dispatched-kernel name and no processor count, so its
+      manifest records neither rather than inferring them. Its threading is
+      vendor-owned, as for OpenBLAS.
+
+# Populations are sampled as the shape classes the issue names: the ends of each
+# axis, with the middle dropped where it buys nothing. Priming is a fixed 0.5 s
+# per engine row per case and does not scale with the shape, so a middle point
+# costs what an end point costs while adding the least. `gemm` and the linalg
+# families cannot share one population: a gemm shape is a triple and a linalg
+# shape is not, and the schema's shape grammar is per population. A regime label
+# is therefore the *population's* identity, not a bare shape class, and it must
+# be unique among the populations: the harness's raw-data names, its skip keys
+# and the report's tables are all keyed by it, so two populations under one label
+# would overwrite each other's CSVs. CI asserts uniqueness (see
+# .github/workflows/ci.yml).
+runs:
+  - threads: [1, 4, 8]
+    cpu_sets: ["4", "4-7", "4-11"]
+    dtypes: [f64, c64]
+    # C (row-major) and F (column-major) for every case, as a declared axis: faer's
+    # gemm and its Householder paths dispatch differently on layout, and the fork's
+    # row-split gates were chosen on F-order shapes. The order is part of the cell
+    # identity, and the manifest records the actual strides at the call boundary,
+    # not only the fixture's nominal order.
+    order: [c, f]
+    engines: [faer-fork, faer-upstream, lapack-openblas, lapack-mkl]
+    populations:
+      - regime: gemm-small
+        groups: [gemm]
+        n: ["4x4x4", "8x8x8", "16x16x16", "32x32x32", "64x64x64"]
+        batch: [1]
+      - regime: gemm-medium
+        groups: [gemm]
+        n: ["256x256x256"]
+        batch: [1]
+      - regime: gemm-large
+        groups: [gemm]
+        n: ["512x512x512"]
+        batch: [1]
+      # The tall class carries both legs of the Householder update that
+      # tlinalg-rs#46 separates, because they are different work and the
+      # reduction is the one whose row split was the experiment: with a 16-wide
+      # basis and a 240-column target over 4096 rows, `tmp = V^H C` is
+      # 16x4096x240 and the write-back `C -= V tmp` is 4096x16x240.
+      - regime: gemm-tall
+        groups: [gemm]
+        n: ["4096x64x64", "16x4096x240", "4096x16x240"]
+        batch: [1]
+      - regime: gemm-wide
+        groups: [gemm]
+        n: ["64x64x4096"]
+        batch: [1]
+      - regime: linalg-small
+        groups: [factor, decompose, heavy, householder]
+        n: ["4", "8", "16", "32", "64"]
+        batch: [1]
+      - regime: linalg-medium
+        groups: [factor, decompose, heavy, householder]
+        n: ["256"]
+        batch: [1]
+      - regime: linalg-large
+        groups: [factor, decompose]
+        n: ["512"]
+        batch: [1]
+      - regime: linalg-tall
+        groups: [factor, decompose, householder]
+        n: ["1024x64", "4096x256"]
+        batch: [1]
+      - regime: linalg-wide
+        groups: [factor, decompose]
+        n: ["64x1024", "256x4096"]
+        batch: [1]

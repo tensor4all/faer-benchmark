@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# Build the campaign harness (`fbench`) with both faer libraries linked *by path*.
+#
+#   build_for_faer_rev.sh --checkout <fork-dir> --upstream <upstream-dir> \
+#                         --vendor <openblas|mkl> --out <var-file> [--bin fbench]...
+#
+# Writes shell assignments to <var-file>:
+#   FAER_FORK_REV, FAER_FORK_DIRTY, FAER_FORK_DIR, FAER_FORK_VERSION,
+#   FAER_UPSTREAM_REV, FAER_UPSTREAM_DIRTY, FAER_UPSTREAM_DIR,
+#   FAER_UPSTREAM_VERSION, FAER_UPSTREAM_REF,
+#   BIN_DIR, BUILD_FEATURES, BUILD_ENV, BUILD_VENDOR
+#
+# The measured library is the fork checkout named by `--checkout`; the baseline is
+# the upstream checkout named by `--upstream`. Neither is fetched from a registry:
+# the harness links both by path, so a run's manifest can name the two revisions
+# it actually measured. `fbench` is built from *this* repository, because the
+# harness is not part of the fork (the fork's `AGENTS.md` forbids keeping campaign
+# infrastructure there, since it would be a rebase cost).
+#
+# Three things this deliberately does *not* do.
+#
+# It does not let baseline and candidate share a target directory, and it clears
+# the compiler cache for the build: a cache keyed on inputs that do not include
+# the sibling checkout can mix revisions. The target directory is keyed by the
+# fork revision *and* the vendor arm, because the two arms are different feature
+# sets and a shared directory would have the second build replace the first
+# binary while the manifest still named the first.
+#
+# It does not let the environment decide the vendor's thread count. The build is
+# asked for the vendor statically where it can be (`link-openblas-static` is the
+# sibling's choice; this harness declares `link-openblas`), so the recorder can
+# execute the binary directly instead of arranging a loader search path;
+# `OPENBLAS_NUM_THREADS` is dropped because `openblas-src` folds it into the built
+# library, and the thread budget belongs to the measurement, not to the build.
+# `OPENBLAS_DYNAMIC_ARCH` is *set* below, because that is the declaration of how
+# the vendor was built.
+#
+# It does not guess which MKL either. `--vendor` names the arm -- one binary links
+# one vendor library, so an arm is a separate build into a separate target
+# directory -- and the MKL arm's `MKLROOT` and `MKL_THREADING_LIB` are resolved to
+# *versioned* paths and reported back in `BUILD_ENV`. Nothing here follows
+# `/opt/intel/oneapi/mkl/latest`: a moving symlink let a build record a version it
+# never read back.
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+    echo "usage: build_for_faer_rev.sh --checkout <fork-dir> --upstream <upstream-dir>" >&2
+    echo "                            --vendor <openblas|mkl> --out <var-file> [--bin <name>]..." >&2
+}
+
+FORK_DIR=""
+UPSTREAM_DIR=""
+OUT_FILE=""
+VENDOR="${BENCH_VENDOR:-}"
+PROFILE="${BENCH_BUILD_PROFILE:-release}"
+BINS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --checkout) FORK_DIR="${2:?--checkout needs a path}"; shift 2 ;;
+        --upstream) UPSTREAM_DIR="${2:?--upstream needs a path}"; shift 2 ;;
+        --vendor) VENDOR="${2:?--vendor needs a name}"; shift 2 ;;
+        --out) OUT_FILE="${2:?--out needs a file}"; shift 2 ;;
+        --bin) BINS+=("${2:?--bin needs a name}"); shift 2 ;;
+        --profile) PROFILE="${2:?--profile needs a name}"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "ERROR: unknown argument '$1'" >&2; usage; exit 2 ;;
+    esac
+done
+if [[ -z "$FORK_DIR" || -z "$UPSTREAM_DIR" || -z "$OUT_FILE" || -z "$VENDOR" ]]; then
+    echo "ERROR: --checkout, --upstream, --vendor and --out are all required" >&2
+    usage
+    exit 2
+fi
+[[ ${#BINS[@]} -gt 0 ]] || BINS=(fbench)
+
+real="$(cd "$FORK_DIR" 2>/dev/null && pwd -P)" || { echo "ERROR: --checkout '$FORK_DIR' is not a directory" >&2; exit 1; }
+FORK_DIR="$real"
+real="$(cd "$UPSTREAM_DIR" 2>/dev/null && pwd -P)" || { echo "ERROR: --upstream '$UPSTREAM_DIR' is not a directory" >&2; exit 1; }
+UPSTREAM_DIR="$real"
+[[ -d "$FORK_DIR/.git" ]] || { echo "ERROR: $FORK_DIR is not a git checkout" >&2; exit 1; }
+[[ -d "$UPSTREAM_DIR/.git" ]] || { echo "ERROR: $UPSTREAM_DIR is not a git checkout" >&2; exit 1; }
+# The fork publishes the crate as `t4a-faer` and upstream calls it `faer`, but both carry the
+# package in their `faer/` workspace member. A checkout without it is not a faer tree.
+[[ -f "$FORK_DIR/faer/Cargo.toml" ]] || { echo "ERROR: $FORK_DIR/faer/Cargo.toml not found; not a faer checkout" >&2; exit 1; }
+[[ -f "$UPSTREAM_DIR/faer/Cargo.toml" ]] || { echo "ERROR: $UPSTREAM_DIR/faer/Cargo.toml not found; not an upstream faer checkout" >&2; exit 1; }
+[[ -f "$PROJECT_DIR/fbench/Cargo.toml" ]] || { echo "ERROR: $PROJECT_DIR/fbench/Cargo.toml not found; the harness crate has not been written yet" >&2; exit 1; }
+
+fork_rev="$(git -C "$FORK_DIR" rev-parse HEAD)"
+up_rev="$(git -C "$UPSTREAM_DIR" rev-parse HEAD)"
+fork_dirty=false
+[[ -z "$(git -C "$FORK_DIR" status --porcelain --untracked-files=no)" ]] || fork_dirty=true
+up_dirty=false
+[[ -z "$(git -C "$UPSTREAM_DIR" status --porcelain --untracked-files=no)" ]] || up_dirty=true
+suffix=""
+[[ $fork_dirty == true || $up_dirty == true ]] && suffix="-dirty"
+
+# The package version of each crate, read from its own manifest rather than assumed from a pin.
+version_of() {
+    python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb")).get("package", {}).get("version", ""))' "$1"
+}
+fork_version="$(version_of "$FORK_DIR/faer/Cargo.toml")"
+up_version="$(version_of "$UPSTREAM_DIR/faer/Cargo.toml")"
+# The tag the upstream checkout sits on, when it sits on one; informational, so a pin is readable
+# as a release and not only as a hash.
+up_ref="$(git -C "$UPSTREAM_DIR" describe --tags --exact-match 2>/dev/null || git -C "$UPSTREAM_DIR" describe --tags --abbrev=0 2>/dev/null || true)"
+
+# Keyed by the fork revision and the vendor as well as the dirty state: the two arms are different
+# feature sets, and a shared target directory would have the second build replace the first binary
+# while the manifest still named the first.
+target="$PROJECT_DIR/target/faer-rev/${fork_rev:0:12}-${VENDOR}${suffix}"
+profile_flag=(); subdir=debug
+if [[ "$PROFILE" == release ]]; then profile_flag=(--release); subdir=release; fi
+
+# The glob is passed quoted, so the shell does not expand it to many arguments and this
+# function sees only the first: with two installations the newest must still win.
+newest_dir() { ls -d $1 2>/dev/null | sort -V | tail -1; }
+
+case "$VENDOR" in
+  openblas)
+    FEATURES="fbench/link-openblas"
+    # Declared, not inherited. `openblas-src` reads `OPENBLAS_DYNAMIC_ARCH` at build time; without
+    # it the from-source OpenBLAS guesses a target from the build host (here `COOPERLAKE`, an
+    # Intel AVX-512 target), and a guessed target is not one the run-time CPU is obliged to
+    # execute -- the sibling campaign's linked tests died with SIGILL on CI exactly that way.
+    # `DYNAMIC_ARCH=1` compiles several cores and dispatches on CPUID with the required features
+    # checked per core; on this host that dispatcher still selects COOPERLAKE, and the manifest
+    # records the kernel it dispatched to.
+    VENDOR_BUILD_ENV="OPENBLAS_DYNAMIC_ARCH=1"
+    ;;
+  mkl)
+    FEATURES="fbench/link-mkl"
+    # The installed MKL, named by versioned path. The threading runtime is linked eagerly because
+    # MKL's Intel OpenMP layer is loaded at run time with an undefined `omp_get_num_procs`, and
+    # `--as-needed` would otherwise drop the library nothing references.
+    MKLROOT="$(newest_dir "${MKLROOT:-/opt/intel/oneapi/mkl/*/}")"
+    MKL_THREADING_LIB="${MKL_THREADING_LIB:-$(newest_dir "/opt/intel/oneapi/compiler/*/lib/libiomp5.so")}"
+    [[ -n "$MKLROOT" && -n "$MKL_THREADING_LIB" ]] || {
+      echo "ERROR: no installed MKL found; set MKLROOT and MKL_THREADING_LIB" >&2; exit 1; }
+    # What is recorded has to name the tree that was used, not a symlink that can be moved under it:
+    # `MKLROOT=.../latest` in a manifest records nothing a reader can act on.
+    MKLROOT="$(cd "$MKLROOT" && pwd -P)"
+    MKL_THREADING_LIB="$(readlink -f "$MKL_THREADING_LIB")"
+    export MKLROOT MKL_THREADING_LIB
+    VENDOR_BUILD_ENV="MKLROOT=$MKLROOT MKL_THREADING_LIB=$MKL_THREADING_LIB"
+    ;;
+  *)
+    echo "ERROR: unknown --vendor '$VENDOR'; this harness knows openblas and mkl" >&2; exit 1 ;;
+esac
+
+# --------------------------------------------------------------- path injection
+# The measured libraries are the checkouts the caller named, not registry downloads, and Cargo has
+# no `--path` for a dependency. So the registry entries the harness declares are patched to those
+# checkout paths here. `--config` keeps the tracked manifests untouched: a checkout path belongs to
+# the measuring host and must not be committed. The crate directory inside each checkout is `faer/`
+# -- the workspace member that carries the package whose lib is named `faer`, published by the fork
+# as `t4a-faer` and by upstream as `faer` -- so the two patches cannot collide. If the harness
+# declares its dependencies another way (a `[patch]` section of its own, or a generated manifest),
+# this is the one place that has to change; the build below is the same either way.
+PATCH_ARGS=(
+    --config "patch.crates-io.t4a-faer.path=\"$FORK_DIR/faer\""
+    --config "patch.crates-io.faer.path=\"$UPSTREAM_DIR/faer\""
+)
+# ------------------------------------------------------------------------------
+
+bin_args=()
+for bin in "${BINS[@]}"; do bin_args+=(--bin "$bin"); done
+
+RUSTC_WRAPPER= CARGO_TARGET_DIR="$target" \
+    env -u OPENBLAS_NUM_THREADS -u OMP_NUM_THREADS -u RAYON_NUM_THREADS -u MKL_NUM_THREADS \
+        -u MKL_DOMAIN_NUM_THREADS -u MKL_INTERFACE_LAYER -u MKL_THREADING_LAYER -u MKL_DYNAMIC \
+        OPENBLAS_DYNAMIC_ARCH=1 \
+    cargo build --manifest-path "$PROJECT_DIR/Cargo.toml" "${profile_flag[@]}" \
+    -p fbench --features "$FEATURES" "${PATCH_ARGS[@]}" "${bin_args[@]}" >&2
+
+bin_dir="$target/$subdir"
+{
+    printf 'FAER_FORK_REV=%q\n' "$fork_rev"
+    printf 'FAER_FORK_DIRTY=%q\n' "$fork_dirty"
+    printf 'FAER_FORK_DIR=%q\n' "$FORK_DIR"
+    printf 'FAER_FORK_VERSION=%q\n' "$fork_version"
+    printf 'FAER_UPSTREAM_REV=%q\n' "$up_rev"
+    printf 'FAER_UPSTREAM_DIRTY=%q\n' "$up_dirty"
+    printf 'FAER_UPSTREAM_DIR=%q\n' "$UPSTREAM_DIR"
+    printf 'FAER_UPSTREAM_VERSION=%q\n' "$up_version"
+    printf 'FAER_UPSTREAM_REF=%q\n' "$up_ref"
+    printf 'BIN_DIR=%q\n' "$bin_dir"
+    printf 'BUILD_FEATURES=%q\n' "$FEATURES"
+    printf 'BUILD_ENV=%q\n' "$VENDOR_BUILD_ENV"
+    printf 'BUILD_VENDOR=%q\n' "$VENDOR"
+} > "$OUT_FILE"
+echo "built ${BINS[*]} for fork $fork_rev and upstream $up_rev (dirty=$fork_dirty/$up_dirty) in $bin_dir" >&2

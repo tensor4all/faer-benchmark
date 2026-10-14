@@ -1,0 +1,27 @@
+# Placeholder manifest for the measurement harness `fbench`. The harness author
+# owns this crate: `info`, `verify` and `run`, with the flags --threads --n
+# --batch --dtype --family --regime --reps --prime-ms --csv, plus a path-based
+# link to a faer checkout. It is deliberately *not* written here and there is no
+# `src/`, so the real manifest replaces this file wholesale.
+#
+# The two faer dependencies will be declared as registry dependencies and patched
+# to the checkouts `scripts/build_for_faer_rev.sh` is given (see the "path
+# injection" section there): the fork is package `t4a-faer` and the baseline is
+# package `faer`, and both declare `[lib] name = "faer"` while remaining distinct
+# dependency keys -- `faer_fork = { package = "t4a-faer" }` and
+# `faer_upstream = { package = "faer" }` -- and therefore distinct Rust crate
+# identities. Their `Mat`, `Par` and trait types are not interchangeable, so every
+# adapter is written per arm.
+#
+# The features below are the vendor-arm contract the build script selects
+# (`--features fbench/link-openblas` or `fbench/link-mkl`): one binary links one
+# vendor library, so an arm is its own build.
+[package]
+name = "fbench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+link-openblas = []
+link-mkl = []

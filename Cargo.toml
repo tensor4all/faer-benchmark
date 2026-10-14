@@ -1,0 +1,10 @@
+# Workspace skeleton for the measurement harness.
+#
+# `fbench` is the only crate in this repository, and its source is owned by the
+# harness author; only a manifest placeholder exists here (no `src/`), so a
+# `cargo build` does not succeed until that work lands. Nothing measured is a
+# crate: the two faer libraries are linked by path from their checkouts by
+# `scripts/build_for_faer_rev.sh`.
+[workspace]
+members = ["fbench"]
+resolver = "2"
