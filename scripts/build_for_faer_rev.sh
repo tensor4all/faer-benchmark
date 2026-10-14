@@ -153,8 +153,28 @@ case "$VENDOR" in
     # for the same reason the compiler is: that pair is what the vendor library's LAPACK was
     # built and checked with.
     OPENBLAS_FC_LIB="$(cd "$(dirname "$OPENBLAS_FC")/../lib" && pwd -P)"
-    export LD_LIBRARY_PATH="$OPENBLAS_FC_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    VENDOR_BUILD_ENV="OPENBLAS_DYNAMIC_ARCH=1 FC=$OPENBLAS_FC LD_LIBRARY_PATH=$OPENBLAS_FC_LIB"
+    # The Fortran runtime is installed in two places under oneAPI -- beside the compiler and under
+    # the oneAPI version directory -- and the binary needs both on its search path. Both are
+    # derived from the compiler's own path rather than guessed from one installation's layout.
+    OPENBLAS_FC_VER="$(basename "$(dirname "$(dirname "$OPENBLAS_FC")")")"
+    OPENBLAS_ONEAPI_ROOT="$(cd "$(dirname "$(dirname "$OPENBLAS_FC")")/../.." && pwd -P)"
+    OPENBLAS_RUNTIME_LIB="$OPENBLAS_ONEAPI_ROOT/$OPENBLAS_FC_VER/lib"
+    OPENBLAS_LIBS="$OPENBLAS_FC_LIB"
+    [[ -d "$OPENBLAS_RUNTIME_LIB" ]] && OPENBLAS_LIBS="$OPENBLAS_LIBS:$OPENBLAS_RUNTIME_LIB"
+    export LD_LIBRARY_PATH="$OPENBLAS_LIBS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    # The build needs that path to run OpenBLAS's own test programs, and the *harness* needs it
+    # again at run time: an `ifx`-built OpenBLAS leaves Fortran-runtime references in the archive
+    # it produces, so a binary linked against it will not start without `libifcoremt`/`libsvml` on
+    # the loader path. An arm whose binary cannot be executed directly is not an arm this campaign
+    # can record -- the recorder executes the harness itself, with the ambient thread variables
+    # removed, not through a shell that arranges a search path. So the paths are burnt into the
+    # binary as an rpath instead, and recorded with the compiler they belong to. `--disable-new-dtags`
+    # matters: a `RUNPATH` is not consulted for a *transitive* dependency, and the runtime pieces
+    # are exactly that (`libifcoremt` needs `libsvml`, which lives in the second directory), so the
+    # link has to emit an inherited `RPATH` rather than a `RUNPATH`.
+    OPENBLAS_RPATH="$(printf -- '-C link-arg=-Wl,--disable-new-dtags -C link-arg=-Wl,-rpath,%s ' $OPENBLAS_FC_LIB $OPENBLAS_RUNTIME_LIB)"
+    export RUSTFLAGS="${RUSTFLAGS:-} ${OPENBLAS_RPATH% }"
+    VENDOR_BUILD_ENV="OPENBLAS_DYNAMIC_ARCH=1 FC=$OPENBLAS_FC LD_LIBRARY_PATH=$OPENBLAS_LIBS rpath=$OPENBLAS_FC_LIB${OPENBLAS_RUNTIME_LIB:+:$OPENBLAS_RUNTIME_LIB}"
     ;;
   mkl)
     FEATURES="fbench/link-mkl"

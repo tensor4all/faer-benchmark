@@ -59,7 +59,13 @@ the arm's identity because it decides what the vendor library actually is:
   for the build and recorded in the manifest's build environment as `FC=<path>`,
   because a page that names a vendor library has to say what compiled it. Neither
   present is a loud error rather than a build that silently produces a BLAS-only
-  library — the vendor rows need LAPACK.
+  library — the vendor rows need LAPACK. An `ifx`-built OpenBLAS leaves Fortran-runtime
+  references in the archive, so the harness binary needs those runtime directories on its
+  loader path: the build puts them there for OpenBLAS's own test programs, and the link
+  *burns them into the binary* as an `RPATH` (`--disable-new-dtags`, because a `RUNPATH` is
+  not consulted for a transitive dependency and `libifcoremt` needs `libsvml`). An arm
+  whose binary cannot be executed directly is not recordable — the recorder runs the
+  harness itself rather than through a shell that arranges a search path.
 - `OPENBLAS_DYNAMIC_ARCH=1` is declared rather than inherited: without it the
   from-source build guesses a target from the build host, and a guessed target is not
   one the run-time CPU is obliged to execute.
