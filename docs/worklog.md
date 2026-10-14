@@ -2,6 +2,59 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-14 — the first recording is blocked: `householder_apply` at 8T trips a faer assertion
+
+**What was attempted.** The first page for the MKL arm at fork `9de95f7` (which carries
+`tensor4all/faer#9`): `gemm-tall,linalg-medium`, `--threads 1,8`, `f64,c64`, five repetitions,
+500 ms of priming, upstream at the pinned tag `faer-v0.24.4`. The recorder built the harness,
+took the vendor identity, and ran `verify` first — and **published nothing**, which is the
+protocol working as designed.
+
+**What stopped it.** `verify` for `linalg-medium` at 8T aborted in the measured library itself:
+
+```
+Assertion failed at faer/src/linalg/matmul/triangular.rs:990
+Assertion failed: lhs_ncols == rhs_nrows
+- lhs_ncols = 64
+- rhs_nrows = 32
+```
+
+Bisected over families at `--threads 8 --n 256 --dtype f64`: `lu`, `full_piv_lu`, `cholesky`,
+`solve`, `triangular_solve`, `qr_factor`, `qr`, `svd_values`, `svd_thin` and `eigh` each pass,
+and so does the whole `factor`/`decompose` group together. The trigger is the `householder`
+group: `--family upgrade_factor,householder_apply` reproduces it, `upgrade_factor` alone is
+recorded as `skipped` (the backend does not implement it), so the case actually measured is
+**`householder_apply` at 8 threads**. Every one of these shapes passes at `--threads 1`.
+
+Because the panic aborts the process before stdout is flushed, the per-case verify log for that
+population is empty on disk; the assertion is in the guard log, not the report. That is a
+harness wart worth fixing later (flush per line), not the cause.
+
+**What is not yet known, and must be settled before the page exists.** Two explanations fit the
+evidence and they have different owners:
+
+- *the harness's fixture* — `householder_apply` builds a basis and its compact-WY factor by
+  hand, and faer's threaded path is the one that reaches the shape assertion; if the fixture's
+  block layout is not the one the threaded kernels require, the fault is `fbench`'s;
+- *the library* — the same assertion, at the same line, fails in an existing fork test on the
+  parent revision (`sparse::linalg::qr::tests::test_numeric_simplicial_qr_1_transpose`, verified
+  failing on a clean checkout of `22f23cf`), so this assertion is reachable from more than one
+  entry point and predates `faer#9`, which only removes regions *below* a floor and leaves the
+  threaded shapes unchanged.
+
+Until that is decided no page can be recorded for a population containing `householder_apply`,
+and the worklog says so rather than publishing a page that hides which families could not be
+verified.
+
+**Reproducer.**
+
+```
+fbench verify --threads 8 --n 256 --batch 1 --dtype f64 --family upgrade_factor,householder_apply
+```
+
+with the binary built by `scripts/build_for_faer_rev.sh --vendor mkl` at the fork revision
+above; the same command at `--threads 1` passes.
+
 ## 2026-10-14 — `fbench` lands: `info`, `verify`, `run`, with a measured subset
 
 **What is implemented.** The harness crate `fbench` replaces the placeholder
