@@ -46,6 +46,10 @@ Until that is decided no page can be recorded for a population containing `house
 and the worklog says so rather than publishing a page that hides which families could not be
 verified.
 
+**Tracked as [tensor4all/faer#12](https://github.com/tensor4all/faer/issues/12)**, with the bisect, the
+reproducer and the two candidate owners above; the campaign consumes that issue rather than
+re-deriving the bisect.
+
 **Reproducer.**
 
 ```
