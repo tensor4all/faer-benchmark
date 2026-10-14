@@ -2,6 +2,61 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-14 — `qr_factor`/`qr` verify: the full-`Q` orthonormality check is O(m^3)
+
+**What was observed.** The MKL arm's first full-declaration verify sat on one
+`fbench verify --threads 1` invocation for 32 minutes at 99.9% CPU. A per-family
+sweep put `qr_factor` past 420 s at `4096x256` and every other family at or below
+~12 s.
+
+**What the cost was.** `qr_factor`'s and `qr`'s check formed the *full* `Q` with
+`Qr::compute_Q()` (an `m x m` matrix) and ran the reference orthonormality
+residual `gram_residual` over it — a naive `Scalar` triple loop, O(m^3). For a
+4096x256 case that is a 16.7M-element allocation to form, an O(m^2 size) apply,
+and ~6.9e10 scalar multiply-adds to reduce, per engine row and order. The
+`reconstruct` check beside it was already cheap because it works from the
+compact Householder factors.
+
+**What it does now, and why that is the same acceptance criterion.** The QR
+factorization's own contract is `A = Q R` with `Q` an `m x min(m,n)` matrix of
+orthonormal columns. Only those `size = min(m, n)` columns multiply `R`; the
+remaining columns of the full `Q` are an arbitrary unitary completion that the
+exact `reconstruct` check never touches, so checking *their* orthonormality
+tests no property of the factorization. The check now builds
+`compute_thin_Q()` (m x size, O(m size^2) to form) and reduces its
+orthonormality residual in O(m size^2). For square and wide shapes thin `Q` *is*
+the full `Q`, so those cases are unchanged; at a tall shape the only thing
+dropped is the residual on the arbitrary completion columns. No tolerance was
+changed, no case was dropped and no check was skipped.
+
+**Before/after, `verify --threads 1`, CPUs 0-3, fork `22f23cf` + upstream
+`faer-v0.24.4`, `batch 1`.** (The vendor row is this host's MKL 2026.1; the same
+numbers hold for the OpenBLAS arm because the check is provider-independent.)
+
+| family | shape | dtype | before | after |
+|---|---|---|---|---|
+| `qr_factor` | 1024x64 | f64 / c64 | 9.54 s / 15.11 s | 0.078 s / 0.156 s |
+| `qr` | 1024x64 | f64 / c64 | 8.88 s / 13.12 s | 0.077 s / 0.184 s |
+| `qr_factor` | 4096x256 | f64 / c64 | >180 s (killed; >420 s observed) | 3.58 s / 7.73 s |
+| `qr` | 4096x256 | f64 / c64 | >180 s (killed) | 4.91 s / 12.05 s |
+| `svd_values` | 4096x256 | f64 / c64 | 0.27 s / 0.74 s | unchanged |
+| `svd_thin` | 4096x256 | f64 / c64 | 5.29 s / 11.80 s | unchanged |
+| `householder_apply` | 4096x256 | f64 / c64 | 0.37 s / 1.18 s | unchanged |
+| `lu`, `full_piv_lu`, `cholesky`, `solve`, `triangular_solve`, `eigh` | 1024x64 / 4096x256 | f64 / c64 | ~0.008 s (`skip`, not square) | unchanged |
+
+The whole tall population (`lu,full_piv_lu,cholesky,triangular_solve,solve,
+qr_factor,qr,svd_values,svd_thin,eigh,upgrade_factor,householder_apply` over
+`1024x64,4096x256`, `f64,c64`, 1T) now takes **48.6 s** and ends
+`all comparisons within tolerance`. Before the change it could not finish.
+
+**The check still fires.** To show the cost fix is not a no-op, a scratch build
+perturbed the compact-`Q` buffer (`q[0] += 1`) and, separately, the reconstructed
+buffer (`recon[0] += 1`) inside `qr_factor`'s check. Both runs printed
+`MISMATCH ... qr Q residual 9.6e-1 exceeds 1.024e-7` and
+`MISMATCH ... qr_factor residual 1.0e0 exceeds 1.5e-5` on the two faer rows and
+exited non-zero; the unperturbed control printed `all comparisons within
+tolerance`. The perturbation was scratch-only and is not in the commit.
+
 ## 2026-10-14 — the first recording is blocked: `householder_apply` at 8T trips a faer assertion
 
 **What was attempted.** The first page for the MKL arm at fork `9de95f7` (which carries
