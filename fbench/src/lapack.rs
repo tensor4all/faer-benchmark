@@ -870,10 +870,14 @@ mod imp {
                         return Err(format!("geqrf returned {info}"));
                     }
                     if s.with_q {
+                        // Q is m x r with r = min(m, n) columns; asking orgqr for
+                        // more columns than Q has (n > m on a wide shape) is invalid
+                        // and MKL rejects it. The m x n buffer keeps its own leading
+                        // dimension, so only the requested column count changes.
                         let info = T::orgqr(
                             layout(s.order),
                             s.m,
-                            s.n,
+                            r,
                             r,
                             &mut a,
                             leading(s.m, s.n, s.order),
@@ -915,7 +919,7 @@ mod imp {
                     let info = T::orgqr(
                         layout(s.order),
                         s.m,
-                        s.n,
+                        r,
                         r,
                         &mut a,
                         leading(s.m, s.n, s.order),
