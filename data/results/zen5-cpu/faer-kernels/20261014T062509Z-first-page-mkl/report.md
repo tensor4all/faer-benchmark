@@ -1,0 +1,1930 @@
+# `faer-kernels` on `zen5-cpu`
+
+- t4a-faer (fork, measured) commit: `bfe4041cd9918815e3b3f766ac0332b792badb7d`
+- t4a-faer version: `0.24.4`
+- upstream faer commit: `0539947ffb757a739d7e703a7d2fa0c792a909c1`
+- upstream faer ref/version: `faer-v0.24.4` / `0.24.4`
+- features: `fbench/link-mkl`
+- faer rows: `faer-fork` (the provider in the measured revision; see library and upstream above); `faer-upstream` (the provider in the measured revision; see library and upstream above)
+- harness commit: `ca0ca08d41c78328b97aad2b8d7d3a89c773e2e8`
+- hardware profile: `zen5-cpu`
+- timestamp: `2026-10-14T07:22:30.244909Z`
+- timing policy: v1, best of 5 reps, priming 500 ms (time-based, identical on every row)
+- guards: idle window 3 s, max busy 5.0% including SMT siblings, 6 attempts
+- command: `scripts/record_run.py zen5-cpu faer-kernels --checkout /tmp/fork-rec --upstream /tmp/upstream-rec --vendor mkl --label first-page-mkl`
+- raw data: `data/results/zen5-cpu/faer-kernels/20261014T062509Z-first-page-mkl/`
+
+## What was measured
+
+- **Workload** — Direct calls into one faer revision: square and rectangular dense matrices, C (row-major) and F (column-major) order, `f64` and `c64`. A shape is `N` for square, `MxN` for rectangular, or `MxKxN` for `gemm`, which is a three-index operation and cannot be written as two. Sizes are the matrix dimensions, not a memory budget, so a case name says exactly what was factored. `gemm` measures `linalg::matmul::matmul` into a caller-prepared destination with `Accum::Replace`; there is no operator path, so one shape is one work.
+  Source: The fork's own public API (`faer/src/linalg`): `matmul`, the QR factor and composite, `upgrade_householder_factor`, the block/sequence Householder apply, LU and full-pivot LU, Cholesky, triangular solve, solve, thin SVD, singular values and the symmetric/nonsymmetric eigensolvers. Inputs are seeded from the case, so `verify` and `run` measure the same matrices and a rerun is reproducible.
+  Known blind spot: Only the faer entry points are measured. tlinalg's packing, batch loop and lane policy, tenferro's tensor construction and dtype dispatch, and the small-`m` decode-projection shapes are other repositories' rows (tlinalg-benchmark, tenferro-benchmark).
+  Known blind spot: The C-order vendor route is per family and is resolved by the harness, not here: a row-major LAPACK driver is a different operation from its transpose, so a vendor C-order cell is either a native row-major route, a timed adaptation, or an explicitly labelled prepared-layout comparison, and the manifest records which.
+  Known blind spot: `gemm` covers the tall class's two Householder legs (a 16-wide basis and a 240-column target over 4096 rows: the reduction and the write-back) beside a vendor `?gemm` on the same leg. A single leg beside a vendor gemm is a diagnostic reference, not the equivalent implementation of the whole update, and the row is labelled accordingly.
+  Known blind spot: `householder_apply` measures the block apply with an explicit basis width and target width, and the sequence form, as two rows; a reflector count the suite does not declare is not covered.
+  Known blind spot: Allocation performed inside the measured call stays inside the clock. The fork's two row splits allocate their partial buffers inside the public call, and the public scratch function does not expose them; the campaign reports that as it is instead of changing faer's API to make the boundary look cleaner.
+  Known blind spot: `f32`/`c32`, the large regime's 1024 shapes, BLIS, sparse, iterative and GPU arms are later declarations, not machinery built now.
+  Known blind spot: A vendor arm records the library it linked. Only OpenBLAS reports the kernel its runtime dispatched to; MKL names no kernel and no processor count, so its manifest leaves both empty rather than inferring them.
+- **Rows** — one row per engine in every table below:
+  - `faer-fork` — The measured library: the tensor4all fork (`t4a-faer`, `[lib] name = "faer"`) at the checkout the harness linked by path. This is the row the campaign exists for; the fork's three perf experiments and the two correctness changes land here.
+    Identity: the fork revision in this run's manifest (`library.commit`), pinned by `pins/t4a-faer.rev`
+    Caveat: Both faer crates declare `[lib] name = "faer"`. They are distinct dependency keys (`faer_fork = { package = "t4a-faer" }`, `faer_upstream = { package = "faer" }`) and therefore distinct Rust crate identities, but their `Mat`, `Par` and trait types are not interchangeable: every adapter is written per arm, and shared transitive dependencies can unify Cargo features, so both arms declare equivalent feature sets and the resolved lock is recorded.
+    As measured: `faer-fork` (the provider in the measured revision; see library and upstream above)
+  - `faer-upstream` — Upstream `faer` at the tag the fork is based on, in the same binary as the fork row. The baseline that says whether a fork change moved the number.
+    Identity: the upstream revision in this run's manifest (`upstream.commit`), pinned by `pins/upstream-faer.rev`
+    Caveat: Same crate-name and feature-unification caveat as `faer-fork`. A change to upstream at a fixed fork revision produces a different page rather than overwriting one.
+    As measured: `faer-upstream` (the provider in the measured revision; see library and upstream above)
+  - `lapack-mkl` — The same calls against Intel oneAPI MKL, linked from the installation `MKLROOT` names. One binary links one vendor library, so this row is measured by its own build of the harness and recorded as its own run; no page carries two vendor arms. The LP64 interface layer and the threading layer are pinned by the harness before the first MKL call, because MKL otherwise lets the environment choose them and the interface layer is an ABI.
+    Identity: the MKL build recorded in this run's manifest (`providers[mkl]`)
+    Caveat: MKL reports no dispatched-kernel name and no processor count, so its manifest records neither rather than inferring them. Its threading is vendor-owned, as for OpenBLAS.
+    As measured: linked shared; mkl 2026.1; kernel not reported by the vendor
+
+## Hardware
+
+- CPU: `AMD Ryzen AI 9 HX 470`
+- logical CPUs: `24`
+- L3: `24 MiB (2 instances)`
+- L3 domains: `0-3: 16 MiB shared; 4-11: 8 MiB shared`
+- OS / arch: `Linux 7.0.0-38-generic` / `x86_64`
+- hostname: `shinaoka-EVO-X1Pro`
+- CPU sets: 1T -> `4`, 4T -> `4-7`, 8T -> `4-11`
+
+Every row below passed `fbench verify` on the same grid before timing: each provider's
+factorizations are checked against that provider's documented convention
+(residual, reconstruction, orthonormality, no NaN), never against another provider's
+floating-point output. Times are milliseconds, the best wall time per case and engine
+row; with more than one complete set repeat the table shows the best repeat, and the
+A/A spread is reported at its foot. C and F order are separate cells, because the order
+decides which path each provider takes.
+
+## gemm-small, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0003 | 0.0003 | 0.0006 |
+| `gemm/32x32x32/b1` | 0.0014 | 0.0014 | 0.0027 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0104 | 0.0104 | 0.0147 |
+| `gemm/8x8x8/b1` | 0.0001 | 0.0001 | 0.0002 |
+
+## gemm-small, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0002 | 0.0003 | 0.0006 |
+| `gemm/32x32x32/b1` | 0.0051 | 0.0055 | 0.0032 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0099 | 0.0113 | 0.0083 |
+| `gemm/8x8x8/b1` | 0.0001 | 0.0001 | 0.0002 |
+
+## gemm-small, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0003 | 0.0003 | 0.0006 |
+| `gemm/32x32x32/b1` | 0.0093 | 0.0076 | 0.0028 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0107 | 0.0105 | 0.0057 |
+| `gemm/8x8x8/b1` | 0.0001 | 0.0001 | 0.0002 |
+
+## gemm-small, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0003 | 0.0003 | 0.0006 |
+| `gemm/32x32x32/b1` | 0.0014 | 0.0014 | 0.0027 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0104 | 0.0103 | 0.0147 |
+| `gemm/8x8x8/b1` | 0.0001 | 0.0001 | 0.0002 |
+
+## gemm-small, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0003 | 0.0003 | 0.0006 |
+| `gemm/32x32x32/b1` | 0.0056 | 0.0056 | 0.0030 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0113 | 0.0148 | 0.0084 |
+| `gemm/8x8x8/b1` | 0.0001 | 0.0001 | 0.0002 |
+
+## gemm-small, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0002 | 0.0003 | 0.0006 |
+| `gemm/32x32x32/b1` | 0.0079 | 0.0066 | 0.0028 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0120 | 0.0104 | 0.0057 |
+| `gemm/8x8x8/b1` | 0.0001 | 0.0001 | 0.0002 |
+
+## gemm-small, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0012 | 0.0012 | 0.0010 |
+| `gemm/32x32x32/b1` | 0.0053 | 0.0053 | 0.0066 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0002 |
+| `gemm/64x64x64/b1` | 0.0408 | 0.0408 | 0.0492 |
+| `gemm/8x8x8/b1` | 0.0002 | 0.0002 | 0.0005 |
+
+## gemm-small, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0012 | 0.0012 | 0.0010 |
+| `gemm/32x32x32/b1` | 0.0053 | 0.0053 | 0.0085 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0002 |
+| `gemm/64x64x64/b1` | 0.0211 | 0.0206 | 0.0212 |
+| `gemm/8x8x8/b1` | 0.0002 | 0.0002 | 0.0005 |
+
+## gemm-small, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0012 | 0.0012 | 0.0010 |
+| `gemm/32x32x32/b1` | 0.0054 | 0.0053 | 0.0146 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0210 | 0.0208 | 0.0097 |
+| `gemm/8x8x8/b1` | 0.0002 | 0.0002 | 0.0005 |
+
+## gemm-small, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0012 | 0.0012 | 0.0010 |
+| `gemm/32x32x32/b1` | 0.0053 | 0.0053 | 0.0066 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0407 | 0.0408 | 0.0493 |
+| `gemm/8x8x8/b1` | 0.0002 | 0.0002 | 0.0005 |
+
+## gemm-small, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0012 | 0.0012 | 0.0010 |
+| `gemm/32x32x32/b1` | 0.0053 | 0.0053 | 0.0085 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0002 |
+| `gemm/64x64x64/b1` | 0.0210 | 0.0209 | 0.0211 |
+| `gemm/8x8x8/b1` | 0.0002 | 0.0002 | 0.0005 |
+
+## gemm-small, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x16x16/b1` | 0.0012 | 0.0012 | 0.0010 |
+| `gemm/32x32x32/b1` | 0.0053 | 0.0053 | 0.0148 |
+| `gemm/4x4x4/b1` | 0.0001 | 0.0001 | 0.0001 |
+| `gemm/64x64x64/b1` | 0.0219 | 0.0209 | 0.0098 |
+| `gemm/8x8x8/b1` | 0.0002 | 0.0002 | 0.0005 |
+
+## gemm-medium, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.9068 | 0.6446 | 0.7243 |
+
+## gemm-medium, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.2505 | 0.1856 | 0.2069 |
+
+## gemm-medium, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.1587 | 0.1590 | 0.1079 |
+
+## gemm-medium, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.6441 | 0.6438 | 0.7284 |
+
+## gemm-medium, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.1823 | 0.1840 | 0.2059 |
+
+## gemm-medium, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.1194 | 0.1152 | 0.1074 |
+
+## gemm-medium, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 2.5762 | 2.5790 | 3.0988 |
+
+## gemm-medium, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.6765 | 0.6772 | 1.0847 |
+
+## gemm-medium, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.3625 | 0.3615 | 0.4252 |
+
+## gemm-medium, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 2.5799 | 2.5805 | 3.0588 |
+
+## gemm-medium, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.6775 | 0.6736 | 1.0733 |
+
+## gemm-medium, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/256x256x256/b1` | 0.3584 | 0.3642 | 0.4113 |
+
+## gemm-large, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 7.2797 | 6.9802 | 6.0195 |
+
+## gemm-large, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 1.8839 | 1.8874 | 1.8400 |
+
+## gemm-large, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 1.0073 | 1.0188 | 0.9585 |
+
+## gemm-large, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 5.2111 | 5.2183 | 6.0130 |
+
+## gemm-large, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 1.3673 | 1.3642 | 1.8766 |
+
+## gemm-large, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 0.7372 | 0.7329 | 0.9596 |
+
+## gemm-large, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 20.8355 | 20.8366 | 24.9020 |
+
+## gemm-large, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 5.3344 | 5.3373 | 8.4500 |
+
+## gemm-large, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 2.8068 | 2.7618 | 3.5231 |
+
+## gemm-large, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 20.8275 | 20.8394 | 24.8119 |
+
+## gemm-large, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 5.3090 | 5.3652 | 8.4523 |
+
+## gemm-large, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/512x512x512/b1` | 2.8022 | 2.7881 | 3.5652 |
+
+## gemm-tall, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 0.8306 | 0.8246 | 1.1146 |
+| `gemm/4096x16x240/b1` | 0.6676 | 0.6686 | 1.0241 |
+| `gemm/4096x64x64/b1` | 0.8038 | 0.6550 | 0.9492 |
+
+## gemm-tall, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 0.2770 | 0.2743 | 0.2816 |
+| `gemm/4096x16x240/b1` | 0.2146 | 0.2160 | 0.2858 |
+| `gemm/4096x64x64/b1` | 0.2588 | 0.1778 | 0.2322 |
+
+## gemm-tall, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 0.2777 | 0.3043 | 0.1735 |
+| `gemm/4096x16x240/b1` | 0.1402 | 0.1708 | 0.2338 |
+| `gemm/4096x64x64/b1` | 0.1340 | 0.1397 | 0.1194 |
+
+## gemm-tall, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 0.6302 | 0.6287 | 1.6505 |
+| `gemm/4096x16x240/b1` | 0.6767 | 0.6807 | 1.0102 |
+| `gemm/4096x64x64/b1` | 0.6788 | 0.6825 | 0.7630 |
+
+## gemm-tall, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 0.4380 | 0.4169 | 0.4001 |
+| `gemm/4096x16x240/b1` | 0.2017 | 0.2083 | 0.3169 |
+| `gemm/4096x64x64/b1` | 0.1866 | 0.1866 | 0.1959 |
+
+## gemm-tall, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 0.6514 | 0.6772 | 0.2138 |
+| `gemm/4096x16x240/b1` | 0.1872 | 0.1731 | 0.1803 |
+| `gemm/4096x64x64/b1` | 0.1041 | 0.1056 | 0.1022 |
+
+## gemm-tall, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 2.5697 | 2.5516 | 3.6758 |
+| `gemm/4096x16x240/b1` | 2.6703 | 2.6604 | 3.7580 |
+| `gemm/4096x64x64/b1` | 2.7113 | 2.6747 | 3.2095 |
+
+## gemm-tall, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 1.0374 | 1.1590 | 1.2577 |
+| `gemm/4096x16x240/b1` | 0.7522 | 0.7505 | 1.5054 |
+| `gemm/4096x64x64/b1` | 0.7062 | 0.7049 | 1.2802 |
+
+## gemm-tall, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 0.6407 | 0.5848 | 0.6782 |
+| `gemm/4096x16x240/b1` | 0.4246 | 0.4371 | 0.7811 |
+| `gemm/4096x64x64/b1` | 0.3667 | 0.3708 | 0.4917 |
+
+## gemm-tall, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 2.4737 | 2.4846 | 3.6872 |
+| `gemm/4096x16x240/b1` | 2.6789 | 2.6749 | 3.9583 |
+| `gemm/4096x64x64/b1` | 2.7596 | 2.7594 | 3.6083 |
+
+## gemm-tall, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 1.1674 | 1.1408 | 12.7717 |
+| `gemm/4096x16x240/b1` | 0.7489 | 0.7542 | 2.5468 |
+| `gemm/4096x64x64/b1` | 0.7482 | 0.7716 | 1.2921 |
+
+## gemm-tall, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/16x4096x240/b1` | 1.5794 | 1.5262 | 5.9337 |
+| `gemm/4096x16x240/b1` | 0.4777 | 0.4800 | 1.4395 |
+| `gemm/4096x64x64/b1` | 0.3823 | 0.3790 | 0.7619 |
+
+## gemm-wide, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.9584 | 0.7993 | 0.7546 |
+
+## gemm-wide, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.2609 | 0.1883 | 0.1976 |
+
+## gemm-wide, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.1463 | 0.1474 | 0.1027 |
+
+## gemm-wide, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.6556 | 0.6558 | 0.9523 |
+
+## gemm-wide, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.1806 | 0.1781 | 0.2347 |
+
+## gemm-wide, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.0975 | 0.0978 | 0.1185 |
+
+## gemm-wide, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 2.7583 | 2.7603 | 3.6623 |
+
+## gemm-wide, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.7543 | 0.7509 | 1.3756 |
+
+## gemm-wide, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.3772 | 0.3725 | 0.8159 |
+
+## gemm-wide, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 2.6864 | 2.6961 | 3.2082 |
+
+## gemm-wide, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.7032 | 0.7004 | 1.2536 |
+
+## gemm-wide, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `gemm/64x64x4096/b1` | 0.3667 | 0.3677 | 0.4781 |
+
+## linalg-small, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0007 | 0.0006 | 0.0008 |
+| `cholesky/n32/b1` | 0.0021 | 0.0017 | 0.0025 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0002 |
+| `cholesky/n64/b1` | 0.0100 | 0.0072 | 0.0102 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0003 |
+| `eigh/n16/b1` | 0.0177 | 0.0178 | 0.0170 |
+| `eigh/n32/b1` | 0.0686 | 0.0681 | 0.0605 |
+| `eigh/n4/b1` | 0.0018 | 0.0018 | 0.0023 |
+| `eigh/n64/b1` | 0.2929 | 0.2921 | 0.2401 |
+| `eigh/n8/b1` | 0.0053 | 0.0052 | 0.0060 |
+| `full_piv_lu/n16/b1` | 0.0019 | 0.0019 | - |
+| `full_piv_lu/n32/b1` | 0.0065 | 0.0064 | - |
+| `full_piv_lu/n4/b1` | 0.0003 | 0.0003 | - |
+| `full_piv_lu/n64/b1` | 0.0281 | 0.0281 | - |
+| `full_piv_lu/n8/b1` | 0.0007 | 0.0007 | - |
+| `householder_apply/n16/b1` | 0.0054 | 0.0061 | - |
+| `householder_apply/n32/b1` | 0.0539 | 0.0590 | - |
+| `householder_apply/n4/b1` | 0.0009 | 0.0010 | - |
+| `householder_apply/n64/b1` | 0.1280 | 0.1461 | - |
+| `householder_apply/n8/b1` | 0.0019 | 0.0021 | - |
+| `lu/n16/b1` | 0.0016 | 0.0016 | 0.0015 |
+| `lu/n32/b1` | 0.0044 | 0.0044 | 0.0073 |
+| `lu/n4/b1` | 0.0003 | 0.0003 | 0.0002 |
+| `lu/n64/b1` | 0.0162 | 0.0161 | 0.0260 |
+| `lu/n8/b1` | 0.0005 | 0.0006 | 0.0005 |
+| `qr/n16/b1` | 0.0050 | 0.0052 | 0.0043 |
+| `qr/n32/b1` | 0.0187 | 0.0198 | 0.0153 |
+| `qr/n4/b1` | 0.0006 | 0.0006 | 0.0008 |
+| `qr/n64/b1` | 0.0707 | 0.0731 | 0.0781 |
+| `qr/n8/b1` | 0.0016 | 0.0017 | 0.0016 |
+| `qr_factor/n16/b1` | 0.0029 | 0.0036 | 0.0023 |
+| `qr_factor/n32/b1` | 0.0141 | 0.0171 | 0.0086 |
+| `qr_factor/n4/b1` | 0.0003 | 0.0004 | 0.0004 |
+| `qr_factor/n64/b1` | 0.0627 | 0.0797 | 0.1801 |
+| `qr_factor/n8/b1` | 0.0009 | 0.0011 | 0.0008 |
+| `solve/n16/b1` | 0.0019 | 0.0019 | 0.0017 |
+| `solve/n32/b1` | 0.0048 | 0.0049 | 0.0076 |
+| `solve/n4/b1` | 0.0004 | 0.0003 | 0.0003 |
+| `solve/n64/b1` | 0.0167 | 0.0166 | 0.0261 |
+| `solve/n8/b1` | 0.0007 | 0.0008 | 0.0006 |
+| `svd_thin/n16/b1` | 0.0302 | 0.0302 | 0.0282 |
+| `svd_thin/n32/b1` | 0.1108 | 0.1105 | 0.1031 |
+| `svd_thin/n4/b1` | 0.0025 | 0.0025 | 0.0045 |
+| `svd_thin/n64/b1` | 0.5489 | 0.5489 | 0.4318 |
+| `svd_thin/n8/b1` | 0.0082 | 0.0082 | 0.0117 |
+| `svd_values/n16/b1` | 0.0213 | 0.0212 | 0.0115 |
+| `svd_values/n32/b1` | 0.0845 | 0.0843 | 0.0374 |
+| `svd_values/n4/b1` | 0.0021 | 0.0021 | 0.0020 |
+| `svd_values/n64/b1` | 0.3090 | 0.3092 | 0.1599 |
+| `svd_values/n8/b1` | 0.0060 | 0.0059 | 0.0041 |
+| `triangular_solve/n16/b1` | 0.0002 | 0.0002 | - |
+| `triangular_solve/n32/b1` | 0.0004 | 0.0004 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0009 | 0.0009 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0007 | 0.0006 | 0.0008 |
+| `cholesky/n32/b1` | 0.0022 | 0.0019 | 0.0025 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0002 |
+| `cholesky/n64/b1` | 0.0073 | 0.0088 | 0.0101 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0003 |
+| `eigh/n16/b1` | 0.0178 | 0.0179 | 0.0169 |
+| `eigh/n32/b1` | 0.0685 | 0.0682 | 0.0635 |
+| `eigh/n4/b1` | 0.0017 | 0.0018 | 0.0023 |
+| `eigh/n64/b1` | 0.3019 | 0.3001 | 0.1645 |
+| `eigh/n8/b1` | 0.0052 | 0.0053 | 0.0060 |
+| `full_piv_lu/n16/b1` | 0.0020 | 0.0020 | - |
+| `full_piv_lu/n32/b1` | 0.0065 | 0.0066 | - |
+| `full_piv_lu/n4/b1` | 0.0004 | 0.0004 | - |
+| `full_piv_lu/n64/b1` | 0.0285 | 0.0285 | - |
+| `full_piv_lu/n8/b1` | 0.0008 | 0.0008 | - |
+| `householder_apply/n16/b1` | 0.0053 | 0.0061 | - |
+| `householder_apply/n32/b1` | 0.0538 | 0.0689 | - |
+| `householder_apply/n4/b1` | 0.0009 | 0.0010 | - |
+| `householder_apply/n64/b1` | 0.1527 | 0.2926 | - |
+| `householder_apply/n8/b1` | 0.0019 | 0.0021 | - |
+| `lu/n16/b1` | 0.0015 | 0.0016 | 0.0015 |
+| `lu/n32/b1` | 0.0043 | 0.0044 | 0.0073 |
+| `lu/n4/b1` | 0.0003 | 0.0003 | 0.0002 |
+| `lu/n64/b1` | 0.0161 | 0.0271 | 0.0259 |
+| `lu/n8/b1` | 0.0005 | 0.0006 | 0.0005 |
+| `qr/n16/b1` | 0.0051 | 0.0053 | 0.0043 |
+| `qr/n32/b1` | 0.0189 | 0.0653 | 0.0152 |
+| `qr/n4/b1` | 0.0007 | 0.0007 | 0.0008 |
+| `qr/n64/b1` | 0.0918 | 0.2815 | 0.0847 |
+| `qr/n8/b1` | 0.0016 | 0.0017 | 0.0016 |
+| `qr_factor/n16/b1` | 0.0029 | 0.0037 | 0.0023 |
+| `qr_factor/n32/b1` | 0.0142 | 0.0513 | 0.0086 |
+| `qr_factor/n4/b1` | 0.0003 | 0.0004 | 0.0004 |
+| `qr_factor/n64/b1` | 0.0723 | 0.2747 | 0.1802 |
+| `qr_factor/n8/b1` | 0.0008 | 0.0011 | 0.0008 |
+| `solve/n16/b1` | 0.0019 | 0.0019 | 0.0018 |
+| `solve/n32/b1` | 0.0049 | 0.0049 | 0.0076 |
+| `solve/n4/b1` | 0.0004 | 0.0004 | 0.0003 |
+| `solve/n64/b1` | 0.0167 | 0.0252 | 0.0261 |
+| `solve/n8/b1` | 0.0007 | 0.0008 | 0.0006 |
+| `svd_thin/n16/b1` | 0.0299 | 0.0298 | 0.0283 |
+| `svd_thin/n32/b1` | 0.1100 | 0.1103 | 0.1074 |
+| `svd_thin/n4/b1` | 0.0025 | 0.0025 | 0.0044 |
+| `svd_thin/n64/b1` | 0.5804 | 0.5794 | 0.4375 |
+| `svd_thin/n8/b1` | 0.0082 | 0.0082 | 0.0117 |
+| `svd_values/n16/b1` | 0.0213 | 0.0211 | 0.0115 |
+| `svd_values/n32/b1` | 0.0842 | 0.0840 | 0.0375 |
+| `svd_values/n4/b1` | 0.0021 | 0.0021 | 0.0021 |
+| `svd_values/n64/b1` | 0.3085 | 0.3100 | 0.1619 |
+| `svd_values/n8/b1` | 0.0060 | 0.0059 | 0.0041 |
+| `triangular_solve/n16/b1` | 0.0002 | 0.0002 | - |
+| `triangular_solve/n32/b1` | 0.0004 | 0.0004 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0009 | 0.0009 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0007 | 0.0006 | 0.0009 |
+| `cholesky/n32/b1` | 0.0019 | 0.0017 | 0.0025 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0002 |
+| `cholesky/n64/b1` | 0.0088 | 0.0086 | 0.0101 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0003 |
+| `eigh/n16/b1` | 0.0178 | 0.0180 | 0.0168 |
+| `eigh/n32/b1` | 0.0682 | 0.0681 | 0.0640 |
+| `eigh/n4/b1` | 0.0018 | 0.0018 | 0.0023 |
+| `eigh/n64/b1` | 0.3021 | 0.3032 | 0.1592 |
+| `eigh/n8/b1` | 0.0052 | 0.0052 | 0.0060 |
+| `full_piv_lu/n16/b1` | 0.0020 | 0.0020 | - |
+| `full_piv_lu/n32/b1` | 0.0066 | 0.0063 | - |
+| `full_piv_lu/n4/b1` | 0.0004 | 0.0004 | - |
+| `full_piv_lu/n64/b1` | 0.0282 | 0.0284 | - |
+| `full_piv_lu/n8/b1` | 0.0008 | 0.0007 | - |
+| `householder_apply/n16/b1` | 0.0054 | 0.0060 | - |
+| `householder_apply/n32/b1` | 0.0537 | 0.0721 | - |
+| `householder_apply/n4/b1` | 0.0009 | 0.0010 | - |
+| `householder_apply/n64/b1` | 0.1547 | 0.3992 | - |
+| `householder_apply/n8/b1` | 0.0019 | 0.0021 | - |
+| `lu/n16/b1` | 0.0016 | 0.0016 | 0.0015 |
+| `lu/n32/b1` | 0.0045 | 0.0044 | 0.0073 |
+| `lu/n4/b1` | 0.0003 | 0.0003 | 0.0002 |
+| `lu/n64/b1` | 0.0160 | 0.0291 | 0.0260 |
+| `lu/n8/b1` | 0.0005 | 0.0005 | 0.0004 |
+| `qr/n16/b1` | 0.0051 | 0.0053 | 0.0043 |
+| `qr/n32/b1` | 0.0187 | 0.0843 | 0.0152 |
+| `qr/n4/b1` | 0.0006 | 0.0006 | 0.0009 |
+| `qr/n64/b1` | 0.0929 | 0.4237 | 0.0917 |
+| `qr/n8/b1` | 0.0016 | 0.0017 | 0.0016 |
+| `qr_factor/n16/b1` | 0.0029 | 0.0037 | 0.0024 |
+| `qr_factor/n32/b1` | 0.0141 | 0.0721 | 0.0086 |
+| `qr_factor/n4/b1` | 0.0003 | 0.0004 | 0.0004 |
+| `qr_factor/n64/b1` | 0.0768 | 0.4151 | 0.1801 |
+| `qr_factor/n8/b1` | 0.0008 | 0.0011 | 0.0008 |
+| `solve/n16/b1` | 0.0020 | 0.0020 | 0.0018 |
+| `solve/n32/b1` | 0.0049 | 0.0050 | 0.0076 |
+| `solve/n4/b1` | 0.0004 | 0.0004 | 0.0003 |
+| `solve/n64/b1` | 0.0168 | 0.0297 | 0.0259 |
+| `solve/n8/b1` | 0.0008 | 0.0007 | 0.0006 |
+| `svd_thin/n16/b1` | 0.0299 | 0.0299 | 0.0282 |
+| `svd_thin/n32/b1` | 0.1102 | 0.1096 | 0.1091 |
+| `svd_thin/n4/b1` | 0.0025 | 0.0026 | 0.0044 |
+| `svd_thin/n64/b1` | 0.5742 | 0.5727 | 0.4141 |
+| `svd_thin/n8/b1` | 0.0081 | 0.0082 | 0.0117 |
+| `svd_values/n16/b1` | 0.0214 | 0.0213 | 0.0114 |
+| `svd_values/n32/b1` | 0.0845 | 0.0839 | 0.0373 |
+| `svd_values/n4/b1` | 0.0021 | 0.0021 | 0.0021 |
+| `svd_values/n64/b1` | 0.3082 | 0.3084 | 0.1621 |
+| `svd_values/n8/b1` | 0.0060 | 0.0060 | 0.0041 |
+| `triangular_solve/n16/b1` | 0.0002 | 0.0002 | - |
+| `triangular_solve/n32/b1` | 0.0004 | 0.0004 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0009 | 0.0009 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0006 | 0.0006 | 0.0007 |
+| `cholesky/n32/b1` | 0.0020 | 0.0017 | 0.0020 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0001 |
+| `cholesky/n64/b1` | 0.0089 | 0.0087 | 0.0085 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0002 |
+| `eigh/n16/b1` | 0.0179 | 0.0179 | 0.0167 |
+| `eigh/n32/b1` | 0.0681 | 0.0680 | 0.0595 |
+| `eigh/n4/b1` | 0.0017 | 0.0018 | 0.0022 |
+| `eigh/n64/b1` | 0.2927 | 0.2925 | 0.2373 |
+| `eigh/n8/b1` | 0.0054 | 0.0052 | 0.0058 |
+| `full_piv_lu/n16/b1` | 0.0019 | 0.0019 | - |
+| `full_piv_lu/n32/b1` | 0.0064 | 0.0063 | - |
+| `full_piv_lu/n4/b1` | 0.0003 | 0.0003 | - |
+| `full_piv_lu/n64/b1` | 0.0275 | 0.0275 | - |
+| `full_piv_lu/n8/b1` | 0.0008 | 0.0007 | - |
+| `householder_apply/n16/b1` | 0.0042 | 0.0045 | - |
+| `householder_apply/n32/b1` | 0.0158 | 0.0161 | - |
+| `householder_apply/n4/b1` | 0.0009 | 0.0009 | - |
+| `householder_apply/n64/b1` | 0.0724 | 0.0747 | - |
+| `householder_apply/n8/b1` | 0.0017 | 0.0017 | - |
+| `lu/n16/b1` | 0.0016 | 0.0017 | 0.0010 |
+| `lu/n32/b1` | 0.0044 | 0.0044 | 0.0059 |
+| `lu/n4/b1` | 0.0003 | 0.0003 | 0.0001 |
+| `lu/n64/b1` | 0.0157 | 0.0158 | 0.0203 |
+| `lu/n8/b1` | 0.0006 | 0.0006 | 0.0003 |
+| `qr/n16/b1` | 0.0050 | 0.0053 | 0.0034 |
+| `qr/n32/b1` | 0.0186 | 0.0197 | 0.0124 |
+| `qr/n4/b1` | 0.0006 | 0.0006 | 0.0006 |
+| `qr/n64/b1` | 0.0687 | 0.0712 | 0.0674 |
+| `qr/n8/b1` | 0.0016 | 0.0017 | 0.0012 |
+| `qr_factor/n16/b1` | 0.0019 | 0.0021 | 0.0018 |
+| `qr_factor/n32/b1` | 0.0102 | 0.0112 | 0.0071 |
+| `qr_factor/n4/b1` | 0.0002 | 0.0003 | 0.0003 |
+| `qr_factor/n64/b1` | 0.0440 | 0.0466 | 0.1747 |
+| `qr_factor/n8/b1` | 0.0006 | 0.0007 | 0.0006 |
+| `solve/n16/b1` | 0.0019 | 0.0019 | 0.0011 |
+| `solve/n32/b1` | 0.0047 | 0.0047 | 0.0059 |
+| `solve/n4/b1` | 0.0003 | 0.0003 | 0.0001 |
+| `solve/n64/b1` | 0.0159 | 0.0159 | 0.0201 |
+| `solve/n8/b1` | 0.0008 | 0.0007 | 0.0004 |
+| `svd_thin/n16/b1` | 0.0304 | 0.0303 | 0.0281 |
+| `svd_thin/n32/b1` | 0.1121 | 0.1119 | 0.1015 |
+| `svd_thin/n4/b1` | 0.0027 | 0.0027 | 0.0041 |
+| `svd_thin/n64/b1` | 0.5749 | 0.5744 | 0.4194 |
+| `svd_thin/n8/b1` | 0.0085 | 0.0085 | 0.0111 |
+| `svd_values/n16/b1` | 0.0219 | 0.0220 | 0.0112 |
+| `svd_values/n32/b1` | 0.0858 | 0.0857 | 0.0366 |
+| `svd_values/n4/b1` | 0.0020 | 0.0020 | 0.0017 |
+| `svd_values/n64/b1` | 0.3211 | 0.3217 | 0.1549 |
+| `svd_values/n8/b1` | 0.0059 | 0.0059 | 0.0040 |
+| `triangular_solve/n16/b1` | 0.0002 | 0.0002 | - |
+| `triangular_solve/n32/b1` | 0.0004 | 0.0004 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0010 | 0.0011 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0006 | 0.0006 | 0.0007 |
+| `cholesky/n32/b1` | 0.0023 | 0.0019 | 0.0021 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0001 |
+| `cholesky/n64/b1` | 0.0073 | 0.0089 | 0.0085 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0002 |
+| `eigh/n16/b1` | 0.0178 | 0.0180 | 0.0165 |
+| `eigh/n32/b1` | 0.0683 | 0.0679 | 0.0626 |
+| `eigh/n4/b1` | 0.0021 | 0.0018 | 0.0021 |
+| `eigh/n64/b1` | 0.3043 | 0.2988 | 0.1630 |
+| `eigh/n8/b1` | 0.0052 | 0.0053 | 0.0058 |
+| `full_piv_lu/n16/b1` | 0.0020 | 0.0019 | - |
+| `full_piv_lu/n32/b1` | 0.0065 | 0.0064 | - |
+| `full_piv_lu/n4/b1` | 0.0004 | 0.0004 | - |
+| `full_piv_lu/n64/b1` | 0.0280 | 0.0282 | - |
+| `full_piv_lu/n8/b1` | 0.0008 | 0.0008 | - |
+| `householder_apply/n16/b1` | 0.0043 | 0.0044 | - |
+| `householder_apply/n32/b1` | 0.0156 | 0.0214 | - |
+| `householder_apply/n4/b1` | 0.0009 | 0.0009 | - |
+| `householder_apply/n64/b1` | 0.0869 | 0.2402 | - |
+| `householder_apply/n8/b1` | 0.0017 | 0.0017 | - |
+| `lu/n16/b1` | 0.0015 | 0.0016 | 0.0011 |
+| `lu/n32/b1` | 0.0043 | 0.0044 | 0.0058 |
+| `lu/n4/b1` | 0.0003 | 0.0003 | 0.0001 |
+| `lu/n64/b1` | 0.0156 | 0.0248 | 0.0202 |
+| `lu/n8/b1` | 0.0005 | 0.0006 | 0.0003 |
+| `qr/n16/b1` | 0.0052 | 0.0054 | 0.0034 |
+| `qr/n32/b1` | 0.0185 | 0.0665 | 0.0123 |
+| `qr/n4/b1` | 0.0007 | 0.0007 | 0.0006 |
+| `qr/n64/b1` | 0.0845 | 0.2755 | 0.0744 |
+| `qr/n8/b1` | 0.0017 | 0.0018 | 0.0012 |
+| `qr_factor/n16/b1` | 0.0020 | 0.0020 | 0.0019 |
+| `qr_factor/n32/b1` | 0.0104 | 0.0467 | 0.0071 |
+| `qr_factor/n4/b1` | 0.0002 | 0.0003 | 0.0003 |
+| `qr_factor/n64/b1` | 0.0532 | 0.2300 | 0.1745 |
+| `qr_factor/n8/b1` | 0.0006 | 0.0007 | 0.0006 |
+| `solve/n16/b1` | 0.0018 | 0.0019 | 0.0012 |
+| `solve/n32/b1` | 0.0047 | 0.0047 | 0.0059 |
+| `solve/n4/b1` | 0.0004 | 0.0004 | 0.0002 |
+| `solve/n64/b1` | 0.0159 | 0.0279 | 0.0200 |
+| `solve/n8/b1` | 0.0008 | 0.0007 | 0.0004 |
+| `svd_thin/n16/b1` | 0.0299 | 0.0299 | 0.0280 |
+| `svd_thin/n32/b1` | 0.1113 | 0.1113 | 0.1061 |
+| `svd_thin/n4/b1` | 0.0026 | 0.0027 | 0.0041 |
+| `svd_thin/n64/b1` | 0.6102 | 0.6067 | 0.4005 |
+| `svd_thin/n8/b1` | 0.0085 | 0.0084 | 0.0110 |
+| `svd_values/n16/b1` | 0.0218 | 0.0220 | 0.0112 |
+| `svd_values/n32/b1` | 0.0852 | 0.0851 | 0.0366 |
+| `svd_values/n4/b1` | 0.0021 | 0.0020 | 0.0017 |
+| `svd_values/n64/b1` | 0.3212 | 0.3219 | 0.1580 |
+| `svd_values/n8/b1` | 0.0059 | 0.0059 | 0.0040 |
+| `triangular_solve/n16/b1` | 0.0002 | 0.0002 | - |
+| `triangular_solve/n32/b1` | 0.0004 | 0.0004 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0010 | 0.0011 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0006 | 0.0006 | 0.0007 |
+| `cholesky/n32/b1` | 0.0019 | 0.0017 | 0.0021 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0001 |
+| `cholesky/n64/b1` | 0.0088 | 0.0089 | 0.0085 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0002 |
+| `eigh/n16/b1` | 0.0178 | 0.0179 | 0.0165 |
+| `eigh/n32/b1` | 0.0680 | 0.0679 | 0.0628 |
+| `eigh/n4/b1` | 0.0018 | 0.0018 | 0.0022 |
+| `eigh/n64/b1` | 0.3016 | 0.3016 | 0.1565 |
+| `eigh/n8/b1` | 0.0053 | 0.0053 | 0.0058 |
+| `full_piv_lu/n16/b1` | 0.0020 | 0.0020 | - |
+| `full_piv_lu/n32/b1` | 0.0065 | 0.0064 | - |
+| `full_piv_lu/n4/b1` | 0.0004 | 0.0004 | - |
+| `full_piv_lu/n64/b1` | 0.0277 | 0.0278 | - |
+| `full_piv_lu/n8/b1` | 0.0008 | 0.0008 | - |
+| `householder_apply/n16/b1` | 0.0043 | 0.0045 | - |
+| `householder_apply/n32/b1` | 0.0157 | 0.0242 | - |
+| `householder_apply/n4/b1` | 0.0009 | 0.0009 | - |
+| `householder_apply/n64/b1` | 0.1019 | 0.3455 | - |
+| `householder_apply/n8/b1` | 0.0016 | 0.0017 | - |
+| `lu/n16/b1` | 0.0016 | 0.0016 | 0.0011 |
+| `lu/n32/b1` | 0.0043 | 0.0044 | 0.0057 |
+| `lu/n4/b1` | 0.0003 | 0.0003 | 0.0001 |
+| `lu/n64/b1` | 0.0157 | 0.0285 | 0.0204 |
+| `lu/n8/b1` | 0.0005 | 0.0006 | 0.0003 |
+| `qr/n16/b1` | 0.0050 | 0.0052 | 0.0034 |
+| `qr/n32/b1` | 0.0184 | 0.0831 | 0.0124 |
+| `qr/n4/b1` | 0.0006 | 0.0006 | 0.0006 |
+| `qr/n64/b1` | 0.0905 | 0.4215 | 0.0815 |
+| `qr/n8/b1` | 0.0016 | 0.0017 | 0.0012 |
+| `qr_factor/n16/b1` | 0.0019 | 0.0021 | 0.0019 |
+| `qr_factor/n32/b1` | 0.0103 | 0.0653 | 0.0070 |
+| `qr_factor/n4/b1` | 0.0002 | 0.0003 | 0.0003 |
+| `qr_factor/n64/b1` | 0.0598 | 0.3693 | 0.1746 |
+| `qr_factor/n8/b1` | 0.0006 | 0.0007 | 0.0006 |
+| `solve/n16/b1` | 0.0019 | 0.0019 | 0.0011 |
+| `solve/n32/b1` | 0.0048 | 0.0047 | 0.0059 |
+| `solve/n4/b1` | 0.0004 | 0.0004 | 0.0001 |
+| `solve/n64/b1` | 0.0159 | 0.0281 | 0.0199 |
+| `solve/n8/b1` | 0.0008 | 0.0007 | 0.0004 |
+| `svd_thin/n16/b1` | 0.0300 | 0.0299 | 0.0279 |
+| `svd_thin/n32/b1` | 0.1113 | 0.1106 | 0.1075 |
+| `svd_thin/n4/b1` | 0.0027 | 0.0027 | 0.0040 |
+| `svd_thin/n64/b1` | 0.6021 | 0.5991 | 0.3853 |
+| `svd_thin/n8/b1` | 0.0083 | 0.0083 | 0.0110 |
+| `svd_values/n16/b1` | 0.0220 | 0.0219 | 0.0111 |
+| `svd_values/n32/b1` | 0.0857 | 0.0850 | 0.0370 |
+| `svd_values/n4/b1` | 0.0020 | 0.0021 | 0.0017 |
+| `svd_values/n64/b1` | 0.3208 | 0.3216 | 0.1572 |
+| `svd_values/n8/b1` | 0.0059 | 0.0059 | 0.0040 |
+| `triangular_solve/n16/b1` | 0.0002 | 0.0002 | - |
+| `triangular_solve/n32/b1` | 0.0004 | 0.0004 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0000 | - |
+| `triangular_solve/n64/b1` | 0.0011 | 0.0010 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0007 | 0.0008 | 0.0013 |
+| `cholesky/n32/b1` | 0.0030 | 0.0031 | 0.0054 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0002 |
+| `cholesky/n64/b1` | 0.0176 | 0.0181 | 0.0315 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0004 |
+| `eigh/n16/b1` | 0.0191 | 0.0192 | 0.0225 |
+| `eigh/n32/b1` | 0.0852 | 0.0855 | 0.0905 |
+| `eigh/n4/b1` | 0.0019 | 0.0019 | 0.0025 |
+| `eigh/n64/b1` | 0.3899 | 0.3907 | 0.4844 |
+| `eigh/n8/b1` | 0.0054 | 0.0054 | 0.0072 |
+| `full_piv_lu/n16/b1` | 0.0024 | 0.0023 | - |
+| `full_piv_lu/n32/b1` | 0.0095 | 0.0093 | - |
+| `full_piv_lu/n4/b1` | 0.0004 | 0.0004 | - |
+| `full_piv_lu/n64/b1` | 0.0554 | 0.0553 | - |
+| `full_piv_lu/n8/b1` | 0.0008 | 0.0008 | - |
+| `householder_apply/n16/b1` | 0.0110 | 0.0118 | - |
+| `householder_apply/n32/b1` | 0.1348 | 0.1422 | - |
+| `householder_apply/n4/b1` | 0.0014 | 0.0014 | - |
+| `householder_apply/n64/b1` | 0.3387 | 0.3567 | - |
+| `householder_apply/n8/b1` | 0.0030 | 0.0032 | - |
+| `lu/n16/b1` | 0.0019 | 0.0019 | 0.0025 |
+| `lu/n32/b1` | 0.0071 | 0.0068 | 0.0121 |
+| `lu/n4/b1` | 0.0003 | 0.0003 | 0.0003 |
+| `lu/n64/b1` | 0.0319 | 0.0315 | 0.0582 |
+| `lu/n8/b1` | 0.0007 | 0.0008 | 0.0007 |
+| `qr/n16/b1` | 0.0064 | 0.0066 | 0.0073 |
+| `qr/n32/b1` | 0.0403 | 0.0416 | 0.0316 |
+| `qr/n4/b1` | 0.0006 | 0.0007 | 0.0010 |
+| `qr/n64/b1` | 0.1884 | 0.1894 | 0.2012 |
+| `qr/n8/b1` | 0.0016 | 0.0018 | 0.0022 |
+| `qr_factor/n16/b1` | 0.0046 | 0.0054 | 0.0043 |
+| `qr_factor/n32/b1` | 0.0244 | 0.0274 | 0.0176 |
+| `qr_factor/n4/b1` | 0.0004 | 0.0005 | 0.0005 |
+| `qr_factor/n64/b1` | 0.1261 | 0.1434 | 0.1008 |
+| `qr_factor/n8/b1` | 0.0011 | 0.0013 | 0.0012 |
+| `solve/n16/b1` | 0.0024 | 0.0023 | 0.0028 |
+| `solve/n32/b1` | 0.0076 | 0.0075 | 0.0123 |
+| `solve/n4/b1` | 0.0004 | 0.0004 | 0.0004 |
+| `solve/n64/b1` | 0.0331 | 0.0331 | 0.0567 |
+| `solve/n8/b1` | 0.0008 | 0.0009 | 0.0010 |
+| `svd_thin/n16/b1` | 0.0319 | 0.0320 | 0.0371 |
+| `svd_thin/n32/b1` | 0.1418 | 0.1428 | 0.1520 |
+| `svd_thin/n4/b1` | 0.0030 | 0.0030 | 0.0047 |
+| `svd_thin/n64/b1` | 0.7380 | 0.7372 | 0.8089 |
+| `svd_thin/n8/b1` | 0.0090 | 0.0090 | 0.0123 |
+| `svd_values/n16/b1` | 0.0234 | 0.0235 | 0.0162 |
+| `svd_values/n32/b1` | 0.0976 | 0.0973 | 0.0614 |
+| `svd_values/n4/b1` | 0.0024 | 0.0024 | 0.0024 |
+| `svd_values/n64/b1` | 0.3908 | 0.3912 | 0.2974 |
+| `svd_values/n8/b1` | 0.0075 | 0.0075 | 0.0056 |
+| `triangular_solve/n16/b1` | 0.0003 | 0.0003 | - |
+| `triangular_solve/n32/b1` | 0.0006 | 0.0006 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0016 | 0.0016 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0008 | 0.0008 | 0.0013 |
+| `cholesky/n32/b1` | 0.0029 | 0.0030 | 0.0054 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0002 |
+| `cholesky/n64/b1` | 0.0175 | 0.0178 | 0.0301 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0005 |
+| `eigh/n16/b1` | 0.0192 | 0.0193 | 0.0225 |
+| `eigh/n32/b1` | 0.0855 | 0.0858 | 0.0937 |
+| `eigh/n4/b1` | 0.0018 | 0.0019 | 0.0024 |
+| `eigh/n64/b1` | 0.3823 | 0.3842 | 0.3389 |
+| `eigh/n8/b1` | 0.0054 | 0.0054 | 0.0072 |
+| `full_piv_lu/n16/b1` | 0.0024 | 0.0025 | - |
+| `full_piv_lu/n32/b1` | 0.0096 | 0.0096 | - |
+| `full_piv_lu/n4/b1` | 0.0005 | 0.0005 | - |
+| `full_piv_lu/n64/b1` | 0.0558 | 0.0557 | - |
+| `full_piv_lu/n8/b1` | 0.0009 | 0.0009 | - |
+| `householder_apply/n16/b1` | 0.0110 | 0.0118 | - |
+| `householder_apply/n32/b1` | 0.1347 | 0.1463 | - |
+| `householder_apply/n4/b1` | 0.0014 | 0.0015 | - |
+| `householder_apply/n64/b1` | 0.2986 | 0.4265 | - |
+| `householder_apply/n8/b1` | 0.0030 | 0.0032 | - |
+| `lu/n16/b1` | 0.0020 | 0.0019 | 0.0025 |
+| `lu/n32/b1` | 0.0069 | 0.0069 | 0.0121 |
+| `lu/n4/b1` | 0.0004 | 0.0004 | 0.0003 |
+| `lu/n64/b1` | 0.0322 | 0.0318 | 0.0587 |
+| `lu/n8/b1` | 0.0008 | 0.0008 | 0.0007 |
+| `qr/n16/b1` | 0.0064 | 0.0067 | 0.0073 |
+| `qr/n32/b1` | 0.0405 | 0.0787 | 0.0315 |
+| `qr/n4/b1` | 0.0007 | 0.0008 | 0.0010 |
+| `qr/n64/b1` | 0.1820 | 0.4127 | 0.1944 |
+| `qr/n8/b1` | 0.0016 | 0.0018 | 0.0022 |
+| `qr_factor/n16/b1` | 0.0046 | 0.0054 | 0.0043 |
+| `qr_factor/n32/b1` | 0.0244 | 0.0634 | 0.0176 |
+| `qr_factor/n4/b1` | 0.0004 | 0.0005 | 0.0005 |
+| `qr_factor/n64/b1` | 0.1320 | 0.3539 | 0.4598 |
+| `qr_factor/n8/b1` | 0.0011 | 0.0013 | 0.0012 |
+| `solve/n16/b1` | 0.0024 | 0.0023 | 0.0028 |
+| `solve/n32/b1` | 0.0077 | 0.0075 | 0.0122 |
+| `solve/n4/b1` | 0.0004 | 0.0005 | 0.0004 |
+| `solve/n64/b1` | 0.0329 | 0.0331 | 0.0564 |
+| `solve/n8/b1` | 0.0009 | 0.0009 | 0.0010 |
+| `svd_thin/n16/b1` | 0.0319 | 0.0319 | 0.0372 |
+| `svd_thin/n32/b1` | 0.1421 | 0.1426 | 0.1561 |
+| `svd_thin/n4/b1` | 0.0030 | 0.0030 | 0.0046 |
+| `svd_thin/n64/b1` | 0.7200 | 0.7203 | 0.6538 |
+| `svd_thin/n8/b1` | 0.0089 | 0.0089 | 0.0124 |
+| `svd_values/n16/b1` | 0.0235 | 0.0235 | 0.0161 |
+| `svd_values/n32/b1` | 0.0974 | 0.0972 | 0.0612 |
+| `svd_values/n4/b1` | 0.0024 | 0.0024 | 0.0024 |
+| `svd_values/n64/b1` | 0.3912 | 0.3913 | 0.3190 |
+| `svd_values/n8/b1` | 0.0075 | 0.0074 | 0.0056 |
+| `triangular_solve/n16/b1` | 0.0003 | 0.0003 | - |
+| `triangular_solve/n32/b1` | 0.0006 | 0.0006 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0016 | 0.0016 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0008 | 0.0008 | 0.0013 |
+| `cholesky/n32/b1` | 0.0030 | 0.0030 | 0.0054 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0002 |
+| `cholesky/n64/b1` | 0.0173 | 0.0176 | 0.0305 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0005 |
+| `eigh/n16/b1` | 0.0192 | 0.0193 | 0.0224 |
+| `eigh/n32/b1` | 0.0849 | 0.0854 | 0.0941 |
+| `eigh/n4/b1` | 0.0018 | 0.0019 | 0.0024 |
+| `eigh/n64/b1` | 0.3867 | 0.3891 | 0.3213 |
+| `eigh/n8/b1` | 0.0054 | 0.0054 | 0.0072 |
+| `full_piv_lu/n16/b1` | 0.0024 | 0.0025 | - |
+| `full_piv_lu/n32/b1` | 0.0095 | 0.0097 | - |
+| `full_piv_lu/n4/b1` | 0.0005 | 0.0005 | - |
+| `full_piv_lu/n64/b1` | 0.0556 | 0.0552 | - |
+| `full_piv_lu/n8/b1` | 0.0009 | 0.0009 | - |
+| `householder_apply/n16/b1` | 0.0111 | 0.0118 | - |
+| `householder_apply/n32/b1` | 0.1343 | 0.1503 | - |
+| `householder_apply/n4/b1` | 0.0014 | 0.0015 | - |
+| `householder_apply/n64/b1` | 0.3114 | 0.5154 | - |
+| `householder_apply/n8/b1` | 0.0030 | 0.0032 | - |
+| `lu/n16/b1` | 0.0019 | 0.0019 | 0.0025 |
+| `lu/n32/b1` | 0.0069 | 0.0068 | 0.0121 |
+| `lu/n4/b1` | 0.0003 | 0.0004 | 0.0003 |
+| `lu/n64/b1` | 0.0333 | 0.0321 | 0.0584 |
+| `lu/n8/b1` | 0.0008 | 0.0008 | 0.0008 |
+| `qr/n16/b1` | 0.0063 | 0.0066 | 0.0073 |
+| `qr/n32/b1` | 0.0407 | 0.1094 | 0.0314 |
+| `qr/n4/b1` | 0.0006 | 0.0007 | 0.0010 |
+| `qr/n64/b1` | 0.1792 | 0.5374 | 0.1678 |
+| `qr/n8/b1` | 0.0016 | 0.0018 | 0.0022 |
+| `qr_factor/n16/b1` | 0.0046 | 0.0054 | 0.0043 |
+| `qr_factor/n32/b1` | 0.0247 | 0.0885 | 0.0176 |
+| `qr_factor/n4/b1` | 0.0004 | 0.0005 | 0.0005 |
+| `qr_factor/n64/b1` | 0.1261 | 0.4659 | 0.4597 |
+| `qr_factor/n8/b1` | 0.0011 | 0.0013 | 0.0012 |
+| `solve/n16/b1` | 0.0025 | 0.0024 | 0.0028 |
+| `solve/n32/b1` | 0.0076 | 0.0076 | 0.0122 |
+| `solve/n4/b1` | 0.0004 | 0.0004 | 0.0004 |
+| `solve/n64/b1` | 0.0329 | 0.0326 | 0.0563 |
+| `solve/n8/b1` | 0.0009 | 0.0009 | 0.0010 |
+| `svd_thin/n16/b1` | 0.0317 | 0.0318 | 0.0372 |
+| `svd_thin/n32/b1` | 0.1415 | 0.1424 | 0.1575 |
+| `svd_thin/n4/b1` | 0.0030 | 0.0030 | 0.0047 |
+| `svd_thin/n64/b1` | 0.7286 | 0.7292 | 0.6391 |
+| `svd_thin/n8/b1` | 0.0089 | 0.0089 | 0.0125 |
+| `svd_values/n16/b1` | 0.0234 | 0.0234 | 0.0162 |
+| `svd_values/n32/b1` | 0.0972 | 0.0972 | 0.0613 |
+| `svd_values/n4/b1` | 0.0024 | 0.0024 | 0.0024 |
+| `svd_values/n64/b1` | 0.3904 | 0.3914 | 0.2959 |
+| `svd_values/n8/b1` | 0.0075 | 0.0074 | 0.0056 |
+| `triangular_solve/n16/b1` | 0.0003 | 0.0003 | - |
+| `triangular_solve/n32/b1` | 0.0007 | 0.0006 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0016 | 0.0016 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0007 | 0.0008 | 0.0011 |
+| `cholesky/n32/b1` | 0.0029 | 0.0031 | 0.0049 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0001 |
+| `cholesky/n64/b1` | 0.0175 | 0.0179 | 0.0270 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0003 |
+| `eigh/n16/b1` | 0.0191 | 0.0191 | 0.0220 |
+| `eigh/n32/b1` | 0.0850 | 0.0856 | 0.0894 |
+| `eigh/n4/b1` | 0.0019 | 0.0019 | 0.0023 |
+| `eigh/n64/b1` | 0.3902 | 0.3903 | 0.4780 |
+| `eigh/n8/b1` | 0.0055 | 0.0055 | 0.0069 |
+| `full_piv_lu/n16/b1` | 0.0023 | 0.0023 | - |
+| `full_piv_lu/n32/b1` | 0.0095 | 0.0094 | - |
+| `full_piv_lu/n4/b1` | 0.0004 | 0.0004 | - |
+| `full_piv_lu/n64/b1` | 0.0540 | 0.0541 | - |
+| `full_piv_lu/n8/b1` | 0.0008 | 0.0008 | - |
+| `householder_apply/n16/b1` | 0.0095 | 0.0097 | - |
+| `householder_apply/n32/b1` | 0.0401 | 0.0406 | - |
+| `householder_apply/n4/b1` | 0.0014 | 0.0014 | - |
+| `householder_apply/n64/b1` | 0.2074 | 0.2093 | - |
+| `householder_apply/n8/b1` | 0.0026 | 0.0027 | - |
+| `lu/n16/b1` | 0.0020 | 0.0019 | 0.0020 |
+| `lu/n32/b1` | 0.0070 | 0.0069 | 0.0106 |
+| `lu/n4/b1` | 0.0004 | 0.0003 | 0.0002 |
+| `lu/n64/b1` | 0.0311 | 0.0309 | 0.0516 |
+| `lu/n8/b1` | 0.0007 | 0.0007 | 0.0005 |
+| `qr/n16/b1` | 0.0064 | 0.0067 | 0.0063 |
+| `qr/n32/b1` | 0.0402 | 0.0417 | 0.0283 |
+| `qr/n4/b1` | 0.0006 | 0.0007 | 0.0008 |
+| `qr/n64/b1` | 0.1867 | 0.1875 | 0.1890 |
+| `qr/n8/b1` | 0.0016 | 0.0018 | 0.0018 |
+| `qr_factor/n16/b1` | 0.0031 | 0.0034 | 0.0038 |
+| `qr_factor/n32/b1` | 0.0199 | 0.0205 | 0.0161 |
+| `qr_factor/n4/b1` | 0.0003 | 0.0003 | 0.0004 |
+| `qr_factor/n64/b1` | 0.0973 | 0.0986 | 0.4547 |
+| `qr_factor/n8/b1` | 0.0008 | 0.0009 | 0.0010 |
+| `solve/n16/b1` | 0.0023 | 0.0024 | 0.0022 |
+| `solve/n32/b1` | 0.0076 | 0.0076 | 0.0105 |
+| `solve/n4/b1` | 0.0004 | 0.0004 | 0.0002 |
+| `solve/n64/b1` | 0.0321 | 0.0322 | 0.0500 |
+| `solve/n8/b1` | 0.0009 | 0.0008 | 0.0006 |
+| `svd_thin/n16/b1` | 0.0317 | 0.0317 | 0.0379 |
+| `svd_thin/n32/b1` | 0.1402 | 0.1411 | 0.1484 |
+| `svd_thin/n4/b1` | 0.0030 | 0.0030 | 0.0043 |
+| `svd_thin/n64/b1` | 0.7533 | 0.7545 | 0.7902 |
+| `svd_thin/n8/b1` | 0.0090 | 0.0090 | 0.0124 |
+| `svd_values/n16/b1` | 0.0244 | 0.0245 | 0.0157 |
+| `svd_values/n32/b1` | 0.0961 | 0.0959 | 0.0595 |
+| `svd_values/n4/b1` | 0.0026 | 0.0026 | 0.0021 |
+| `svd_values/n64/b1` | 0.3752 | 0.3754 | 0.2900 |
+| `svd_values/n8/b1` | 0.0074 | 0.0074 | 0.0052 |
+| `triangular_solve/n16/b1` | 0.0003 | 0.0003 | - |
+| `triangular_solve/n32/b1` | 0.0007 | 0.0007 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0017 | 0.0017 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+## linalg-small, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0007 | 0.0008 | 0.0011 |
+| `cholesky/n32/b1` | 0.0030 | 0.0030 | 0.0049 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0001 |
+| `cholesky/n64/b1` | 0.0183 | 0.0176 | 0.0266 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0003 |
+| `eigh/n16/b1` | 0.0191 | 0.0193 | 0.0221 |
+| `eigh/n32/b1` | 0.0853 | 0.0857 | 0.0919 |
+| `eigh/n4/b1` | 0.0019 | 0.0019 | 0.0023 |
+| `eigh/n64/b1` | 0.3806 | 0.3823 | 0.3331 |
+| `eigh/n8/b1` | 0.0054 | 0.0054 | 0.0070 |
+| `full_piv_lu/n16/b1` | 0.0024 | 0.0024 | - |
+| `full_piv_lu/n32/b1` | 0.0096 | 0.0096 | - |
+| `full_piv_lu/n4/b1` | 0.0005 | 0.0005 | - |
+| `full_piv_lu/n64/b1` | 0.0542 | 0.0542 | - |
+| `full_piv_lu/n8/b1` | 0.0009 | 0.0008 | - |
+| `householder_apply/n16/b1` | 0.0095 | 0.0097 | - |
+| `householder_apply/n32/b1` | 0.0398 | 0.0450 | - |
+| `householder_apply/n4/b1` | 0.0013 | 0.0013 | - |
+| `householder_apply/n64/b1` | 0.1784 | 0.3299 | - |
+| `householder_apply/n8/b1` | 0.0027 | 0.0028 | - |
+| `lu/n16/b1` | 0.0020 | 0.0020 | 0.0020 |
+| `lu/n32/b1` | 0.0070 | 0.0069 | 0.0104 |
+| `lu/n4/b1` | 0.0004 | 0.0004 | 0.0002 |
+| `lu/n64/b1` | 0.0311 | 0.0310 | 0.0520 |
+| `lu/n8/b1` | 0.0007 | 0.0007 | 0.0006 |
+| `qr/n16/b1` | 0.0063 | 0.0067 | 0.0063 |
+| `qr/n32/b1` | 0.0406 | 0.0881 | 0.0284 |
+| `qr/n4/b1` | 0.0007 | 0.0008 | 0.0008 |
+| `qr/n64/b1` | 0.1717 | 0.4068 | 0.1767 |
+| `qr/n8/b1` | 0.0016 | 0.0017 | 0.0018 |
+| `qr_factor/n16/b1` | 0.0031 | 0.0034 | 0.0038 |
+| `qr_factor/n32/b1` | 0.0200 | 0.0526 | 0.0161 |
+| `qr_factor/n4/b1` | 0.0003 | 0.0003 | 0.0004 |
+| `qr_factor/n64/b1` | 0.0946 | 0.2923 | 0.4546 |
+| `qr_factor/n8/b1` | 0.0008 | 0.0009 | 0.0010 |
+| `solve/n16/b1` | 0.0024 | 0.0024 | 0.0022 |
+| `solve/n32/b1` | 0.0075 | 0.0077 | 0.0104 |
+| `solve/n4/b1` | 0.0005 | 0.0004 | 0.0003 |
+| `solve/n64/b1` | 0.0321 | 0.0321 | 0.0501 |
+| `solve/n8/b1` | 0.0009 | 0.0009 | 0.0006 |
+| `svd_thin/n16/b1` | 0.0319 | 0.0319 | 0.0378 |
+| `svd_thin/n32/b1` | 0.1403 | 0.1412 | 0.1523 |
+| `svd_thin/n4/b1` | 0.0030 | 0.0030 | 0.0043 |
+| `svd_thin/n64/b1` | 0.7389 | 0.7404 | 0.6346 |
+| `svd_thin/n8/b1` | 0.0090 | 0.0090 | 0.0124 |
+| `svd_values/n16/b1` | 0.0245 | 0.0245 | 0.0156 |
+| `svd_values/n32/b1` | 0.0962 | 0.0955 | 0.0593 |
+| `svd_values/n4/b1` | 0.0026 | 0.0025 | 0.0021 |
+| `svd_values/n64/b1` | 0.3760 | 0.3773 | 0.3037 |
+| `svd_values/n8/b1` | 0.0073 | 0.0073 | 0.0051 |
+| `triangular_solve/n16/b1` | 0.0003 | 0.0003 | - |
+| `triangular_solve/n32/b1` | 0.0008 | 0.0007 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0017 | 0.0017 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0002 | - |
+
+## linalg-small, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n16/b1` | 0.0008 | 0.0008 | 0.0011 |
+| `cholesky/n32/b1` | 0.0030 | 0.0030 | 0.0047 |
+| `cholesky/n4/b1` | 0.0002 | 0.0002 | 0.0001 |
+| `cholesky/n64/b1` | 0.0174 | 0.0177 | 0.0273 |
+| `cholesky/n8/b1` | 0.0003 | 0.0003 | 0.0003 |
+| `eigh/n16/b1` | 0.0192 | 0.0192 | 0.0220 |
+| `eigh/n32/b1` | 0.0851 | 0.0855 | 0.0929 |
+| `eigh/n4/b1` | 0.0018 | 0.0019 | 0.0023 |
+| `eigh/n64/b1` | 0.3873 | 0.3868 | 0.3166 |
+| `eigh/n8/b1` | 0.0054 | 0.0055 | 0.0069 |
+| `full_piv_lu/n16/b1` | 0.0025 | 0.0024 | - |
+| `full_piv_lu/n32/b1` | 0.0099 | 0.0097 | - |
+| `full_piv_lu/n4/b1` | 0.0005 | 0.0005 | - |
+| `full_piv_lu/n64/b1` | 0.0542 | 0.0543 | - |
+| `full_piv_lu/n8/b1` | 0.0009 | 0.0009 | - |
+| `householder_apply/n16/b1` | 0.0095 | 0.0099 | - |
+| `householder_apply/n32/b1` | 0.0398 | 0.0475 | - |
+| `householder_apply/n4/b1` | 0.0014 | 0.0013 | - |
+| `householder_apply/n64/b1` | 0.1771 | 0.4336 | - |
+| `householder_apply/n8/b1` | 0.0026 | 0.0028 | - |
+| `lu/n16/b1` | 0.0020 | 0.0020 | 0.0020 |
+| `lu/n32/b1` | 0.0069 | 0.0069 | 0.0105 |
+| `lu/n4/b1` | 0.0004 | 0.0004 | 0.0002 |
+| `lu/n64/b1` | 0.0313 | 0.0311 | 0.0517 |
+| `lu/n8/b1` | 0.0007 | 0.0007 | 0.0006 |
+| `qr/n16/b1` | 0.0063 | 0.0066 | 0.0063 |
+| `qr/n32/b1` | 0.0406 | 0.1100 | 0.0285 |
+| `qr/n4/b1` | 0.0006 | 0.0007 | 0.0008 |
+| `qr/n64/b1` | 0.1792 | 0.5244 | 0.1567 |
+| `qr/n8/b1` | 0.0016 | 0.0017 | 0.0018 |
+| `qr_factor/n16/b1` | 0.0031 | 0.0033 | 0.0038 |
+| `qr_factor/n32/b1` | 0.0200 | 0.0760 | 0.0160 |
+| `qr_factor/n4/b1` | 0.0003 | 0.0003 | 0.0004 |
+| `qr_factor/n64/b1` | 0.0966 | 0.4076 | 0.4544 |
+| `qr_factor/n8/b1` | 0.0008 | 0.0009 | 0.0010 |
+| `solve/n16/b1` | 0.0025 | 0.0024 | 0.0022 |
+| `solve/n32/b1` | 0.0077 | 0.0075 | 0.0104 |
+| `solve/n4/b1` | 0.0005 | 0.0004 | 0.0003 |
+| `solve/n64/b1` | 0.0321 | 0.0319 | 0.0499 |
+| `solve/n8/b1` | 0.0009 | 0.0009 | 0.0006 |
+| `svd_thin/n16/b1` | 0.0315 | 0.0315 | 0.0378 |
+| `svd_thin/n32/b1` | 0.1397 | 0.1409 | 0.1543 |
+| `svd_thin/n4/b1` | 0.0030 | 0.0030 | 0.0043 |
+| `svd_thin/n64/b1` | 0.7581 | 0.7520 | 0.6021 |
+| `svd_thin/n8/b1` | 0.0090 | 0.0089 | 0.0124 |
+| `svd_values/n16/b1` | 0.0244 | 0.0245 | 0.0156 |
+| `svd_values/n32/b1` | 0.0957 | 0.0960 | 0.0593 |
+| `svd_values/n4/b1` | 0.0025 | 0.0026 | 0.0021 |
+| `svd_values/n64/b1` | 0.3763 | 0.3765 | 0.2887 |
+| `svd_values/n8/b1` | 0.0073 | 0.0073 | 0.0052 |
+| `triangular_solve/n16/b1` | 0.0003 | 0.0003 | - |
+| `triangular_solve/n32/b1` | 0.0007 | 0.0007 | - |
+| `triangular_solve/n4/b1` | 0.0001 | 0.0001 | - |
+| `triangular_solve/n64/b1` | 0.0017 | 0.0017 | - |
+| `triangular_solve/n8/b1` | 0.0001 | 0.0001 | - |
+
+Not applicable to this population's shapes and reported as skipped: `eig/16`, `eig/32`, `eig/4`, `eig/64`, `eig/8`, `full_piv_lu/16`, `full_piv_lu/32`, `full_piv_lu/4`, `full_piv_lu/64`, `full_piv_lu/8`, `householder_apply/16`, `householder_apply/32`, `householder_apply/4`, `householder_apply/64`, `householder_apply/8`, `triangular_solve/16`, `triangular_solve/32`, `triangular_solve/4`, `triangular_solve/64`, `triangular_solve/8`, `upgrade_factor/16`, `upgrade_factor/32`, `upgrade_factor/4`, `upgrade_factor/64`, `upgrade_factor/8`.
+
+## linalg-medium, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.2325 | 0.2263 | 0.3816 |
+| `eigh/n256/b1` | 5.8964 | 5.8998 | 5.9947 |
+| `full_piv_lu/n256/b1` | 1.6564 | 1.6600 | - |
+| `householder_apply/n256/b1` | 2.7623 | 3.0287 | - |
+| `lu/n256/b1` | 0.6440 | 0.6504 | 0.5801 |
+| `qr/n256/b1` | 1.7597 | 1.7721 | 2.5586 |
+| `qr_factor/n256/b1` | 1.4454 | 1.7147 | 1.2389 |
+| `solve/n256/b1` | 0.6343 | 0.6349 | 0.5871 |
+| `svd_thin/n256/b1` | 11.1124 | 11.1271 | 10.8420 |
+| `svd_values/n256/b1` | 7.4899 | 7.4969 | 4.1829 |
+| `triangular_solve/n256/b1` | 0.0072 | 0.0073 | - |
+
+## linalg-medium, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.2321 | 0.2487 | 0.2423 |
+| `eigh/n256/b1` | 4.3730 | 4.9879 | 2.8703 |
+| `full_piv_lu/n256/b1` | 1.6536 | 1.6599 | - |
+| `householder_apply/n256/b1` | 2.1819 | 3.8613 | - |
+| `lu/n256/b1` | 0.6483 | 0.7366 | 0.2257 |
+| `qr/n256/b1` | 1.2110 | 2.2912 | 1.1688 |
+| `qr_factor/n256/b1` | 1.6259 | 3.3204 | 0.4120 |
+| `solve/n256/b1` | 0.6403 | 0.6695 | 0.2187 |
+| `svd_thin/n256/b1` | 8.1316 | 8.1715 | 7.5118 |
+| `svd_values/n256/b1` | 6.4672 | 6.4077 | 3.6902 |
+| `triangular_solve/n256/b1` | 0.0059 | 0.0059 | - |
+
+## linalg-medium, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.2590 | 0.2479 | 0.2154 |
+| `eigh/n256/b1` | 4.2638 | 4.3437 | 2.3698 |
+| `full_piv_lu/n256/b1` | 1.6498 | 1.6632 | - |
+| `householder_apply/n256/b1` | 2.1394 | 4.4842 | - |
+| `lu/n256/b1` | 0.6579 | 0.8018 | 0.2084 |
+| `qr/n256/b1` | 1.4832 | 3.3248 | 1.0383 |
+| `qr_factor/n256/b1` | 1.6841 | 4.1057 | 0.3555 |
+| `solve/n256/b1` | 0.6432 | 0.7122 | 0.2008 |
+| `svd_thin/n256/b1` | 8.4160 | 8.2886 | 6.9747 |
+| `svd_values/n256/b1` | 6.5849 | 6.5660 | 3.6002 |
+| `triangular_solve/n256/b1` | 0.0067 | 0.0067 | - |
+
+## linalg-medium, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.1921 | 0.1931 | 0.2714 |
+| `eigh/n256/b1` | 5.8593 | 5.8647 | 5.9033 |
+| `full_piv_lu/n256/b1` | 1.5710 | 1.5794 | - |
+| `householder_apply/n256/b1` | 2.1462 | 2.1596 | - |
+| `lu/n256/b1` | 0.4187 | 0.4193 | 0.4853 |
+| `qr/n256/b1` | 1.6672 | 1.6840 | 2.3729 |
+| `qr_factor/n256/b1` | 0.8261 | 0.8361 | 1.1477 |
+| `solve/n256/b1` | 0.5428 | 0.5448 | 0.4892 |
+| `svd_thin/n256/b1` | 11.0590 | 11.0646 | 10.6028 |
+| `svd_values/n256/b1` | 7.3946 | 7.3970 | 4.1400 |
+| `triangular_solve/n256/b1` | 0.0081 | 0.0084 | - |
+
+## linalg-medium, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.2038 | 0.2056 | 0.1426 |
+| `eigh/n256/b1` | 4.3639 | 4.3601 | 2.7803 |
+| `full_piv_lu/n256/b1` | 1.5741 | 1.5754 | - |
+| `householder_apply/n256/b1` | 1.3295 | 2.4155 | - |
+| `lu/n256/b1` | 0.4238 | 0.4851 | 0.1940 |
+| `qr/n256/b1` | 1.1314 | 2.1824 | 1.1173 |
+| `qr_factor/n256/b1` | 0.7933 | 1.8392 | 0.3883 |
+| `solve/n256/b1` | 0.5472 | 0.5894 | 0.1885 |
+| `svd_thin/n256/b1` | 8.0990 | 8.0565 | 7.5465 |
+| `svd_values/n256/b1` | 6.3433 | 6.3304 | 3.7112 |
+| `triangular_solve/n256/b1` | 0.0065 | 0.0065 | - |
+
+## linalg-medium, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.2232 | 0.2191 | 0.1129 |
+| `eigh/n256/b1` | 4.3711 | 4.2183 | 2.3215 |
+| `full_piv_lu/n256/b1` | 1.5684 | 1.5746 | - |
+| `householder_apply/n256/b1` | 1.2992 | 3.0328 | - |
+| `lu/n256/b1` | 0.4269 | 0.5466 | 0.1903 |
+| `qr/n256/b1` | 1.3823 | 3.1738 | 1.0071 |
+| `qr_factor/n256/b1` | 0.8787 | 2.5062 | 0.3360 |
+| `solve/n256/b1` | 0.5538 | 0.6140 | 0.1825 |
+| `svd_thin/n256/b1` | 8.4048 | 8.3373 | 6.9649 |
+| `svd_values/n256/b1` | 6.5041 | 6.5016 | 3.6501 |
+| `triangular_solve/n256/b1` | 0.0085 | 0.0070 | - |
+
+## linalg-medium, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.7310 | 0.7316 | 1.1071 |
+| `eigh/n256/b1` | 10.4851 | 10.4887 | 16.0573 |
+| `full_piv_lu/n256/b1` | 3.6309 | 3.6284 | - |
+| `householder_apply/n256/b1` | 8.7074 | 9.0267 | - |
+| `lu/n256/b1` | 1.3288 | 1.3281 | 1.9869 |
+| `qr/n256/b1` | 6.2191 | 6.2246 | 7.3641 |
+| `qr_factor/n256/b1` | 3.6072 | 3.9076 | 3.4318 |
+| `solve/n256/b1` | 1.2950 | 1.2901 | 1.6947 |
+| `svd_thin/n256/b1` | 20.6439 | 20.6173 | 26.5815 |
+| `svd_values/n256/b1` | 11.5514 | 11.5530 | 10.9682 |
+| `triangular_solve/n256/b1` | 0.0141 | 0.0142 | - |
+
+## linalg-medium, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.5336 | 0.5185 | 0.4755 |
+| `eigh/n256/b1` | 7.8469 | 7.9238 | 6.1274 |
+| `full_piv_lu/n256/b1` | 3.6263 | 3.6055 | - |
+| `householder_apply/n256/b1` | 4.3910 | 6.0329 | - |
+| `lu/n256/b1` | 1.3388 | 1.0019 | 0.6060 |
+| `qr/n256/b1` | 2.7752 | 3.7486 | 2.8433 |
+| `qr_factor/n256/b1` | 2.5872 | 4.3736 | 1.0115 |
+| `solve/n256/b1` | 1.2981 | 0.9305 | 0.5390 |
+| `svd_thin/n256/b1` | 13.5203 | 13.7790 | 13.0176 |
+| `svd_values/n256/b1` | 10.3591 | 10.4443 | 6.6810 |
+| `triangular_solve/n256/b1` | 0.0141 | 0.0142 | - |
+
+## linalg-medium, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.5091 | 0.5127 | 0.3928 |
+| `eigh/n256/b1` | 7.0601 | 6.9638 | 4.8326 |
+| `full_piv_lu/n256/b1` | 3.6219 | 3.6359 | - |
+| `householder_apply/n256/b1` | 4.0640 | 6.2276 | - |
+| `lu/n256/b1` | 1.3483 | 1.0191 | 0.4175 |
+| `qr/n256/b1` | 2.5616 | 4.2347 | 2.2441 |
+| `qr_factor/n256/b1` | 2.5963 | 5.1251 | 1.0024 |
+| `solve/n256/b1` | 1.3245 | 0.9046 | 0.4006 |
+| `svd_thin/n256/b1` | 13.9130 | 13.6743 | 10.4462 |
+| `svd_values/n256/b1` | 10.4036 | 10.5730 | 5.8391 |
+| `triangular_solve/n256/b1` | 0.0142 | 0.0144 | - |
+
+## linalg-medium, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.6759 | 0.6775 | 1.0823 |
+| `eigh/n256/b1` | 10.4223 | 10.4353 | 15.8014 |
+| `full_piv_lu/n256/b1` | 3.4657 | 3.4710 | - |
+| `householder_apply/n256/b1` | 7.8184 | 7.8325 | - |
+| `lu/n256/b1` | 1.2027 | 1.2029 | 1.9398 |
+| `qr/n256/b1` | 6.0533 | 6.0673 | 7.1887 |
+| `qr_factor/n256/b1` | 2.6881 | 2.7385 | 3.3364 |
+| `solve/n256/b1` | 1.1645 | 1.1633 | 1.6428 |
+| `svd_thin/n256/b1` | 20.4647 | 20.4667 | 27.0180 |
+| `svd_values/n256/b1` | 11.4026 | 11.3937 | 11.9587 |
+| `triangular_solve/n256/b1` | 0.0134 | 0.0134 | - |
+
+## linalg-medium, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.4706 | 0.4633 | 0.3508 |
+| `eigh/n256/b1` | 7.9800 | 7.8396 | 6.0347 |
+| `full_piv_lu/n256/b1` | 3.4421 | 3.4476 | - |
+| `householder_apply/n256/b1` | 3.4173 | 4.2217 | - |
+| `lu/n256/b1` | 1.2120 | 0.8889 | 0.5846 |
+| `qr/n256/b1` | 2.6082 | 3.6089 | 2.7794 |
+| `qr_factor/n256/b1` | 1.5885 | 2.5536 | 0.9865 |
+| `solve/n256/b1` | 1.1893 | 0.8032 | 0.5127 |
+| `svd_thin/n256/b1` | 13.1371 | 13.1872 | 12.7959 |
+| `svd_values/n256/b1` | 10.2328 | 10.2991 | 6.6601 |
+| `triangular_solve/n256/b1` | 0.0139 | 0.0140 | - |
+
+## linalg-medium, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n256/b1` | 0.4643 | 0.4603 | 0.2737 |
+| `eigh/n256/b1` | 6.9188 | 6.9163 | 4.7283 |
+| `full_piv_lu/n256/b1` | 3.4713 | 3.4731 | - |
+| `householder_apply/n256/b1` | 2.9669 | 4.5132 | - |
+| `lu/n256/b1` | 1.2153 | 0.8991 | 0.4065 |
+| `qr/n256/b1` | 2.4159 | 4.0676 | 2.1866 |
+| `qr_factor/n256/b1` | 1.5872 | 3.2629 | 1.0038 |
+| `solve/n256/b1` | 1.1849 | 0.7993 | 0.3902 |
+| `svd_thin/n256/b1` | 13.2897 | 13.9153 | 10.3146 |
+| `svd_values/n256/b1` | 10.1155 | 10.2289 | 5.8093 |
+| `triangular_solve/n256/b1` | 0.0133 | 0.0133 | - |
+
+Not applicable to this population's shapes and reported as skipped: `eig/256`, `full_piv_lu/256`, `householder_apply/256`, `triangular_solve/256`, `upgrade_factor/256`.
+
+## linalg-large, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 1.5173 | 1.5142 | 2.4195 |
+| `eigh/n512/b1` | 29.4241 | 29.5299 | 37.0274 |
+| `full_piv_lu/n512/b1` | 12.9534 | 12.9021 | - |
+| `lu/n512/b1` | 6.1417 | 4.4494 | 3.6272 |
+| `qr/n512/b1` | 12.5143 | 12.4759 | 18.1132 |
+| `qr_factor/n512/b1` | 9.4042 | 10.5130 | 8.6203 |
+| `solve/n512/b1` | 4.3419 | 4.3318 | 3.6262 |
+| `svd_thin/n512/b1` | 63.6777 | 63.7269 | 71.7261 |
+| `svd_values/n512/b1` | 39.8695 | 39.8649 | 28.7652 |
+| `triangular_solve/n512/b1` | 0.0236 | 0.0236 | - |
+
+## linalg-large, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 0.9884 | 0.9869 | 1.1746 |
+| `eigh/n512/b1` | 16.5043 | 16.7161 | 13.4186 |
+| `full_piv_lu/n512/b1` | 10.5235 | 10.5540 | - |
+| `lu/n512/b1` | 4.6480 | 4.7194 | 1.0989 |
+| `qr/n512/b1` | 7.0055 | 9.1068 | 7.0623 |
+| `qr_factor/n512/b1` | 9.6961 | 18.6258 | 2.3871 |
+| `solve/n512/b1` | 3.3331 | 3.3924 | 1.0931 |
+| `svd_thin/n512/b1` | 38.9358 | 38.8388 | 35.5277 |
+| `svd_values/n512/b1` | 29.7949 | 29.4360 | 15.7837 |
+| `triangular_solve/n512/b1` | 0.0207 | 0.0205 | - |
+
+## linalg-large, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 0.9659 | 0.9803 | 0.9026 |
+| `eigh/n512/b1` | 15.8360 | 15.8383 | 9.4086 |
+| `full_piv_lu/n512/b1` | 10.3321 | 10.3306 | - |
+| `lu/n512/b1` | 4.5329 | 4.9686 | 0.7979 |
+| `qr/n512/b1` | 6.4313 | 9.5891 | 5.2553 |
+| `qr_factor/n512/b1` | 9.8441 | 21.0533 | 1.4461 |
+| `solve/n512/b1` | 3.1709 | 3.4078 | 0.7755 |
+| `svd_thin/n512/b1` | 36.9935 | 37.7787 | 29.7771 |
+| `svd_values/n512/b1` | 29.9820 | 30.0304 | 13.5829 |
+| `triangular_solve/n512/b1` | 0.0217 | 0.0236 | - |
+
+## linalg-large, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 1.2481 | 1.2457 | 2.0430 |
+| `eigh/n512/b1` | 29.1079 | 29.1103 | 36.2619 |
+| `full_piv_lu/n512/b1` | 12.2811 | 12.2450 | - |
+| `lu/n512/b1` | 3.0513 | 3.0162 | 3.1538 |
+| `qr/n512/b1` | 11.7449 | 12.0173 | 17.0243 |
+| `qr_factor/n512/b1` | 4.6986 | 4.7838 | 8.0774 |
+| `solve/n512/b1` | 3.6890 | 3.6607 | 3.1636 |
+| `svd_thin/n512/b1` | 63.4339 | 63.3984 | 70.8953 |
+| `svd_values/n512/b1` | 39.2456 | 39.2050 | 28.5383 |
+| `triangular_solve/n512/b1` | 0.0259 | 0.0257 | - |
+
+## linalg-large, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 0.7380 | 0.7374 | 0.8370 |
+| `eigh/n512/b1` | 16.4649 | 16.7538 | 13.0044 |
+| `full_piv_lu/n512/b1` | 9.9517 | 9.9341 | - |
+| `lu/n512/b1` | 1.9675 | 2.0998 | 0.9778 |
+| `qr/n512/b1` | 6.3073 | 8.4303 | 6.8732 |
+| `qr_factor/n512/b1` | 2.9424 | 4.9922 | 2.2902 |
+| `solve/n512/b1` | 2.6192 | 2.6629 | 0.9707 |
+| `svd_thin/n512/b1` | 37.7540 | 38.1077 | 36.5468 |
+| `svd_values/n512/b1` | 29.1209 | 28.9732 | 15.8154 |
+| `triangular_solve/n512/b1` | 0.0237 | 0.0240 | - |
+
+## linalg-large, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 0.7300 | 0.7199 | 0.5699 |
+| `eigh/n512/b1` | 15.8327 | 15.7556 | 9.1105 |
+| `full_piv_lu/n512/b1` | 9.5903 | 9.6344 | - |
+| `lu/n512/b1` | 1.9333 | 2.2614 | 0.7416 |
+| `qr/n512/b1` | 5.8697 | 8.9428 | 5.2104 |
+| `qr_factor/n512/b1` | 3.1180 | 6.2958 | 1.4190 |
+| `solve/n512/b1` | 2.5680 | 2.7814 | 0.7277 |
+| `svd_thin/n512/b1` | 37.0180 | 37.3778 | 30.3652 |
+| `svd_values/n512/b1` | 29.6184 | 29.8885 | 13.7175 |
+| `triangular_solve/n512/b1` | 0.0265 | 0.0258 | - |
+
+## linalg-large, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 4.7724 | 4.7758 | 7.0044 |
+| `eigh/n512/b1` | 63.6748 | 63.7209 | 103.7290 |
+| `full_piv_lu/n512/b1` | 24.5114 | 24.5809 | - |
+| `lu/n512/b1` | 9.2724 | 9.2463 | 13.0553 |
+| `qr/n512/b1` | 42.5618 | 42.6265 | 49.5031 |
+| `qr_factor/n512/b1` | 21.4056 | 22.6971 | 24.3069 |
+| `solve/n512/b1` | 9.2549 | 9.2427 | 11.6576 |
+| `svd_thin/n512/b1` | 128.4018 | 128.5290 | 169.1530 |
+| `svd_values/n512/b1` | 66.4552 | 66.6370 | 74.3607 |
+| `triangular_solve/n512/b1` | 0.0528 | 0.0526 | - |
+
+## linalg-large, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 2.0837 | 2.0841 | 2.2500 |
+| `eigh/n512/b1` | 29.8250 | 29.9617 | 32.6865 |
+| `full_piv_lu/n512/b1` | 16.8613 | 16.8699 | - |
+| `lu/n512/b1` | 5.2108 | 4.7161 | 3.8960 |
+| `qr/n512/b1` | 14.3652 | 16.5114 | 17.2572 |
+| `qr_factor/n512/b1` | 12.7005 | 15.8093 | 7.2744 |
+| `solve/n512/b1` | 5.2127 | 4.6218 | 3.5927 |
+| `svd_thin/n512/b1` | 60.4472 | 60.9831 | 70.0253 |
+| `svd_values/n512/b1` | 40.1966 | 40.2818 | 36.5896 |
+| `triangular_solve/n512/b1` | 0.0416 | 0.0426 | - |
+
+## linalg-large, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 1.7341 | 1.7279 | 1.3967 |
+| `eigh/n512/b1` | 25.6597 | 25.9462 | 22.8589 |
+| `full_piv_lu/n512/b1` | 15.9558 | 15.9284 | - |
+| `lu/n512/b1` | 4.5675 | 4.0598 | 2.2600 |
+| `qr/n512/b1` | 11.3099 | 14.3912 | 9.5036 |
+| `qr_factor/n512/b1` | 11.7287 | 16.4571 | 3.7399 |
+| `solve/n512/b1` | 4.5029 | 3.9533 | 2.2110 |
+| `svd_thin/n512/b1` | 52.2057 | 52.3642 | 52.4323 |
+| `svd_values/n512/b1` | 37.9777 | 37.9140 | 27.2216 |
+| `triangular_solve/n512/b1` | 0.0424 | 0.0434 | - |
+
+## linalg-large, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 4.5936 | 4.5612 | 7.5944 |
+| `eigh/n512/b1` | 63.3436 | 63.3904 | 102.6576 |
+| `full_piv_lu/n512/b1` | 23.8758 | 23.8795 | - |
+| `lu/n512/b1` | 8.4986 | 8.5094 | 12.0496 |
+| `qr/n512/b1` | 41.8204 | 41.9557 | 47.2890 |
+| `qr_factor/n512/b1` | 17.4598 | 17.5107 | 23.1841 |
+| `solve/n512/b1` | 8.5617 | 8.5683 | 10.9887 |
+| `svd_thin/n512/b1` | 127.7699 | 127.8786 | 185.0405 |
+| `svd_values/n512/b1` | 65.7936 | 65.9846 | 91.3742 |
+| `triangular_solve/n512/b1` | 0.0521 | 0.0520 | - |
+
+## linalg-large, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 1.9680 | 1.9128 | 1.9321 |
+| `eigh/n512/b1` | 29.2408 | 29.8566 | 32.1212 |
+| `full_piv_lu/n512/b1` | 16.0651 | 16.3071 | - |
+| `lu/n512/b1` | 4.6005 | 4.1198 | 3.5805 |
+| `qr/n512/b1` | 13.8303 | 15.8988 | 16.6643 |
+| `qr_factor/n512/b1` | 6.7263 | 8.8984 | 6.8585 |
+| `solve/n512/b1` | 4.5658 | 4.0066 | 3.3007 |
+| `svd_thin/n512/b1` | 59.2024 | 60.9021 | 68.7818 |
+| `svd_values/n512/b1` | 39.4641 | 39.3740 | 33.8609 |
+| `triangular_solve/n512/b1` | 0.0433 | 0.0452 | - |
+
+## linalg-large, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `cholesky/n512/b1` | 1.5328 | 1.5396 | 1.1528 |
+| `eigh/n512/b1` | 25.6809 | 25.2521 | 22.5239 |
+| `full_piv_lu/n512/b1` | 15.2008 | 15.1562 | - |
+| `lu/n512/b1` | 3.9284 | 3.4767 | 2.1128 |
+| `qr/n512/b1` | 10.7419 | 13.7751 | 9.1410 |
+| `qr_factor/n512/b1` | 6.0504 | 8.9314 | 3.5653 |
+| `solve/n512/b1` | 3.9355 | 3.3678 | 2.0288 |
+| `svd_thin/n512/b1` | 51.0646 | 51.0768 | 51.7010 |
+| `svd_values/n512/b1` | 37.5923 | 36.9283 | 26.0443 |
+| `triangular_solve/n512/b1` | 0.0464 | 0.0459 | - |
+
+Not applicable to this population's shapes and reported as skipped: `full_piv_lu/512`, `triangular_solve/512`.
+
+## linalg-tall, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 1.4796 | 1.5025 | - |
+| `householder_apply/4096x256/b1` | 70.0472 | 69.9837 | - |
+| `qr/1024x64/b1` | 7.1348 | 7.1247 | 1.1167 |
+| `qr/4096x256/b1` | 490.6519 | 489.9508 | 57.7822 |
+| `qr_factor/1024x64/b1` | 1.5394 | 1.5804 | 0.5534 |
+| `qr_factor/4096x256/b1` | 47.3279 | 47.6216 | 27.7300 |
+| `svd_thin/1024x64/b1` | 1.5051 | 1.5098 | 1.8361 |
+| `svd_thin/4096x256/b1` | 55.9827 | 56.1315 | 76.9541 |
+| `svd_values/1024x64/b1` | 0.9038 | 0.9084 | 0.8428 |
+| `svd_values/4096x256/b1` | 28.1463 | 28.0879 | 33.8151 |
+
+## linalg-tall, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 2.2058 | 2.5226 | - |
+| `householder_apply/4096x256/b1` | 75.1990 | 80.4156 | - |
+| `qr/1024x64/b1` | 2.4625 | 2.7333 | 0.6294 |
+| `qr/4096x256/b1` | 162.0838 | 164.6153 | 19.5388 |
+| `qr_factor/1024x64/b1` | 2.5682 | 3.1965 | 0.5129 |
+| `qr_factor/4096x256/b1` | 43.8625 | 64.7165 | 8.6576 |
+| `svd_thin/1024x64/b1` | 1.4313 | 1.6939 | 1.1260 |
+| `svd_thin/4096x256/b1` | 30.7374 | 32.9290 | 31.3794 |
+| `svd_values/1024x64/b1` | 0.9722 | 1.2904 | 0.5759 |
+| `svd_values/4096x256/b1` | 20.2288 | 22.4572 | 15.5818 |
+
+## linalg-tall, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 2.3006 | 3.8177 | - |
+| `householder_apply/4096x256/b1` | 69.4040 | 76.9571 | - |
+| `qr/1024x64/b1` | 2.0629 | 2.4141 | 0.5289 |
+| `qr/4096x256/b1` | 118.9852 | 121.9003 | 13.6884 |
+| `qr_factor/1024x64/b1` | 2.8414 | 3.4750 | 0.3976 |
+| `qr_factor/4096x256/b1` | 58.2467 | 64.5668 | 8.1990 |
+| `svd_thin/1024x64/b1` | 1.5278 | 1.8966 | 1.0027 |
+| `svd_thin/4096x256/b1` | 27.3577 | 32.2509 | 24.0251 |
+| `svd_values/1024x64/b1` | 1.0537 | 1.4930 | 0.4996 |
+| `svd_values/4096x256/b1` | 18.9260 | 23.5571 | 11.7188 |
+
+## linalg-tall, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 0.8842 | 0.8851 | - |
+| `householder_apply/4096x256/b1` | 43.2265 | 43.2612 | - |
+| `qr/1024x64/b1` | 7.0379 | 7.0294 | 0.9409 |
+| `qr/4096x256/b1` | 489.0593 | 488.9146 | 42.3605 |
+| `qr_factor/1024x64/b1` | 0.4754 | 0.4777 | 0.4672 |
+| `qr_factor/4096x256/b1` | 15.7286 | 15.7412 | 18.0729 |
+| `svd_thin/1024x64/b1` | 1.4716 | 1.4750 | 1.6850 |
+| `svd_thin/4096x256/b1` | 52.4183 | 52.6896 | 67.4392 |
+| `svd_values/1024x64/b1` | 0.8401 | 0.8409 | 0.7575 |
+| `svd_values/4096x256/b1` | 23.9900 | 24.0817 | 24.8385 |
+
+## linalg-tall, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 0.7333 | 1.0158 | - |
+| `householder_apply/4096x256/b1` | 26.7844 | 30.9306 | - |
+| `qr/1024x64/b1` | 2.3721 | 2.6578 | 0.5811 |
+| `qr/4096x256/b1` | 153.9888 | 154.2378 | 16.5437 |
+| `qr_factor/1024x64/b1` | 0.5543 | 0.8278 | 0.2625 |
+| `qr_factor/4096x256/b1` | 8.4894 | 11.1818 | 7.3210 |
+| `svd_thin/1024x64/b1` | 1.4180 | 1.6360 | 1.1047 |
+| `svd_thin/4096x256/b1` | 26.8256 | 28.9317 | 28.4827 |
+| `svd_values/1024x64/b1` | 0.9396 | 1.2170 | 0.5605 |
+| `svd_values/4096x256/b1` | 16.0748 | 18.6771 | 13.1611 |
+
+## linalg-tall, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 0.8025 | 1.1807 | - |
+| `householder_apply/4096x256/b1` | 21.9622 | 28.9011 | - |
+| `qr/1024x64/b1` | 1.9040 | 2.3427 | 0.5019 |
+| `qr/4096x256/b1` | 113.8438 | 121.4225 | 11.9250 |
+| `qr_factor/1024x64/b1` | 0.6404 | 1.0191 | 0.1924 |
+| `qr_factor/4096x256/b1` | 7.3624 | 12.0581 | 4.4022 |
+| `svd_thin/1024x64/b1` | 1.4786 | 1.8680 | 0.9791 |
+| `svd_thin/4096x256/b1` | 23.7667 | 28.4758 | 21.8451 |
+| `svd_values/1024x64/b1` | 1.0387 | 1.4698 | 0.4860 |
+| `svd_values/4096x256/b1` | 15.3285 | 19.9507 | 9.9193 |
+
+## linalg-tall, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 3.7772 | 3.7642 | - |
+| `householder_apply/4096x256/b1` | 203.0615 | 203.8013 | - |
+| `qr/1024x64/b1` | 25.7821 | 25.7870 | 3.1085 |
+| `qr/4096x256/b1` | 1602.1001 | 1600.9453 | 143.9541 |
+| `qr_factor/1024x64/b1` | 2.2960 | 2.3289 | 1.4510 |
+| `qr_factor/4096x256/b1` | 106.3275 | 107.0199 | 70.0437 |
+| `svd_thin/1024x64/b1` | 3.6020 | 3.6117 | 5.3645 |
+| `svd_thin/4096x256/b1` | 177.4906 | 177.0106 | 242.6334 |
+| `svd_values/1024x64/b1` | 1.8423 | 1.8756 | 2.3389 |
+| `svd_values/4096x256/b1` | 76.0238 | 76.8783 | 90.1158 |
+
+## linalg-tall, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 3.1477 | 3.1727 | - |
+| `householder_apply/4096x256/b1` | 101.1322 | 145.4774 | - |
+| `qr/1024x64/b1` | 7.9197 | 8.2522 | 1.8715 |
+| `qr/4096x256/b1` | 480.2887 | 486.1831 | 58.9159 |
+| `qr_factor/1024x64/b1` | 3.6570 | 3.7363 | 0.8559 |
+| `qr_factor/4096x256/b1` | 70.6539 | 105.1009 | 28.9328 |
+| `svd_thin/1024x64/b1` | 2.4077 | 2.6291 | 3.3516 |
+| `svd_thin/4096x256/b1` | 75.8511 | 79.7604 | 91.4096 |
+| `svd_values/1024x64/b1` | 1.5694 | 1.8074 | 1.7281 |
+| `svd_values/4096x256/b1` | 42.9715 | 48.1782 | 44.0044 |
+
+## linalg-tall, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 2.9781 | 3.2600 | - |
+| `householder_apply/4096x256/b1` | 115.2555 | 125.4520 | - |
+| `qr/1024x64/b1` | 6.3013 | 5.9282 | 1.3868 |
+| `qr/4096x256/b1` | 309.0285 | 315.3120 | 39.3471 |
+| `qr_factor/1024x64/b1` | 3.4400 | 3.9504 | 0.5484 |
+| `qr_factor/4096x256/b1` | 67.1483 | 103.8674 | 20.7050 |
+| `svd_thin/1024x64/b1` | 2.2705 | 2.8025 | 2.7144 |
+| `svd_thin/4096x256/b1` | 61.0104 | 70.1729 | 53.5102 |
+| `svd_values/1024x64/b1` | 1.5623 | 2.0180 | 1.3857 |
+| `svd_values/4096x256/b1` | 38.0020 | 46.7011 | 32.8312 |
+
+## linalg-tall, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 2.9013 | 2.9142 | - |
+| `householder_apply/4096x256/b1` | 157.2479 | 157.4521 | - |
+| `qr/1024x64/b1` | 25.4271 | 25.4830 | 2.9136 |
+| `qr/4096x256/b1` | 1588.2308 | 1588.1765 | 134.5629 |
+| `qr_factor/1024x64/b1` | 1.3332 | 1.3307 | 1.3782 |
+| `qr_factor/4096x256/b1` | 55.4838 | 55.6984 | 64.6678 |
+| `svd_thin/1024x64/b1` | 3.5386 | 3.5634 | 5.0858 |
+| `svd_thin/4096x256/b1` | 169.3920 | 169.4943 | 221.2539 |
+| `svd_values/1024x64/b1` | 1.7761 | 1.8044 | 2.2066 |
+| `svd_values/4096x256/b1` | 68.0494 | 68.5321 | 87.9836 |
+
+## linalg-tall, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 1.6139 | 1.8553 | - |
+| `householder_apply/4096x256/b1` | 69.8262 | 66.1275 | - |
+| `qr/1024x64/b1` | 7.7457 | 8.0316 | 1.8331 |
+| `qr/4096x256/b1` | 465.3524 | 472.6928 | 49.4532 |
+| `qr_factor/1024x64/b1` | 1.0419 | 1.2952 | 0.8590 |
+| `qr_factor/4096x256/b1` | 23.1180 | 28.8950 | 20.5935 |
+| `svd_thin/1024x64/b1` | 2.3276 | 2.5548 | 3.2534 |
+| `svd_thin/4096x256/b1` | 67.8834 | 71.6874 | 94.0616 |
+| `svd_values/1024x64/b1` | 1.5402 | 1.7599 | 1.7021 |
+| `svd_values/4096x256/b1` | 35.5723 | 40.5545 | 31.8543 |
+
+## linalg-tall, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `householder_apply/1024x64/b1` | 1.4947 | 1.9608 | - |
+| `householder_apply/4096x256/b1` | 55.7170 | 65.6724 | - |
+| `qr/1024x64/b1` | 5.3714 | 6.5379 | 1.3693 |
+| `qr/4096x256/b1` | 310.4457 | 321.7240 | 29.8452 |
+| `qr_factor/1024x64/b1` | 1.0451 | 1.4829 | 0.5563 |
+| `qr_factor/4096x256/b1` | 17.7302 | 26.8490 | 12.4443 |
+| `svd_thin/1024x64/b1` | 2.2278 | 2.7459 | 2.6412 |
+| `svd_thin/4096x256/b1` | 52.9047 | 63.0372 | 52.4415 |
+| `svd_values/1024x64/b1` | 1.5161 | 1.9719 | 1.3958 |
+| `svd_values/4096x256/b1` | 30.8003 | 39.3058 | 21.2746 |
+
+Not applicable to this population's shapes and reported as skipped: `cholesky/1024x64`, `cholesky/4096x256`, `eigh/1024x64`, `eigh/4096x256`, `full_piv_lu/1024x64`, `full_piv_lu/4096x256`, `householder_apply/1024x64`, `householder_apply/4096x256`, `lu/1024x64`, `lu/4096x256`, `solve/1024x64`, `solve/4096x256`, `triangular_solve/1024x64`, `triangular_solve/4096x256`, `upgrade_factor/1024x64`, `upgrade_factor/4096x256`.
+
+## linalg-wide, f64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 20.9548 | 21.5071 | 39.3426 |
+| `qr/64x1024/b1` | 0.4998 | 0.5013 | 0.8601 |
+| `qr_factor/256x4096/b1` | 16.8911 | 17.4613 | 38.9094 |
+| `qr_factor/64x1024/b1` | 0.8192 | 0.5955 | 0.9852 |
+| `svd_thin/256x4096/b1` | 52.0702 | 52.4225 | 161.7772 |
+| `svd_thin/64x1024/b1` | 1.4649 | 1.4714 | 2.4673 |
+| `svd_values/256x4096/b1` | 24.1049 | 24.0525 | 118.7839 |
+| `svd_values/64x1024/b1` | 0.8442 | 0.8498 | 1.5690 |
+
+## linalg-wide, f64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 8.8682 | 9.3609 | 10.0233 |
+| `qr/64x1024/b1` | 0.3105 | 0.4608 | 0.3122 |
+| `qr_factor/256x4096/b1` | 6.4241 | 7.6553 | 12.0972 |
+| `qr_factor/64x1024/b1` | 0.5420 | 0.7702 | 0.2654 |
+| `svd_thin/256x4096/b1` | 26.8070 | 29.1262 | 76.2359 |
+| `svd_thin/64x1024/b1` | 1.3935 | 1.6402 | 1.8201 |
+| `svd_values/256x4096/b1` | 16.0957 | 18.4824 | 59.5602 |
+| `svd_values/64x1024/b1` | 0.9534 | 1.2194 | 1.2624 |
+
+## linalg-wide, f64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 7.4024 | 8.5128 | 5.7660 |
+| `qr/64x1024/b1` | 0.3286 | 0.5639 | 0.2155 |
+| `qr_factor/256x4096/b1` | 5.4418 | 7.0817 | 4.8224 |
+| `qr_factor/64x1024/b1` | 0.5386 | 0.8866 | 0.1639 |
+| `svd_thin/256x4096/b1` | 23.7173 | 28.7231 | 64.7451 |
+| `svd_thin/64x1024/b1` | 1.4751 | 1.8503 | 1.7727 |
+| `svd_values/256x4096/b1` | 15.1266 | 20.0922 | 48.2977 |
+| `svd_values/64x1024/b1` | 1.0528 | 1.4497 | 1.2686 |
+
+## linalg-wide, f64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 18.4754 | 18.6723 | 33.6859 |
+| `qr/64x1024/b1` | 0.3756 | 0.3790 | 0.7767 |
+| `qr_factor/256x4096/b1` | 16.5099 | 16.5871 | 32.3449 |
+| `qr_factor/64x1024/b1` | 0.3374 | 0.3405 | 3.7968 |
+| `svd_thin/256x4096/b1` | 55.7884 | 55.9148 | 151.8935 |
+| `svd_thin/64x1024/b1` | 1.4985 | 1.5112 | 2.3697 |
+| `svd_values/256x4096/b1` | 28.1062 | 28.0270 | 111.3482 |
+| `svd_values/64x1024/b1` | 0.8764 | 0.8812 | 1.5096 |
+
+## linalg-wide, f64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 5.5253 | 6.3780 | 8.3456 |
+| `qr/64x1024/b1` | 0.1946 | 0.3423 | 0.2710 |
+| `qr_factor/256x4096/b1` | 4.5394 | 5.3008 | 7.5200 |
+| `qr_factor/64x1024/b1` | 0.1516 | 0.2860 | 0.2306 |
+| `svd_thin/256x4096/b1` | 31.1209 | 33.0434 | 75.2309 |
+| `svd_thin/64x1024/b1` | 1.4185 | 1.6720 | 1.8053 |
+| `svd_values/256x4096/b1` | 19.8275 | 22.5189 | 57.9498 |
+| `svd_values/64x1024/b1` | 0.9854 | 1.2315 | 1.2791 |
+
+## linalg-wide, f64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 4.1514 | 5.3723 | 4.8981 |
+| `qr/64x1024/b1` | 0.1979 | 0.4211 | 0.1848 |
+| `qr_factor/256x4096/b1` | 3.3498 | 4.4330 | 4.2017 |
+| `qr_factor/64x1024/b1` | 0.1514 | 0.3703 | 0.1396 |
+| `svd_thin/256x4096/b1` | 27.4989 | 32.5529 | 63.5597 |
+| `svd_thin/64x1024/b1` | 1.5374 | 1.9198 | 1.7062 |
+| `svd_values/256x4096/b1` | 19.1240 | 23.5874 | 47.0004 |
+| `svd_values/64x1024/b1` | 1.0758 | 1.4970 | 1.2416 |
+
+## linalg-wide, c64, c order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 71.3674 | 71.7787 | 116.2069 |
+| `qr/64x1024/b1` | 1.5839 | 1.5875 | 2.2592 |
+| `qr_factor/256x4096/b1` | 62.0656 | 62.8899 | 112.1491 |
+| `qr_factor/64x1024/b1` | 1.5341 | 1.5564 | 2.1711 |
+| `svd_thin/256x4096/b1` | 167.3661 | 168.6281 | 336.2274 |
+| `svd_thin/64x1024/b1` | 3.5683 | 3.5597 | 7.1830 |
+| `svd_values/256x4096/b1` | 68.1399 | 68.3967 | 134.0433 |
+| `svd_values/64x1024/b1` | 1.7611 | 1.7832 | 3.2983 |
+
+## linalg-wide, c64, c order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 22.3979 | 23.1598 | 28.3265 |
+| `qr/64x1024/b1` | 0.6152 | 0.8205 | 0.9205 |
+| `qr_factor/256x4096/b1` | 18.1541 | 19.8170 | 25.9359 |
+| `qr_factor/64x1024/b1` | 0.6084 | 0.7851 | 0.8437 |
+| `svd_thin/256x4096/b1` | 68.4550 | 72.8416 | 121.0886 |
+| `svd_thin/64x1024/b1` | 2.3317 | 2.5794 | 4.4395 |
+| `svd_values/256x4096/b1` | 35.6213 | 40.9103 | 53.2213 |
+| `svd_values/64x1024/b1` | 1.5011 | 1.7487 | 2.2637 |
+
+## linalg-wide, c64, c order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 14.9815 | 16.6619 | 16.2664 |
+| `qr/64x1024/b1` | 0.5565 | 0.7788 | 0.5535 |
+| `qr_factor/256x4096/b1` | 11.8526 | 13.8399 | 20.2696 |
+| `qr_factor/64x1024/b1` | 0.5502 | 0.8409 | 0.4864 |
+| `svd_thin/256x4096/b1` | 53.9376 | 61.9043 | 81.2093 |
+| `svd_thin/64x1024/b1` | 2.2379 | 2.7465 | 3.8342 |
+| `svd_values/256x4096/b1` | 30.8651 | 39.1490 | 35.4341 |
+| `svd_values/64x1024/b1` | 1.5141 | 1.9722 | 1.9697 |
+
+## linalg-wide, c64, f order, 1T (CPU 4)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 68.0498 | 68.0388 | 101.9722 |
+| `qr/64x1024/b1` | 1.4558 | 1.4550 | 2.1410 |
+| `qr_factor/256x4096/b1` | 62.2365 | 62.0681 | 97.7483 |
+| `qr_factor/64x1024/b1` | 1.3328 | 1.3346 | 10.1946 |
+| `svd_thin/256x4096/b1` | 176.8219 | 177.1357 | 323.4623 |
+| `svd_thin/64x1024/b1` | 3.6348 | 3.6282 | 7.0819 |
+| `svd_values/256x4096/b1` | 76.5204 | 76.9266 | 118.1954 |
+| `svd_values/64x1024/b1` | 1.8392 | 1.8633 | 3.2219 |
+
+## linalg-wide, c64, f order, 4T (CPU 4-7)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 19.2035 | 20.1287 | 25.1301 |
+| `qr/64x1024/b1` | 0.5305 | 0.6923 | 0.8751 |
+| `qr_factor/256x4096/b1` | 17.0893 | 17.9531 | 23.2553 |
+| `qr_factor/64x1024/b1` | 0.4309 | 0.5728 | 0.8051 |
+| `svd_thin/256x4096/b1` | 76.1426 | 80.1148 | 110.2769 |
+| `svd_thin/64x1024/b1` | 2.4181 | 2.6655 | 4.4046 |
+| `svd_values/256x4096/b1` | 43.3888 | 48.1260 | 49.9813 |
+| `svd_values/64x1024/b1` | 1.5654 | 1.8177 | 2.2371 |
+
+## linalg-wide, c64, f order, 8T (CPU 4-11)
+
+| case | faer-fork (ms) | faer-upstream (ms) | lapack-mkl (ms) |
+|---|---|---|---|
+| `qr/256x4096/b1` | 12.2028 | 13.5525 | 13.7895 |
+| `qr/64x1024/b1` | 0.4897 | 0.7068 | 0.5257 |
+| `qr_factor/256x4096/b1` | 10.2227 | 11.4424 | 12.4427 |
+| `qr_factor/64x1024/b1` | 0.3590 | 0.5822 | 0.4603 |
+| `svd_thin/256x4096/b1` | 61.4159 | 70.9475 | 72.6348 |
+| `svd_thin/64x1024/b1` | 2.3176 | 2.8373 | 3.7535 |
+| `svd_values/256x4096/b1` | 38.0755 | 46.4407 | 33.7076 |
+| `svd_values/64x1024/b1` | 1.5593 | 2.0035 | 1.9380 |
+
+Not applicable to this population's shapes and reported as skipped: `cholesky/256x4096`, `cholesky/64x1024`, `eigh/256x4096`, `eigh/64x1024`, `full_piv_lu/256x4096`, `full_piv_lu/64x1024`, `lu/256x4096`, `lu/64x1024`, `solve/256x4096`, `solve/64x1024`, `triangular_solve/256x4096`, `triangular_solve/64x1024`.
+
+This run made a single complete set, so it carries no A/A: it is a scan, not a paired comparison.
