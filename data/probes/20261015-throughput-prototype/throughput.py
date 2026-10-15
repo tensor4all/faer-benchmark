@@ -31,8 +31,17 @@ FLOPS = {
 }
 FAMILIES = ['gemm', 'lu', 'cholesky', 'qr', 'svd_values', 'eigh']
 BUDGETS = [1, 4, 8]
-SERIES = [('faer-fork', 'mkl', '#1f77b4', 'circle'), ('faer-upstream', 'mkl', '#ff7f0e', 'square'),
-          ('lapack-mkl', 'mkl', '#2ca02c', 'triangle'), ('lapack-openblas', 'openblas', '#d62728', 'diamond')]
+# The fork is the subject of the campaign, so it shares its colour with its upstream baseline and is
+# distinguished by line style (solid vs dashed) and a larger marker, and it is drawn **last** so a
+# nearly coincident upstream curve cannot hide it. Vendors keep their own colours and markers.
+FORK_COLOUR = '#1f77b4'
+SERIES = [   # legend order: main row first
+    ('faer-fork', 'mkl', FORK_COLOUR, 'circle', None, 4.2),
+    ('faer-upstream', 'mkl', FORK_COLOUR, 'circle', '5 3', 2.2),
+    ('lapack-mkl', 'mkl', '#2ca02c', 'triangle', None, 3.0),
+    ('lapack-openblas', 'openblas', '#d62728', 'diamond', None, 3.0),
+]
+DRAW_ORDER = ['faer-upstream', 'lapack-mkl', 'lapack-openblas', 'faer-fork']
 ORDER, DTYPE = 'c', 'f64'
 PANEL_W, PANEL_H = 560, 400          # one panel per thread budget, stacked so GitHub renders it large
 PAD_L, PAD_R, PAD_T, PAD_B = 92, 24, 46, 40
@@ -98,16 +107,14 @@ def points(cells, threads, family, engine):
     return out
 
 
-def marker(kind, x, y, colour):
-    if kind == 'square':
-        return f'<rect x="{x - 2.6:.1f}" y="{y - 2.6:.1f}" width="5.2" height="5.2" fill="{colour}"/>'
+def marker(kind, x, y, colour, size=2.7):
     if kind == 'triangle':
-        return (f'<polygon points="{x:.1f},{y - 3:.1f} {x - 3:.1f},{y + 2.4:.1f} {x + 3:.1f},{y + 2.4:.1f}" '
-                f'fill="{colour}"/>')
+        return (f'<polygon points="{x:.1f},{y - size:.1f} {x - size:.1f},{y + size * 0.8:.1f} '
+                f'{x + size:.1f},{y + size * 0.8:.1f}" fill="{colour}"/>')
     if kind == 'diamond':
-        return (f'<polygon points="{x:.1f},{y - 3:.1f} {x - 3:.1f},{y:.1f} {x:.1f},{y + 3:.1f} '
-                f'{x + 3:.1f},{y:.1f}" fill="{colour}"/>')
-    return f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.7" fill="{colour}"/>'
+        return (f'<polygon points="{x:.1f},{y - size:.1f} {x - size:.1f},{y:.1f} {x:.1f},{y + size:.1f} '
+                f'{x + size:.1f},{y:.1f}" fill="{colour}"/>')
+    return f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{size:.1f}" fill="{colour}"/>'
 
 
 def panel(checker, family, threads, blocks, origin):
@@ -144,26 +151,32 @@ def panel(checker, family, threads, blocks, origin):
     out.append(checker.text(ox + 20, oy + PANEL_H - 18, 10, 'n (matrix size)', 'start', panel=panel_key))
     out.append(checker.text(ox + 18, oy + PANEL_H / 2, 10, 'nominal GFLOP/s', 'middle', rotate=True,
                             panel=panel_key))
-    for name, vendor, colour, kind in SERIES:
+    by_name = {name: (vendor, colour, kind, dash, size) for name, vendor, colour, kind, dash, size in SERIES}
+    for name in DRAW_ORDER:
+        vendor, colour, kind, dash, size = by_name[name]
         pts = blocks.get(name) or []
         if not pts:
             continue
+        style = f' stroke-dasharray="{dash}"' if dash else ''
+        width = 1.9 if name == 'faer-fork' else 1.3
         out.append('<polyline points="' + ' '.join(f'{sx(x):.1f},{sy(y):.1f}' for x, y, _ in pts)
-                   + f'" fill="none" stroke="{colour}" stroke-width="1.5"/>')
+                   + f'" fill="none" stroke="{colour}" stroke-width="{width}"{style}/>')
         for x, y, err in pts:
             out.append(f'<line x1="{sx(x):.1f}" y1="{sy(y - err):.1f}" x2="{sx(x):.1f}" y2="{sy(y + err):.1f}" '
                        f'stroke="{colour}" stroke-width="1.1"/>')
-            out.append(marker(kind, sx(x), sy(y), colour))
+            out.append(marker(kind, sx(x), sy(y), colour, size))
     # legend inside the panel: the lower-right corner is the one a rising curve leaves free
-    legend_x, legend_y = x0 + width - 128, y0 + height - 12 - 13 * len(SERIES)
-    out.append(f'<rect x="{legend_x - 6}" y="{legend_y - 6}" width="132" height="{13 + 13 * len(SERIES)}" '
+    legend_x, legend_y = x0 + width - 140, y0 + height - 12 - 13 * len(SERIES)
+    out.append(f'<rect x="{legend_x - 6}" y="{legend_y - 6}" width="144" height="{13 + 13 * len(SERIES)}" '
                f'fill="#ffffff" fill-opacity="0.86" stroke="#e0e0e0"/>')
-    for index, (name, vendor, colour, kind) in enumerate(SERIES):
+    for index, (name, vendor, colour, kind, dash, size) in enumerate(SERIES):
         row_y = legend_y + index * 13
-        out.append(f'<line x1="{legend_x}" y1="{row_y}" x2="{legend_x + 16}" y2="{row_y}" stroke="{colour}" '
-                   f'stroke-width="1.5"/>')
-        out.append(marker(kind, legend_x + 8, row_y, colour))
-        out.append(checker.text(legend_x + 20, row_y + 3, 9, name, panel=panel_key))
+        style = f' stroke-dasharray="{dash}"' if dash else ''
+        out.append(f'<line x1="{legend_x}" y1="{row_y}" x2="{legend_x + 18}" y2="{row_y}" stroke="{colour}" '
+                   f'stroke-width="{1.9 if name == "faer-fork" else 1.3}"{style}/>')
+        out.append(marker(kind, legend_x + 9, row_y, colour, size))
+        label = name + ('' if name != 'faer-fork' else ' (main)')
+        out.append(checker.text(legend_x + 22, row_y + 3, 9, label, panel=panel_key))
     return '<g>' + ''.join(out) + '</g>'
 
 
