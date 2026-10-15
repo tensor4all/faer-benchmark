@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
-"""Position analysis of the representative controls (read-only evidence).
+"""Position/rotation analysis of the representative controls (read-only evidence).
 
 The controls run three engine rows (faer-fork, faer-upstream, lapack-vendor) per
-cell, and three process starts whose row rotation is a Latin square: over the
-three processes each engine occupies each row position exactly once. That
-balance means
+cell and three process starts whose row rotation is a cyclic shift of the
+emitted engine list. What that design can and cannot identify:
 
-  * the mean over processes of `log(median_i)` differences between two engines
-    cancels an arbitrary per-position effect (each engine visits every position),
-  * the per-position effect is itself estimable as the mean over the three
-    observations that sat in that position.
+  * For a cell where every engine has a successful row, the three starts form a
+    3x3 Latin square: each engine is measured in each row position exactly once.
+    Under the model
+        log m[e, r] = alpha_e + beta_r + gamma_position(e, r),
+    i.e. one position effect shared by the engines and stable across process
+    starts, the averaged log-ratio cancels gamma exactly. Engine x position
+    interactions, predecessor/history effects and process x position
+    interactions are NOT cancelled; the per-rotation ratios are therefore printed
+    next to the average so that rotation dependence stays visible.
+  * For a cell where an engine has no row at all (for example the vendor skips
+    `full_piv_lu`, square `triangular_solve` or Householder), the emitted skip
+    keeps an emission position but no measured work happens in it, so the
+    remaining engines are NOT a Latin square and the averaged ratio of the
+    measured engines keeps a residual position factor. Those cells are reported
+    as `unbalanced` and no position effect is estimated from them.
+  * Cells without both faer rows, or without all three process starts, get no
+    ratio at all.
 
-This script reports, per (vendor, cell): the position-effect range (max-min of
-per-position means of log medians), the position-adjusted engine ratios
-exp(mean_j log(engine_j / fork_j)), the naive ratio of per-engine
-median-of-process-medians, and the within-process sample SD share. It never
-discards samples, never pools variants, and makes no inference beyond the
-descriptive numbers it prints. Engine ratios here are baseline-vs-baseline
-controls (fork vs upstream) plus the vendor row; they are not optimized-candidate
-results.
+Ratios are time ratios: `R > 1` means engine A took longer than engine B. The
+script never discards samples, never pools variants or dtypes, and reports
+descriptive quantities only.
 """
 import csv
-import json
 import math
 import statistics
 import sys
@@ -32,101 +38,119 @@ import yaml
 from campaign_toolkit import timing_evidence
 
 HERE = Path(__file__).resolve().parent
+WARN = math.log(1.05)
 
 
 def load():
-    cells = defaultdict(dict)   # (vendor, family, m, n, k, order, note, threads) -> {rot: {engine: log median}}
+    cells = defaultdict(dict)   # key -> {rotation: {engine: log median}}
     spread = defaultdict(list)
+    engines = {}
     for contract in sorted(HERE.glob('*/*t/control-contract.yaml')):
         manifest = yaml.safe_load(contract.read_text())
         timing_evidence.validate(manifest, contract.parent)
         for name in manifest['result_files']:
             rotation = int(name.split('-')[0][3:])
             for row in csv.DictReader((contract.parent / name).open(newline='')):
+                engines[(manifest['vendor']['name'], row['regime'], row['threads'])] = manifest['run_spec']['engines']
                 if row['status'] != 'ok':
                     continue
                 samples = timing_evidence.samples(row, manifest['timing_policy']['repetitions'])
-                key = (manifest['vendor']['name'], row['family'], row['m'], row['n'], row['k'],
-                       row['order'], row['note'], row['threads'])
+                key = (manifest['vendor']['name'], row['regime'], row['family'], row['dtype'], row['m'],
+                       row['n'], row['k'], row['batch'], row['order'], row['note'], row['threads'])
                 cells[key].setdefault(rotation, {})[row['row']] = math.log(statistics.median(samples))
                 spread[key].append(statistics.stdev(samples) / statistics.median(samples))
-    return cells, spread
+    return cells, spread, engines
 
 
 def main():
-    cells, spread = load()
+    cells, spread, declared = load()
     records = []
     for key, by_rotation in sorted(cells.items()):
-        engines = sorted({e for rows in by_rotation.values() for e in rows})
-        if len(by_rotation) != 3 or len(engines) < 2:
+        measured = sorted({e for rows in by_rotation.values() for e in rows})
+        if 'faer-fork' not in measured or 'faer-upstream' not in measured or len(by_rotation) != 3:
             continue
-        positions = defaultdict(list)   # position -> log medians
-        rows = {}
-        for rotation, measured in by_rotation.items():
-            for engine, value in measured.items():
-                rows[(engine, rotation)] = value
-        if len(rows) != len(engines) * 3:
-            continue
-        # position of engine e inside rotation r: engines[r:] + engines[:r]
-        for engine, rotation in rows:
-            order = engines[rotation:] + engines[:rotation]
-            positions[order.index(engine)].append(rows[(engine, rotation)])
-        record = {
-            'vendor': key[0], 'family': key[1], 'shape': f"{key[2]}x{key[3]}" + (f"x{key[4]}" if key[4] else ''),
-            'order': key[5], 'note': key[6], 'threads': key[7], 'engines': len(engines),
-            'position_effect_range': max(statistics.fmean(v) for v in positions.values())
-                                     - min(statistics.fmean(v) for v in positions.values()),
-            'within_process_relative_sd': statistics.median(spread[key]),
-        }
-        for engine in engines:
+        row = {'vendor': key[0], 'regime': key[1], 'family': key[2], 'dtype': key[3],
+               'shape': f'{key[4]}x{key[5]}' + (f'x{key[6]}' if key[6] else ''), 'batch': key[7],
+               'order': key[8], 'note': key[9], 'threads': key[10], 'measured_engines': len(measured),
+               'declared_engines': len(declared[(key[0], key[1], key[10])]),
+               'within_process_relative_sd': statistics.median(spread[key])}
+        complete = len(measured) == row['declared_engines'] == 3 and all(
+            len(rows) == 3 for rows in by_rotation.values())
+        row['balanced'] = complete
+        if complete:
+            order = declared[(key[0], key[1], key[10])]
+            positions = defaultdict(list)
+            for rotation, rows in by_rotation.items():
+                for engine, value in rows.items():
+                    positions[(order[rotation:] + order[:rotation]).index(engine)].append(value)
+            means = [statistics.fmean(v) for v in positions.values()]
+            row['position_effect_ratio'] = math.exp(max(means) - min(means))
+        else:
+            row['position_effect_ratio'] = None
+        for engine in measured:
             if engine == 'faer-fork':
                 continue
-            adjusted = statistics.fmean(rows[(engine, r)] - rows[('faer-fork', r)] for r in by_rotation)
-            raw = {e: [rows[(e, r)] for r in by_rotation] for e in (engine, 'faer-fork')}
-            naive = math.log(statistics.median([math.exp(v) for v in raw[engine]])) - \
-                    math.log(statistics.median([math.exp(v) for v in raw['faer-fork']]))
-            record[f'{engine}/fork adjusted'] = math.exp(adjusted)
-            record[f'{engine}/fork naive'] = math.exp(naive)
-            record[f'{engine}/fork per-rotation'] = ' '.join(
-                f"{math.exp(rows[(engine, r)] - rows[('faer-fork', r)]):.3f}" for r in sorted(by_rotation))
-        records.append(record)
+            row[f'{engine}/fork averaged'] = math.exp(
+                statistics.fmean(by_rotation[r][engine] - by_rotation[r]['faer-fork'] for r in by_rotation))
+            naive = [math.exp(by_rotation[r][engine]) for r in by_rotation]
+            base = [math.exp(by_rotation[r]['faer-fork']) for r in by_rotation]
+            row[f'{engine}/fork naive'] = statistics.median(naive) / statistics.median(base)
+            row[f'{engine}/fork per-rotation'] = ' '.join(
+                f"{math.exp(by_rotation[r][engine] - by_rotation[r]['faer-fork']):.3f}" for r in sorted(by_rotation))
+        records.append(row)
+
     out = HERE / 'position-analysis.txt'
-    lines = ['# Row-position and engine-effect analysis of the v2 representative controls',
+    lines = ['# Rotation/position analysis of the v2 representative controls',
              '',
-             'Derived from the retained control CSVs by `analyze_positions.py`; engine ratios are',
-             'rotation-averaged (position-balanced) unless the column says naive. The balanced',
-             '3x3 row rotation cancels an arbitrary per-position effect in the averaged ratio,',
-             'while the per-process median-of-medians comparison does not.',
+             '`R > 1` means the first engine took longer. `averaged` is the geometric mean of the',
+             'three per-process ratios; `naive` is the ratio of per-engine median-of-three medians.',
+             '`pos.eff` is exp(max-min) of the per-position mean log medians and is only defined for',
+             'cells where every declared engine has a successful row (balanced design); `-` means the',
+             'position effect is not identifiable there and the averaged ratio is not position-balanced.',
+             'Engine x position interactions are not cancelled by the average; the per-rotation ratios',
+             'are printed for that reason.',
              '',
-             f"{'cell':<42} {'pos.eff':>7} {'withinSD':>8} {'up/fork adj':>11} {'up/fork naive':>13} "
-             f"{'mkl/fork adj':>12} {'per-rotation up/fork':<24}"]
-    flagged_position = flagged_naive = 0
-    for record in records:
-        name = f"{record['vendor']}/{record['threads']}T {record['family']} {record['shape']} {record['order']}"
-        if record['note']:
-            name += f" [{record['note']}]"
-        lines.append(f"{name:<42} {record['position_effect_range']:>7.3f} {record['within_process_relative_sd']:>8.4f} "
-                     f"{record.get('faer-upstream/fork adjusted', float('nan')):>11.4f} "
-                     f"{record.get('faer-upstream/fork naive', float('nan')):>13.4f} "
-                     f"{record.get('lapack-mkl/fork adjusted', float('nan')):>12.4f} "
-                     f"{record.get('faer-upstream/fork per-rotation', ''):<24}")
-        if record['position_effect_range'] > math.log(1.05):
-            flagged_position += 1
-        for engine in ('faer-upstream', 'lapack-mkl', 'lapack-openblas'):
-            adjusted, naive = record.get(f'{engine}/fork adjusted'), record.get(f'{engine}/fork naive')
-            if adjusted and naive and abs(math.log(naive) - math.log(adjusted)) > math.log(1.05):
-                flagged_naive += 1
+             (f"{'cell':<44}{'dtype':<5}{'pos.eff':>8}{'bal':>5}{'withinSD':>9}"
+              f"{'up/fork avg':>12}{'naive':>8}{'mkl/fork avg':>13}{'ob/fork avg':>12}"
+              f"  per-rotation up/fork")]
+    unbalanced = flags = 0
+    for row in records:
+        name = f"{row['vendor']}/{row['threads']}T {row['family']} {row['shape']} {row['order']}"
+        if row['note']:
+            name += f" [{row['note']}]"
+        pos = f"{row['position_effect_ratio']:.3f}" if row['position_effect_ratio'] else '-'
+        if row['position_effect_ratio'] and row['position_effect_ratio'] > 1.05:
+            flags += 1
+        if not row['balanced']:
+            unbalanced += 1
+        lines.append(
+            f"{name:<44}{row['dtype']:<5}{pos:>8}{'yes' if row['balanced'] else 'no':>5}"
+            f"{row['within_process_relative_sd']:>9.4f}"
+            f"{row.get('faer-upstream/fork averaged', float('nan')):>12.4f}"
+            f"{row.get('faer-upstream/fork naive', float('nan')):>8.3f}"
+            f"{row.get('lapack-mkl/fork averaged', float('nan')):>13.4f}"
+            f"{row.get('lapack-openblas/fork averaged', float('nan')):>12.4f}  "
+            f"{row.get('faer-upstream/fork per-rotation', '')}")
+    ratios = [row for row in records if row['balanced'] and row.get('position_effect_ratio')]
+    disagree = sum(1 for row in records for engine in ('faer-upstream', 'lapack-mkl', 'lapack-openblas')
+                   if row.get(f'{engine}/fork averaged') and row.get(f'{engine}/fork naive')
+                   and abs(math.log(row[f'{engine}/fork naive']) - math.log(row[f'{engine}/fork averaged'])) > WARN)
     lines += ['',
-              f"cells analysed: {len(records)}",
-              f"cells whose position effect exceeds 5% of the level: {flagged_position}",
-              f"engine comparisons where the naive ratio differs from the position-adjusted ratio by >5%: {flagged_naive}",
-              f"median position-effect range: {statistics.median(r['position_effect_range'] for r in records):.4f}",
-              f"median within-process relative SD: {statistics.median(r['within_process_relative_sd'] for r in records):.4f}",
+              f"cells with both faer rows and three process starts: {len(records)}",
+              f"cells where the averaged ratio is position-balanced (all engines measured): {len(ratios)}",
+              f"cells where it is not (an engine has no row): {unbalanced}",
+              f"balanced cells whose position effect exceeds the 5% ratio threshold: {flags}",
+              (f"median position effect over balanced cells: "
+               f"{statistics.median(r['position_effect_ratio'] for r in ratios):.4f}"),
+              f"engine comparisons where `naive` differs from `averaged` by more than 5%: {disagree}",
+              (f"median within-process relative SD: "
+               f"{statistics.median(r['within_process_relative_sd'] for r in records):.4f}"),
               '',
-              'Not claimed here: any causal mechanism for the position or process-level shifts, any',
-              'provider equality, or any optimized-candidate performance result.']
+              'Not established: any causal mechanism for the position or between-process variation,',
+              'provider equality, or any result for the saved optimization candidate. The averaged',
+              'ratio is only balanced under the shared-position model stated above.']
     out.write_text('\n'.join(lines) + '\n')
-    print('\n'.join(lines[-8:]))
+    print('\n'.join(lines[-9:]))
     print(f'wrote {out}')
 
 

@@ -2,48 +2,56 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
-## 2026-10-15 — representative v2 controls: process shifts, a row-position effect, and the cost floor
+## 2026-10-15 — representative v2 controls: scheduled variation, a row-position effect, and the cost floor
 
 Optimization is still frozen. The three bounded POST reviews completed; the two
 IMPORTANT core findings (validated `order` cells, >=2 process sets) and the two
 recorder findings (own-Git-root toolkit provenance, publication exit propagation)
-are fixed, and the raw reports are archived in `docs/reviews/20261015-timing-v2/`.
-The numerical/runtime report found no must-fix defect; its two MINOR diagnostics
-(failed rows keep the variant label, stale vendor-QR comment) are corrected, and
-both vendors were rebuilt (`cce14420...` mkl, `d59f5a80...` openblas). The full
-union `verify` grid (every declared shape, f64/c64, batch 1, 1/4/8T, both
+are fixed, with raw reports archived in `docs/reviews/20261015-timing-v2/`. The
+numerical/runtime report found no must-fix defect; its two MINOR diagnostics are
+corrected and both vendors rebuilt (`cce14420...` mkl, `d59f5a80...` openblas).
+The full union `verify` grid (every declared shape, f64/c64, batch 1, 1/4/8T, both
 binaries) passes with 1448 ok / 2336 declared skips / 0 failures per grid and no
 budget-readback anomaly; gzipped raw grids are in
 `data/probes/20261015-full-numeric-grid/`.
 
-Two 64-process control attempts aborted on the idle guard alone (one attempt each,
-exit 75), because ~3.5% of 3 s guard windows on this host are pushed above the 5%
-busy threshold by unrelated activity (operator polling in the first attempt, plus
-the agent's own bursts; standalone repro runs reproduced it). The controls now use
-the pinned protocol's own admission retry (8 attempts, 30 s wait) and pin the
-observer to CPUs 0-3; that is an admission retry, not a favourable-data retry, and
-all attempts stay archived. Attempt 3 completed all 64 processes with exit 0, 528
-timed rows, 172 cells, 15,480 samples.
+Two 64-process control attempts aborted on idle admission alone (exit 75), because
+~3.5% of 3 s guard windows on this host are pushed above the 5% busy threshold by
+unrelated activity (operator polling in the first attempt, plus the agent's own
+bursts; standalone repros reproduced it). Controls now use the pinned protocol's
+own admission retry (8 attempts, 30 s wait) and an observer launched on CPUs 0-3;
+retries are admission retries, not favourable-data retries, and every attempt stays
+archived. Attempt 3 completed all 64 processes with exit 0: 528 timed rows, 172
+cells, 15,480 samples. A pre-implementation design review of the frozen protocol
+found the position-balance claim overstated for cells where an engine has no row
+and for engine x position interactions; the analysis was reworked (`analysis.md`,
+`position-analysis.txt`) and the budget choice is still open.
 
-What it measured (baseline-vs-baseline, not the candidate):
+What the controls measured (baseline-vs-baseline, not the candidate):
 
-- within-process relative sample SD is 1.47% median;
-- **process-level level shifts dominate**: 50/172 cells exceed a 5% process-median
-  range, worst 74% (`mkl/4T lu 256^2 c64`), with all engines moving together - the
-  same phenomenon as the historical ~1.4x shifts, now located between process
-  starts, mechanism still unknown;
-- a **row-position effect** of 1.4% median (21% worst, `mkl/8T cholesky 512^2 c64`)
-  is cancelled by the balanced 3-start rotation in the averaged ratio, which is why
-  the naive per-engine median-of-medians differs from the position-balanced ratio
-  by >5% in 17 comparisons;
+- within-process relative sample SD: 1.47% median;
+- **50/172 cells exceed a 5% range of their three process medians** (worst 74%,
+  `mkl/4T c64 lu 256^2` F-order 1.224/1.208/2.115 ms). This is scheduled
+  between-process variation - process state and row order both change - sometimes
+  shared across engines, sometimes not (the MKL vendor row barely moves in that
+  cell; an OpenBLAS GEMM cell moves only the vendor row). The historical ~1.4x
+  shifts are the same phenomenon; the mechanism is still unknown;
+- a **row-position effect**: median 1.010 over the 52 cells where every declared
+  engine has a row (10 above 1.05, worst 1.486 for `openblas/8T f64 cholesky
+  512^2` C-order). In 8 cells an engine has no row at all, the schedule is not a
+  Latin square there, and no position effect is identified. The rotation-averaged
+  ratio cancels a shared, start-invariant position effect only; 17 comparisons
+  differ from the naive median-of-three ratio by more than 5%;
 - retained outliers (upstream `qr` 8T max 34.9 ms vs 16.6 ms median) and
-  rotation-consistent real differences (fork `qr` 2.26x faster than upstream at
-  `4096x256` f64 8T; MKL GEMM `16x240x4096` f64 4T ~10x slower than faer) are kept.
+  rotation-consistent real differences (F-order `qr_factor` `4096x256` f64 8T is
+  2.26x slower upstream than on the fork in all three rotations; MKL GEMM
+  `16x240x4096` c64 4T ~10x slower than faer) are kept.
 
-Cost floor for the full suite at the proposed 3 s priming: 3948 primed rows per
-set per vendor -> ~9.9 h per vendor of priming alone, ~19.7 h for both, before
-measured calls, checks, guard overhead and verification. Budget-freeze options are
-being written up for a decision; the full re-record has not started.
+Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
+of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
+1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of
+priming alone, before calls, checks, guard overhead and verification. Budget-freeze
+options are with the maintainer; the full re-record has not started.
 
 ## 2026-10-15 — align timing-v2 contracts before the baseline re-record
 
