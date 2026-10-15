@@ -719,10 +719,7 @@ mod imp {
             "gemm" => Ok(vec![gemm_op::<T>(m, case.k.unwrap_or(m), n, batch, order)?]),
             "qr_factor" => Ok(vec![qr_op::<T>(m, n, batch, order, false)?]),
             "qr" => Ok(vec![qr_op::<T>(m, n, batch, order, true)?]),
-            "lu" => {
-                square(case, family)?;
-                Ok(vec![lu_op::<T>(m, batch, order)?])
-            }
+            "lu" => Ok(vec![lu_op::<T>(m, n, batch, order)?]),
             "cholesky" => {
                 square(case, family)?;
                 Ok(vec![cholesky_op::<T>(m, batch, order)?])
@@ -945,22 +942,33 @@ mod imp {
     }
 
     /// `lu` times `getrf`; the check solves with the factors via `getrs`.
-    fn lu_op<T: LapackScalar>(n: usize, batch: usize, order: Order) -> Result<Op, String> {
-        let a0 = fill_seeded::<T>(n * n * batch, seed(n, n, 5));
-        let b0 = fill_seeded::<T>(n * batch, seed(n, 1, 6));
+    /// `lu` times `getrf`; the check rebuilds `L` and `U` from the factors and
+    /// compares `P A` against `L U`, which is the factorization's own contract
+    /// for any shape (`L` is `m x min(m, n)` unit-lower trapezoidal, `U` is
+    /// `min(m, n) x n` upper trapezoidal).
+    fn lu_op<T: LapackScalar>(
+        m: usize,
+        n: usize,
+        batch: usize,
+        order: Order,
+    ) -> Result<Op, String> {
+        let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 5));
+        let size = m.min(n);
         struct S<T> {
             a0: Vec<T>,
-            b0: Vec<T>,
             sink: T,
+            m: usize,
             n: usize,
+            size: usize,
             batch: usize,
             order: Order,
         }
         let state = S {
             a0,
-            b0,
             sink: T::zero(),
+            m,
             n,
+            size,
             batch,
             order,
         };
@@ -970,14 +978,14 @@ mod imp {
             |_s| Ok(()),
             |s| {
                 for bi in 0..s.batch {
-                    let mut a = s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n].to_vec();
-                    let mut ipiv = vec![0i32; s.n];
+                    let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
+                    let mut ipiv = vec![0i32; s.size];
                     let info = T::getrf(
                         layout(s.order),
-                        s.n,
+                        s.m,
                         s.n,
                         &mut a,
-                        leading(s.n, s.n, s.order),
+                        leading(s.m, s.n, s.order),
                         &mut ipiv,
                     );
                     if info != 0 {
@@ -989,37 +997,57 @@ mod imp {
             },
             |s| {
                 for bi in 0..s.batch {
-                    let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                    let b0 = &s.b0[bi * s.n..(bi + 1) * s.n];
+                    let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                     let mut a = a0.to_vec();
-                    let mut ipiv = vec![0i32; s.n];
+                    let mut ipiv = vec![0i32; s.size];
                     let info = T::getrf(
                         layout(s.order),
-                        s.n,
+                        s.m,
                         s.n,
                         &mut a,
-                        leading(s.n, s.n, s.order),
+                        leading(s.m, s.n, s.order),
                         &mut ipiv,
                     );
                     if info != 0 {
                         return Err(format!("getrf returned {info}"));
                     }
-                    let mut x = b0.to_vec();
-                    let info = T::getrs(
-                        layout(s.order),
-                        s.n,
-                        &a,
-                        leading(s.n, s.n, s.order),
-                        &ipiv,
-                        &mut x,
-                        leading(s.n, 1, s.order),
-                    );
-                    if info != 0 {
-                        return Err(format!("getrs returned {info}"));
+                    // L is the lower trapezoid of `a` with a unit diagonal, U its
+                    // upper trapezoid.
+                    let mut l = vec![T::zero(); s.m * s.size];
+                    let mut u = vec![T::zero(); s.size * s.n];
+                    for i in 0..s.m {
+                        for j in 0..s.size {
+                            if i > j {
+                                l[idx(i, j, s.m, s.size, s.order)] =
+                                    a[idx(i, j, s.m, s.n, s.order)];
+                            } else if i == j {
+                                l[idx(i, j, s.m, s.size, s.order)] = T::one();
+                            }
+                        }
                     }
-                    let mut ax = vec![T::zero(); s.n];
-                    mul(s.n, s.n, 1, s.order, a0, &x, &mut ax);
-                    within::<T>(max_diff(&ax, b0), frob(b0), s.n, "lu solve")?;
+                    for i in 0..s.size {
+                        for j in i..s.n {
+                            u[idx(i, j, s.size, s.n, s.order)] =
+                                a[idx(i, j, s.m, s.n, s.order)];
+                        }
+                    }
+                    let mut lu = vec![T::zero(); s.m * s.n];
+                    mul(s.m, s.size, s.n, s.order, &l, &u, &mut lu);
+                    // And `P A`: the same row swaps `getrf` chose, applied to the
+                    // input. `ipiv` is one-based.
+                    let mut pa = a0.to_vec();
+                    for k in 0..s.size {
+                        let t = (ipiv[k] - 1) as usize;
+                        if t != k {
+                            for j in 0..s.n {
+                                pa.swap(
+                                    idx(k, j, s.m, s.n, s.order),
+                                    idx(t, j, s.m, s.n, s.order),
+                                );
+                            }
+                        }
+                    }
+                    within::<T>(max_diff(&pa, &lu), frob(&pa), s.n.max(s.m), "lu")?;
                 }
                 Ok(())
             },

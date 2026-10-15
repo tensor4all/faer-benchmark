@@ -122,13 +122,13 @@ macro_rules! define_backend {
                     "gemm" => Ok(vec![gemm_op::<T>(m, case.k.unwrap_or(m), n, batch, order)?]),
                     "qr_factor" => Ok(vec![qr_factor_op::<T>(m, n, batch, order)?]),
                     "qr" => Ok(vec![qr_op::<T>(m, n, batch, order)?]),
-                    "lu" => {
-                        square(case, family)?;
-                        Ok(vec![lu_op::<T>(m, batch, order)?])
-                    }
+                    // The LU factors are defined for a rectangular matrix too:
+                    // `dgetrf` takes any shape and faer's `lu_in_place` does as
+                    // well, with `min(m, n)` pivots and a trapezoidal `L` or
+                    // `U`. So neither is gated to square.
+                    "lu" => Ok(vec![lu_op::<T>(m, n, batch, order)?]),
                     "full_piv_lu" => {
-                        square(case, family)?;
-                        Ok(vec![full_piv_lu_op::<T>(m, batch, order)?])
+                        Ok(vec![full_piv_lu_op::<T>(m, n, batch, order)?])
                     }
                     "cholesky" => {
                         square(case, family)?;
@@ -410,11 +410,17 @@ macro_rules! define_backend {
 
             // ------------------------------------------------------------ lu
 
-            fn lu_op<T: Scalar + ComplexField>(n: usize, batch: usize, order: Order) -> Result<Op, String> {
-                let a0 = fill_seeded::<T>(n * n * batch, seed(n, n, 5));
+            fn lu_op<T: Scalar + ComplexField>(
+                m: usize,
+                n: usize,
+                batch: usize,
+                order: Order,
+            ) -> Result<Op, String> {
+                let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 5));
                 struct S<T> {
                     a0: Vec<T>,
                     sink: T,
+                    m: usize,
                     n: usize,
                     batch: usize,
                     order: Order,
@@ -422,6 +428,7 @@ macro_rules! define_backend {
                 let state = S {
                     a0,
                     sink: T::zero(),
+                    m,
                     n,
                     batch,
                     order,
@@ -432,8 +439,8 @@ macro_rules! define_backend {
                     |_s| Ok(()),
                     |s| {
                         for bi in 0..s.batch {
-                            let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let lu = mref(a0, s.n, s.n, s.order).partial_piv_lu();
+                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            let lu = mref(a0, s.m, s.n, s.order).partial_piv_lu();
                             black_box(lu.L()[(0, 0)].clone());
                             acc(&mut s.sink, lu.U()[(0, 0)].clone());
                         }
@@ -441,10 +448,10 @@ macro_rules! define_backend {
                     },
                     |s| {
                         for bi in 0..s.batch {
-                            let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let lu = mref(a0, s.n, s.n, s.order).partial_piv_lu();
-                            let recon = to_layout(lu.reconstruct().as_ref(), s.n, s.n, s.order);
-                            within::<T>(max_diff(a0, &recon), frob(a0), s.n, "lu")?;
+                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            let lu = mref(a0, s.m, s.n, s.order).partial_piv_lu();
+                            let recon = to_layout(lu.reconstruct().as_ref(), s.m, s.n, s.order);
+                            within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "lu")?;
                         }
                         Ok(())
                     },
@@ -452,14 +459,16 @@ macro_rules! define_backend {
             }
 
             fn full_piv_lu_op<T: Scalar + ComplexField>(
+                m: usize,
                 n: usize,
                 batch: usize,
                 order: Order,
             ) -> Result<Op, String> {
-                let a0 = fill_seeded::<T>(n * n * batch, seed(n, n, 7));
+                let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 7));
                 struct S<T> {
                     a0: Vec<T>,
                     sink: T,
+                    m: usize,
                     n: usize,
                     batch: usize,
                     order: Order,
@@ -467,6 +476,7 @@ macro_rules! define_backend {
                 let state = S {
                     a0,
                     sink: T::zero(),
+                    m,
                     n,
                     batch,
                     order,
@@ -477,8 +487,8 @@ macro_rules! define_backend {
                     |_s| Ok(()),
                     |s| {
                         for bi in 0..s.batch {
-                            let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let lu = mref(a0, s.n, s.n, s.order).full_piv_lu();
+                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            let lu = mref(a0, s.m, s.n, s.order).full_piv_lu();
                             black_box(lu.L()[(0, 0)].clone());
                             acc(&mut s.sink, lu.U()[(0, 0)].clone());
                         }
@@ -486,10 +496,10 @@ macro_rules! define_backend {
                     },
                     |s| {
                         for bi in 0..s.batch {
-                            let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let lu = mref(a0, s.n, s.n, s.order).full_piv_lu();
-                            let recon = to_layout(lu.reconstruct().as_ref(), s.n, s.n, s.order);
-                            within::<T>(max_diff(a0, &recon), frob(a0), s.n, "full_piv_lu")?;
+                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            let lu = mref(a0, s.m, s.n, s.order).full_piv_lu();
+                            let recon = to_layout(lu.reconstruct().as_ref(), s.m, s.n, s.order);
+                            within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "full_piv_lu")?;
                         }
                         Ok(())
                     },

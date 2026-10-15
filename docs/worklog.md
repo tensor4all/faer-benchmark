@@ -2,6 +2,37 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-15 — a rectangular LU cell exists now, in both orders
+
+**What was wrong.** `fbench` gated `lu` and `full_piv_lu` on `square(case, family)`, so every
+rectangular cell in `linalg-tall` and `linalg-wide` was recorded as `skipped` with "lu needs a
+square matrix; `1024x64` is not". That is not true of either implementation the campaign compares:
+`dgetrf` takes any shape and so does faer's `lu_in_place`, both with `min(m, n)` pivots and a
+trapezoidal `L` or `U`. The gate was the harness's, and it hid the whole rectangular class from the
+family that is the first thing a least-squares or a determinant-shaped workload reaches for.
+
+**What it does now.** Both families take any declared shape. The faer arms time the composite and
+check `A ~ L U` through its own `reconstruct`, which handles both trapezoids; the vendor arm times
+`getrf` and checks the same identity, rebuilding `L` (unit-lower `m x min(m, n)`) and `U` (upper
+`min(m,n) x n`) from the factors and applying the `ipiv` swaps to the input to form `P A`. The
+vendor's old square check solved with `getrs` and compared one right-hand side; the new one is the
+factorization's own contract at every shape and is strictly stronger at the square ones.
+
+**What it records.** The verify grid passes for both families over `linalg-small`, `linalg-medium`,
+`linalg-large`, `linalg-tall` and `linalg-wide` at one and eight threads, both dtypes, both orders
+(`full_piv_lu`'s vendor row is `skipped`, as it always was, because LAPACK has no full-pivoting
+driver in this harness). A probe (reps 3, `f64`, one thread, C order) puts the new cells where the
+recorded square ones were: `lu/1024x64` 0.283 ms and `lu/4096x256` 10.43 against the vendor's
+0.421 and 12.68, and at eight threads 0.293 and 6.05 against 0.386 and 3.21 -- ahead at one thread
+on every new shape, behind on the two large ones at eight, which is the same parallel-scaling story
+the `Thread policy` row carries. The pages will show these cells as measured rather than skipped
+when the pin move re-records them.
+
+**What did not change.** `cholesky`, `eigh`, `solve` and `triangular_solve` stay square-gated: the
+matrix they factor or solve with is square by definition, and the declaration's blind spots now say
+so and say why `lu` is not. No shape was added to any population -- the rectangular shapes were
+already declared, so this makes existing cells measurable rather than widening the grid.
+
 ## 2026-10-15 — `qr_factor`'s check never saw what its timed call left
 
 **What was wrong.** `Op`'s own contract says the three closures exist so that the timing loop
