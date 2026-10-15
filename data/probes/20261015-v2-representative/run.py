@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 import yaml
-from campaign_toolkit import descriptor, report_run, timing_evidence
+from campaign_toolkit import descriptor, record_run, report_run, timing_evidence
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
@@ -54,6 +54,7 @@ def main():
     args = parser.parse_args()
     if (HERE / 'metadata.json').exists():
         raise RuntimeError('control attempt already exists; preserve its metadata and logs')
+    record_run.require_observer_off_measured_cpus({str(n): cpus for n, cpus in CPU.items()})
     suite = yaml.safe_load((ROOT / 'benchmarks/suites/faer-kernels.yaml').read_text())
     env = dict(os.environ)
     for key in descriptor.current().vendor_env:

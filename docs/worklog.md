@@ -47,6 +47,13 @@ What the controls measured (baseline-vs-baseline, not the candidate):
   2.26x slower upstream than on the fork in all three rotations; MKL GEMM
   `16x240x4096` c64 4T ~10x slower than faer) are kept.
 
+The observing side is now an enforced precondition, not a remembered habit: the
+recorder refuses to start when its own affinity overlaps the measured CPU set
+(expanded with SMT siblings), the harness `AGENTS.md`, `docs/timing-policy.md` and
+`docs/reliable-measurement.md` state the `taskset -c 0-3` rule for this host, and
+the control driver applies the same check. This followed a design-review question
+that exposed the agent process running unpinned while a measurement was in progress.
+
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
 1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of

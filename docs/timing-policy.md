@@ -109,7 +109,11 @@ the fork's `AGENTS.md` forbids adding one): `taskset` to the declared CPU set, a
 at most 5% busy before and after, 3 attempts. A spoiled run is discarded, not
 published. The recorder holds one campaign-level lock across build, verify and
 timing, so no second recorder builds another revision while a measurement runs;
-unrelated workloads remain an operator precondition.
+unrelated workloads remain an operator precondition, and that includes the observing side itself:
+on `zen5-cpu` the agent, the recorder and the guard checker run on `taskset -c 0-3`, off the
+measured `4-11` and their SMT siblings `16-23`. `record_run.py` refuses to start when its own
+affinity overlaps the measured set (siblings included), so forgetting the pin fails the run instead
+of publishing a contaminated number.
 
 ## What a report may and may not claim
 

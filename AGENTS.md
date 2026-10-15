@@ -48,7 +48,14 @@ measurement. Every timing goes through this repository's protocol script
 of its own); it pins the cores and checks that those cores **and their SMT siblings** were idle
 before and after, and a run spoiled by other load is discarded, not published.
 
-Priming is **time-based** (at least 0.5 s of wall time per arm) and identical on every arm. A fixed
+The observing side is pinned too, because unrelated work on the measured cores is what the idle
+guard then has to reject: on `zen5-cpu` the agent, the recorder and the guard checker stay on
+`taskset -c 0-3`, off the measured `4-11` and their SMT siblings `16-23`. The recorder refuses to
+start when its own affinity overlaps the measured set (expanded with siblings), so an unpinned run
+fails before its build instead of recording a number nobody can trust. A pinned agent must be
+re-established after a harness restart: the affinity lives in the process, not in this file.
+
+Priming is **time-based** and identical on every arm. A fixed
 call count is not a substitute: after an idle gate this host reads low for the first second or two
 of sustained AVX-512 work, which is large enough to be mistaken for a kernel defect.
 
