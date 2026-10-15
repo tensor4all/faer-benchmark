@@ -105,8 +105,10 @@ fork's row splits are exactly a threaded-kernel change.
 Every measurement runs through `benchmarks/scripts/pinned.sh` in this repository
 (the harness owns the protocol, because faer has no `benchmarks/` directory and
 the fork's `AGENTS.md` forbids adding one): `taskset` to the declared CPU set, a
-3-second `/proc/stat` idle window covering those CPUs **and their SMT siblings**,
-at most 5% busy before and after, 3 attempts. A spoiled run is discarded, not
+3-second `/proc/stat` idle window covering those CPUs **and every CPU sharing
+their last-level cache** (SMT siblings included - a measured set that fills only
+part of its domain would otherwise leave cache contention invisible), at most 5%
+busy before and after, 3 attempts. A spoiled run is discarded, not
 published. The recorder holds one campaign-level lock across build, verify and
 timing, so no second recorder builds another revision while a measurement runs;
 unrelated workloads remain an operator precondition, and that includes the observing side itself.

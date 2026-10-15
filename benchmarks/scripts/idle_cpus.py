@@ -7,9 +7,11 @@ copy from `tensor4all/tlinalg-rs` `benchmarks/scripts/idle_cpus.py` at c5d1d61f
 (see docs/provenance.md), itself adapted from `tensor4all/tprims-rs`
 `benchmarks/scripts/idle_cpus.py` (MIT, Copyright (c) 2026 Lukas Devos and
 tensor4all contributors). The one deliberate difference from that upstream is in
-`check`: it expands the given CPUs with their SMT siblings, because a busy sibling
-contends with the physical core that is being measured. Upstream checked only the
-listed logical CPUs.
+`check`: it expands the given CPUs with every CPU sharing their last-level cache,
+because a busy peer - an SMT sibling or a core in the same L3 domain - contends for
+the cache the measured cores are using, and a measured set that fills only part of
+its domain would otherwise leave that contention invisible. Upstream checked only
+the listed logical CPUs.
 
 PERFORMANCE_TIPS.md (Performance-Sensitive Tests And Benchmarks) requires the
 measured process to be pinned to cores of one L3 domain that are idle
@@ -91,11 +93,12 @@ def siblings(root: Path, cpu: int) -> list[int]:
     return parse_cpu_list(p.read_text()) if p.exists() else [cpu]
 
 
-def with_siblings(root: Path, cpus: list[int]) -> list[int]:
-    """`cpus` expanded with every sibling, so a busy sibling is not invisible."""
+def with_cache_peers(root: Path, cpus: list[int]) -> list[int]:
+    """`cpus` expanded with every CPU sharing their last-level cache (SMT siblings included)."""
     out: set[int] = set()
     for cpu in cpus:
-        out.update(siblings(root, cpu))
+        p = root / f"sys/devices/system/cpu/cpu{cpu}/cache/index3/shared_cpu_list"
+        out.update(parse_cpu_list(p.read_text()) if p.exists() else siblings(root, cpu))
     return sorted(out)
 
 
@@ -141,10 +144,10 @@ def main(argv: list[str] | None = None, root: Path = Path("/"), sleep=time.sleep
         print(",".join(map(str, got)))
         return 0
     requested = parse_cpu_list(a.arg)
-    cpus = with_siblings(root, requested)
+    cpus = with_cache_peers(root, requested)
     busy = {c: frac.get(c, 1.0) for c in cpus if frac.get(c, 1.0) > a.max_busy}
     for c in cpus:
-        mark = "" if c in requested else " (sibling)"
+        mark = "" if c in requested else " (cache peer)"
         print(f"cpu{c} busy={frac.get(c, 1.0):.3f}{mark}", file=sys.stderr)
     if busy:
         print(f"idle_cpus: busy CPUs {sorted(busy)}", file=sys.stderr)
