@@ -66,6 +66,14 @@ separate one, and the index's currency is computed from the pins, so `gen_index.
 green until that happens. Do not quote a `qr` row from the 2026-10-14 pages beside a new
 `faer-fork` number.
 
+One inconsistency this exposed and did not fix: `validate_run.py` compares a manifest's recorded
+`suite_sha256` against the declaration and now prints "measured under a different declaration", but
+`gen_index.py` still gives both pages `coverage: full`, `status: current`. Either the index's
+coverage column should follow the suite hash the validator reads, or the validator's note is
+redundant; the two disagree about the same fact and the index is the one that has to be right,
+because the coverage column is what a reader uses to decide whether a page still describes the
+suite.
+
 **What the harness still does not do.** `qr_factor`'s check re-factors the original fixture through
 the composite and compares that against a reference, so it never inspects what the timed low-level
 `qr_in_place` left behind; a wrong copy-back in that call would pass it. The compact call's own
