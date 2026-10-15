@@ -119,6 +119,12 @@ small-matrix loop bench, as does a "too many threads on too little work" check. 
 recorder gained `--shapes` so the daily loop measures one square per tier while the
 run still records the subset it covered. See protocol-v2-baseline.md section 5.
 
+Large tiers are now a separate suite (`faer-kernels-large`) measured at 4T/8T only -
+1024 plus the adoption-only 2048/4096 and the diagnostic boundary sizes - because a
+run dominated by the biggest shapes is not worth a 1T pass, and a second suite keeps
+each page a full cover of its own declaration rather than two partial pages
+fighting over one page name. The daily suite keeps small/mid/tall/wide at 1/4/8T.
+
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
 1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of

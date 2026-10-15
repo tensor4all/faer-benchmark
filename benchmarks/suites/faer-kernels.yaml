@@ -187,10 +187,6 @@ runs:
         groups: [gemm]
         n: ["128x128x128", "256x256x256", "512x512x512"]
         batch: [1]
-      - regime: gemm-large
-        groups: [gemm]
-        n: ["1024x1024x1024"]
-        batch: [1]
       # The tall class carries both legs of the Householder update that
       # tlinalg-rs#46 separates, because they are different work and the
       # reduction is the one whose row split was the experiment: with a 16-wide
@@ -213,10 +209,6 @@ runs:
         groups: [factor, decompose, heavy, householder]
         n: ["128", "256", "512"]
         batch: [1]
-      - regime: linalg-large
-        groups: [factor, decompose]
-        n: ["1024"]
-        batch: [1]
       - regime: linalg-tall
         groups: [factor, decompose, householder]
         n: ["1024x64", "4096x256"]
@@ -224,19 +216,4 @@ runs:
       - regime: linalg-wide
         groups: [factor, decompose]
         n: ["64x1024", "256x4096"]
-        batch: [1]
-      # Adoption-only tiers: declared so a decision run can select them with
-      # --regimes, but not part of the daily optimization loop.
-      - regime: gemm-huge
-        groups: [gemm]
-        n: ["2048x2048x2048", "4096x4096x4096"]
-        batch: [1]
-      - regime: linalg-big
-        groups: [factor, decompose]
-        n: ["2048", "4096"]
-        batch: [1]
-      # Diagnostic tier for block-boundary overfitting (255/257, 511/513).
-      - regime: linalg-boundary
-        groups: [factor, decompose]
-        n: ["255", "257", "511", "513"]
         batch: [1]

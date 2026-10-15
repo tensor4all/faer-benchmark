@@ -112,6 +112,12 @@ little work" side-effect check belongs.
   `--shapes 64,64x64x64,256,256x256x256,1024,1024x1024x1024,1024x64,4096x256,64x1024,256x4096,4096x64x64,16x4096x240,4096x16x240,64x64x4096`
   with `--regimes` naming the daily tiers. A run records the subset it covered, so
   a daily subset is never mistaken for the whole declaration.
+- **Large tiers are their own suite** (`faer-kernels-large`, `threads: [4, 8]`):
+  1024, and the adoption-only 2048/4096 and the diagnostic 255/257/511/513. A run
+  time dominated by the biggest shapes is not worth a 1T pass, and splitting by
+  thread budget keeps each page a full cover of its own declaration instead of two
+  partial pages overwriting each other. The daily suite keeps the 1/4/8T
+  small/mid/tall/wide grid.
 - **Before adopting a change** the same arms run the full declared lists (no
   `--shapes`), and the expensive tiers are added explicitly:
   `--regimes linalg-big,gemm-huge --threads 4,8 --dtypes f64` (2048/4096 are not
