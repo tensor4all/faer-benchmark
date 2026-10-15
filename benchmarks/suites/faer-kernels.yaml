@@ -179,7 +179,10 @@ runs:
     populations:
       - regime: gemm-small
         groups: [gemm]
-        n: ["4x4x4", "8x8x8", "16x16x16", "32x32x32", "64x64x64"]
+        # Trimmed from 4,8,16,32,64: the 4T/8T cells of these shapes measure thread-region
+        # start-up (gemm 32^3 pays a constant +8-11 us there; 4^3 never enters a parallel
+        # path), so the extra shapes buy machine time rather than kernel information.
+        n: ["8x8x8", "64x64x64"]
         batch: [1]
       - regime: gemm-medium
         groups: [gemm]
@@ -204,7 +207,8 @@ runs:
         batch: [1]
       - regime: linalg-small
         groups: [factor, decompose, heavy, householder]
-        n: ["4", "8", "16", "32", "64"]
+        # Trimmed from 4,8,16,32,64 for the same reason as gemm-small above.
+        n: ["8", "64"]
         batch: [1]
       - regime: linalg-medium
         groups: [factor, decompose, heavy, householder]
