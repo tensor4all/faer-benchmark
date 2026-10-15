@@ -35,7 +35,7 @@ use lapack_src as _;
 use shared::{Case, Dtype, Order};
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: fbench info [--threads N] | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--csv PATH] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--reps M] [--prime-ms MS] [--rotate-rows K] [--statistic best|median] --csv PATH";
+const USAGE: &str = "usage: fbench info [--threads N] | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--csv PATH] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--reps M] [--prime-ms MS] [--rotate-rows K] [--statistic best|median] --csv PATH";
 
 /// Every family name the suite declares, in the harness's priority order.
 const ALL_FAMILIES: &[&str] = &[
@@ -167,6 +167,9 @@ struct Args {
     prime_ms: u64,
     /// Explicit row-order probe, not a guarantee of equivalent conditions.
     rotate_rows: usize,
+    /// Which engine rows this run measures. A campaign may declare a subset per arm
+    /// (an arm that carries an unchanged faer row twice does not have to pay for both).
+    rows: Vec<String>,
     statistic: Statistic,
     csv: Option<String>,
 }
@@ -204,6 +207,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             reps: 5,
             prime_ms: 500,
             rotate_rows: 0,
+            rows: Vec::new(),
             statistic: Statistic::Best,
             csv: None,
         });
@@ -222,6 +226,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         reps: 5,
         prime_ms: 500,
         rotate_rows: 0,
+        rows: Vec::new(),
         statistic: Statistic::Best,
         csv: None,
     };
@@ -267,6 +272,21 @@ fn parse(args: &[String]) -> Result<Args, String> {
                 }
             }
             "--regime" => a.regime = value()?,
+            "--rows" => {
+                a.rows = value()?
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+                let known = engine_rows();
+                for row in &a.rows {
+                    if !known.contains(row) {
+                        return Err(format!(
+                            "unknown row {row:?}; this binary carries {known:?}"
+                        ));
+                    }
+                }
+            }
             "--rotate-rows" => {
                 a.rotate_rows = value()?.parse().map_err(|e| format!("{e}"))?;
             }
@@ -460,6 +480,9 @@ fn main() -> ExitCode {
     let threads = args.threads.expect("verify and run require --threads");
 
     let mut rows = engine_rows();
+    if !args.rows.is_empty() {
+        rows.retain(|row| args.rows.contains(row));
+    }
     let n_rows = rows.len();
     if n_rows > 0 {
         rows.rotate_left(args.rotate_rows % n_rows);
