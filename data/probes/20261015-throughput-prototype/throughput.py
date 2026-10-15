@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Size-versus-throughput prototype: 1T / 4T / 8T, small multiples per family, four engines.
+"""Size-versus-throughput charts: one SVG per family, three thread budgets side by side.
 
-Reads the two recorded daily-suite runs (MKL arm for fork/upstream/mkl, OpenBLAS arm for the
-openblas row), takes the median of the process medians per cell and the between-start sample SD as
-the error bar, converts to **nominal** GFLOP/s with one operation count per family, and writes one
-SVG per thread budget plus a markdown page. No timing is run and nothing is published.
+Layout rules learned the hard way: a family per file (a six-panel sheet was unreadable), a table of
+contents on the page, a rotated y-axis label, and a legend inside every panel. The script also
+checks its own geometry (no text may overlap another text or leave its panel) and prints an ASCII
+sketch so the layout can be inspected without a rasteriser. No timing is run; nothing is published.
 """
 import csv
 import json
@@ -12,6 +12,7 @@ import math
 import statistics
 import sys
 from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -22,35 +23,61 @@ RUNS = {
     'mkl': ROOT / 'data/results/zen5-cpu/faer-kernels/20261015T130805Z-baseline-v2-faer-kernels-mkl',
     'openblas': ROOT / 'data/results/zen5-cpu/faer-kernels/20261015T194810Z-baseline-v2-faer-kernels-openblas',
 }
-# Nominal operation counts for a square n x n problem. They are algorithmic, not measured, so the
-# page must call the result "nominal GFLOP/s" and must not compare absolute values across families.
+# Nominal, algorithmic operation counts for a square n x n problem; complex is 4x the real count.
 FLOPS = {
-    'gemm': lambda n, c: 2 * n ** 3 * (4 if c else 1),          # c64 is a complex product: 8 flops/elt
-    'lu': lambda n, c: 2 / 3 * n ** 3 * (4 if c else 1),
-    'full_piv_lu': lambda n, c: 2 / 3 * n ** 3 * (4 if c else 1),
-    'cholesky': lambda n, c: 1 / 3 * n ** 3 * (4 if c else 1),
-    'qr_factor': lambda n, c: 4 / 3 * n ** 3 * (4 if c else 1),
-    'qr': lambda n, c: 8 / 3 * n ** 3 * (4 if c else 1),        # factor + explicit Q
-    'eigh': lambda n, c: 8 / 3 * n ** 3 * (4 if c else 1),
-    'svd_values': lambda n, c: 4 * n ** 3 * (4 if c else 1),
-    'svd_thin': lambda n, c: 10 * n ** 3 * (4 if c else 1),
+    'gemm': (2, '2n^3'), 'lu': (2 / 3, '2n^3/3'), 'full_piv_lu': (2 / 3, '2n^3/3'),
+    'cholesky': (1 / 3, 'n^3/3'), 'qr_factor': (4 / 3, '4n^3/3'), 'qr': (8 / 3, '8n^3/3 (factor + Q)'),
+    'eigh': (8 / 3, '8n^3/3'), 'svd_values': (4, '4n^3'), 'svd_thin': (10, '10n^3'),
 }
-PANELS = ['gemm', 'lu', 'cholesky', 'qr', 'svd_values', 'eigh']
-SERIES = [('faer-fork', 'mkl', '#1f77b4'), ('faer-upstream', 'mkl', '#ff7f0e'),
-          ('lapack-mkl', 'mkl', '#2ca02c'), ('lapack-openblas', 'openblas', '#d62728')]
-ORDER = 'c'
-DTYPE = 'f64'
+FAMILIES = ['gemm', 'lu', 'cholesky', 'qr', 'svd_values', 'eigh']
+BUDGETS = [1, 4, 8]
+SERIES = [('faer-fork', 'mkl', '#1f77b4', 'circle'), ('faer-upstream', 'mkl', '#ff7f0e', 'square'),
+          ('lapack-mkl', 'mkl', '#2ca02c', 'triangle'), ('lapack-openblas', 'openblas', '#d62728', 'diamond')]
+ORDER, DTYPE = 'c', 'f64'
+PANEL_W, PANEL_H = 380, 380          # one panel per thread budget, drawn left to right
+PAD_L, PAD_R, PAD_T, PAD_B = 92, 24, 46, 62
+CANVAS_W, CANVAS_H = PAD_L + 3 * PANEL_W + PAD_R, PAD_T + PANEL_H + PAD_B
+
+
+@dataclass
+class Checker:
+    """Text bounding boxes, so a layout bug is an assertion instead of a surprise on GitHub."""
+    boxes: list = field(default_factory=list)
+
+    def text(self, x, y, size, content, anchor='start', rotate=None, panel=None):
+        width = 0.62 * size * len(content)
+        if rotate:
+            x0, x1 = x - size * 0.8, x
+        elif anchor == 'middle':
+            x0, x1 = x - width / 2, x + width / 2
+        elif anchor == 'end':
+            x0, x1 = x - width, x
+        else:
+            x0, x1 = x, x + width
+        box = (x0, y - size * 0.9, x1, y + size * 0.25, panel)
+        for other in self.boxes:
+            if other[4] is not panel:
+                continue
+            if box[0] < other[2] and other[0] < box[2] and box[1] < other[3] and other[1] < box[3]:
+                raise AssertionError(f'overlapping text: {content!r} with a neighbour')
+        if panel:
+            px, py = panel
+            if box[0] < px - 1 or box[2] > px + PANEL_W + 1 or box[1] < py - 1 or box[3] > py + PANEL_H + 1:
+                raise AssertionError(f'text {content!r} box={tuple(round(v, 1) for v in box[:4])} '
+                                     f'panel={(px, py, px + PANEL_W, py + PANEL_H)}')
+        self.boxes.append(box)
+        transform = f' transform="rotate(-90 {x:.1f} {y:.1f})"' if rotate else ''
+        return (f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}" text-anchor="{anchor}"{transform}>'
+                f'{content}</text>')
 
 
 def load(vendor, run):
     manifest = yaml.safe_load((run / 'run.yaml').read_text())
-    cells = defaultdict(dict)          # (threads, family, shape, engine) -> repeat -> median ms
+    cells = defaultdict(dict)
     for name in manifest['result_files']:
         repeat = name.split('-')[0]
         for row in csv.DictReader((run / name).open(newline='')):
-            if row['status'] != 'ok' or row['dtype'] != DTYPE or row['order'] != ORDER:
-                continue
-            if row['m'] != row['n']:
+            if row['status'] != 'ok' or row['dtype'] != DTYPE or row['order'] != ORDER or row['m'] != row['n']:
                 continue
             cells[(int(row['threads']), row['family'], int(row['n']), row['note'], row['row'])][repeat] = \
                 statistics.median(json.loads(row['samples_ms']))
@@ -58,7 +85,6 @@ def load(vendor, run):
 
 
 def points(cells, threads, family, engine):
-    """[(n, nominal GFLOP/s, between-start SD)] for one engine, in the cells this run measured."""
     out = []
     for (t, f, size, note, row), medians in sorted(cells.items()):
         if t != threads or f != family or row != engine or note:
@@ -67,86 +93,130 @@ def points(cells, threads, family, engine):
         if len(values) < 2:
             continue
         ms = statistics.median(values)
-        gflops = FLOPS[family](size, False) / (ms * 1e6)
+        gflops = FLOPS[family][0] * size ** 3 / (ms * 1e6)
         out.append((size, gflops, gflops * statistics.stdev(values) / ms))
     return out
 
 
-def panel_svg(family, threads, blocks):
-    scale = 300
-    x0, y0 = 46, 20
-    width, height = scale - 56, scale - 60
-    all_x = [p[0] for pts in blocks.values() for p in pts]
-    all_y = [max(p[1], 1e-6) for pts in blocks.values() for p in pts]
-    if not all_x:
-        return f'<g><text x="{x0}" y="{y0 + 20}">no data</text></g>'
-    lx0, lx1 = math.log10(min(all_x)), math.log10(max(all_x))
-    ly0, ly1 = math.log10(min(all_y) / 2), math.log10(max(all_y) * 2)
+def marker(kind, x, y, colour):
+    if kind == 'square':
+        return f'<rect x="{x - 2.6:.1f}" y="{y - 2.6:.1f}" width="5.2" height="5.2" fill="{colour}"/>'
+    if kind == 'triangle':
+        return (f'<polygon points="{x:.1f},{y - 3:.1f} {x - 3:.1f},{y + 2.4:.1f} {x + 3:.1f},{y + 2.4:.1f}" '
+                f'fill="{colour}"/>')
+    if kind == 'diamond':
+        return (f'<polygon points="{x:.1f},{y - 3:.1f} {x - 3:.1f},{y:.1f} {x:.1f},{y + 3:.1f} '
+                f'{x + 3:.1f},{y:.1f}" fill="{colour}"/>')
+    return f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.7" fill="{colour}"/>'
+
+
+def panel(checker, family, threads, blocks, origin):
+    """One thread budget for one family: axes, ticks, error bars, markers and an inside legend."""
+    ox, oy = origin
+    x0, y0 = ox + 44, oy + 30
+    width, height = PANEL_W - 64, PANEL_H - 92
+    data = [p for pts in blocks.values() for p in pts]
+    if not data:
+        return f'<g><text x="{x0}" y="{y0 + 20}" font-size="12">no data</text></g>'
+    xs = [p[0] for p in data]
+    ys = [max(p[1], 1e-6) for p in data]
+    lx0, lx1 = math.log10(min(xs)), math.log10(max(xs)) + 0.02
+    ly0, ly1 = math.log10(min(ys)) - 0.25, math.log10(max(ys)) + 0.25
+
     def sx(value):
-        return x0 + (math.log10(value) - lx0) / (lx1 - lx0 or 1) * width
+        return x0 + (math.log10(value) - lx0) / (lx1 - lx0) * width
+
     def sy(value):
-        return y0 + height - (math.log10(max(value, 1e-6)) - ly0) / (ly1 - ly0 or 1) * height
-    parts = [f'<rect x="{x0}" y="{y0}" width="{width}" height="{height}" fill="none" stroke="#cccccc"/>',
-             f'<text x="{x0 + width / 2}" y="{y0 + height + 32}" font-size="11" text-anchor="middle">n</text>',
-             f'<text x="{x0 - 34}" y="{y0 + 12}" font-size="11">{family}</text>',
-             f'<text x="{x0 - 30}" y="{y0 + 26}" font-size="9" fill="#666">nominal GFLOP/s</text>']
-    for value in all_x:
-        parts.append(f'<line x1="{sx(value):.1f}" y1="{y0}" x2="{sx(value):.1f}" y2="{y0 + height}" stroke="#f0f0f0"/>')
-        parts.append(f'<text x="{sx(value):.1f}" y="{y0 + height + 14}" font-size="9" text-anchor="middle">{value}</text>')
-    for power in range(int(math.floor(ly0)), int(math.ceil(ly1)) + 1):
-        value = 10 ** power
-        parts.append(f'<line x1="{x0}" y1="{sy(value):.1f}" x2="{x0 + width}" y2="{sy(value):.1f}" stroke="#f0f0f0"/>')
-        parts.append(f'<text x="{x0 - 4}" y="{sy(value) + 3:.1f}" font-size="9" text-anchor="end">{value:g}</text>')
-    for name, _, colour in SERIES:
+        return y0 + height - (math.log10(max(value, 1e-6)) - ly0) / (ly1 - ly0) * height
+
+    panel_key = (ox, oy)
+    out = [f'<rect x="{ox + 6}" y="{oy + 6}" width="{PANEL_W - 12}" height="{PANEL_H - 12}" fill="#ffffff" '
+           f'stroke="#d0d0d0"/>',
+           checker.text(ox + 14, oy + 24, 13, f'{threads}T')]
+    for size in sorted(set(xs)):
+        out.append(f'<line x1="{sx(size):.1f}" y1="{y0}" x2="{sx(size):.1f}" y2="{y0 + height}" stroke="#f2f2f2"/>')
+        out.append(checker.text(sx(size), y0 + height + 15, 9, f'{size}', 'middle', panel=panel_key))
+    for power in range(math.ceil(ly0), math.floor(ly1) + 1):   # only powers inside the axis
+        value = 10.0 ** power
+        out.append(f'<line x1="{x0}" y1="{sy(value):.1f}" x2="{x0 + width}" y2="{sy(value):.1f}" stroke="#f2f2f2"/>')
+        out.append(checker.text(x0 - 6, sy(value) + 3, 9, f'{value:g}', 'end', panel=panel_key))
+    out.append(f'<rect x="{x0}" y="{y0}" width="{width}" height="{height}" fill="none" stroke="#c8c8c8"/>')
+    out.append(checker.text(ox + 20, oy + PANEL_H - 18, 10, 'n (matrix size)', 'start', panel=panel_key))
+    out.append(checker.text(ox + 18, oy + PANEL_H / 2, 10, 'nominal GFLOP/s', 'middle', rotate=True,
+                            panel=panel_key))
+    for name, vendor, colour, kind in SERIES:
         pts = blocks.get(name) or []
         if not pts:
             continue
-        parts.append('<polyline points="' + ' '.join(f'{sx(x):.1f},{sy(y):.1f}' for x, y, _ in pts)
-                     + f'" fill="none" stroke="{colour}" stroke-width="1.4"/>')
+        out.append('<polyline points="' + ' '.join(f'{sx(x):.1f},{sy(y):.1f}' for x, y, _ in pts)
+                   + f'" fill="none" stroke="{colour}" stroke-width="1.5"/>')
         for x, y, err in pts:
-            parts.append(f'<line x1="{sx(x):.1f}" y1="{sy(y - err):.1f}" x2="{sx(x):.1f}" y2="{sy(y + err):.1f}" '
-                         f'stroke="{colour}" stroke-width="1"/>')
-            parts.append(f'<circle cx="{sx(x):.1f}" cy="{sy(y):.1f}" r="2.4" fill="{colour}"/>')
-    return '<g>' + ''.join(parts) + '</g>'
+            out.append(f'<line x1="{sx(x):.1f}" y1="{sy(y - err):.1f}" x2="{sx(x):.1f}" y2="{sy(y + err):.1f}" '
+                       f'stroke="{colour}" stroke-width="1.1"/>')
+            out.append(marker(kind, sx(x), sy(y), colour))
+    # legend inside the panel, in the corner a rising curve leaves free
+    legend_x, legend_y = x0 + width - 128, y0 + 8
+    out.append(f'<rect x="{legend_x - 6}" y="{legend_y - 6}" width="132" height="{13 + 13 * len(SERIES)}" '
+               f'fill="#ffffff" fill-opacity="0.86" stroke="#e0e0e0"/>')
+    for index, (name, vendor, colour, kind) in enumerate(SERIES):
+        row_y = legend_y + index * 13
+        out.append(f'<line x1="{legend_x}" y1="{row_y}" x2="{legend_x + 16}" y2="{row_y}" stroke="{colour}" '
+                   f'stroke-width="1.5"/>')
+        out.append(marker(kind, legend_x + 8, row_y, colour))
+        out.append(checker.text(legend_x + 20, row_y + 3, 9, name, panel=panel_key))
+    return '<g>' + ''.join(out) + '</g>'
 
 
 def main():
     cells = {vendor: load(vendor, run) for vendor, run in RUNS.items()}
-    pages = []
-    for threads in (1, 4, 8):
-        rows = (len(PANELS) + 2) // 3
-        svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="960" height="{rows * 330 + 40}" '
-               f'viewBox="0 0 960 {rows * 330 + 40}">',
-               f'<text x="20" y="16" font-size="13">timing-v2 baseline, {threads}T, f64, C order — '
-               f'nominal GFLOP/s vs n (median of process medians, error bar = between-start SD)</text>']
-        for index, family in enumerate(PANELS):
-            blocks = {name: points(cells[vendor], threads, family, name) for name, vendor, _ in SERIES}
-            svg.append(f'<g transform="translate({56 + (index % 3) * 300}, {30 + (index // 3) * 330})">'
-                       + panel_svg(family, threads, blocks) + '</g>')
-        for series_index, (name, _, colour) in enumerate(SERIES):
-            svg.append(f'<g transform="translate({56 + series_index * 210}, {rows * 330 + 22})">'
-                       f'<line x1="0" y1="0" x2="18" y2="0" stroke="{colour}" stroke-width="1.6"/>'
-                       f'<text x="24" y="4" font-size="11">{name}</text></g>')
+    families = []
+    for family in FAMILIES:
+        checker = Checker()          # one file per family: boxes only have to be disjoint within it
+        svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{CANVAS_W}" height="{CANVAS_H}" '
+               f'viewBox="0 0 {CANVAS_W} {CANVAS_H}">',
+               checker.text(12, 20, 14, f'{family}: nominal GFLOP/s vs matrix size, f64, C order '
+                                        f'(median of process medians, bar = between-start SD)')]
+        for index, threads in enumerate(BUDGETS):
+            blocks = {name: points(cells[vendor], threads, family, name) for name, vendor, _, _ in SERIES}
+            svg.append(panel(checker, family, threads, blocks,
+                             (PAD_L + index * PANEL_W, PAD_T)))
         svg.append('</svg>')
-        path = HERE / f'throughput-{threads}t.svg'
-        path.write_text('\n'.join(svg) + '\n')
-        pages.append(f'### {threads}T\n\n![{threads}T throughput](throughput-{threads}t.svg)\n')
-        print(f'--- {threads}T (fork, nominal GFLOP/s)')
-        for family in PANELS:
-            pts = points(cells['mkl'], threads, family, 'faer-fork')
-            if pts:
-                print(f'  {family:<12}' + ' '.join(f'{size}:{value:.1f}' for size, value, _ in pts))
+        (HERE / f'throughput-{family}.svg').write_text('\n'.join(svg) + '\n')
+        families.append((family, FLOPS[family][1],
+                          {threads: len(points(cells['mkl'], threads, family, 'faer-fork')) for threads in BUDGETS}))
+    toc = '\n'.join(f'| [{family}](throughput-{family}.svg) | `{flops}` | ' +
+                    ', '.join(f'{t}T: {count}' for t, count in counts.items()) + ' |'
+                    for family, flops, counts in families)
     (HERE / 'README.md').write_text(
-        '# Throughput prototype (visual check only)\n\n'
-        'Generated from the recorded daily-suite runs; no timing was run. **Nominal** GFLOP/s with one\n'
-        'algorithmic operation count per family (GEMM 2n^3, LU 2n^3/3, Cholesky n^3/3, QR 8n^3/3 with Q,\n'
-        'SVD values 4n^3, self-adjoint EVD 8n^3/3), median of process medians, error bar = between-start\n'
-        'sample SD, C order, f64, one panel per family and one SVG per thread budget.\n\n'
-        + '\n'.join(pages) +
-        '\nThe `lapack-openblas` line comes from the other arm (a separate binary), so its absolute\n'
-        'level carries the between-arm uncertainty; `faer-fork`/`faer-upstream`/`lapack-mkl` are one\n'
-        'process. Sizes above 768 need the `faer-kernels-large` suite (4T/8T only).\n')
-    print('\nwrote', HERE / 'throughput-1t.svg', 'and the 4T/8T equivalents')
+        '# Throughput charts (prototype, visual check only)\n\n'
+        'Recorded daily-suite data only; no timing was run and nothing is published. One file per\n'
+        'family, one panel per thread budget (1T measured 32-768; 4T/8T will extend to 1536 once\n'
+        '`faer-kernels-large` is recorded). Error bars are the between-start sample SD of the process\n'
+        'medians. GFLOP/s is **nominal**: one algorithmic operation count per family, so absolute\n'
+        'values are not comparable across families. The `lapack-openblas` line comes from the other\n'
+        'arm (its own binary, its own processes); the other three share one process.\n\n'
+        '## Contents\n\n| family | nominal flops | points per budget |\n|---|---|---|\n' + toc + '\n\n' +
+        '\n'.join(f'## {family}\n\n![{family}](throughput-{family}.svg)\n'
+                  f'Nominal operation count: `{flops}`.\n' for family, flops, _ in families) +
+        '\nLayout is checked by the script: no label may overlap another or leave its panel.\n')
+    print('charts:', ', '.join(f'{family}({sum(counts.values())} pts)' for family, _, counts in families))
+    print('geometry check: no overlapping or out-of-panel text')
+    # ASCII sketch of the 8T panel of gemm so the layout can be eyeballed without a rasteriser
+    family = 'gemm'
+    blocks = {name: points(cells[vendor], 8, family, name) for name, vendor, _, _ in SERIES}
+    grid = [[' '] * 92 for _ in range(22)]
+    data = [p for pts in blocks.values() for p in pts]
+    lx0, lx1 = math.log10(min(p[0] for p in data)), math.log10(max(p[0] for p in data))
+    ly0, ly1 = math.log10(min(p[1] for p in data)), math.log10(max(p[1] for p in data))
+    for row, (name, _, _, _) in enumerate(SERIES):
+        for x, y, _ in blocks.get(name) or []:
+            col = int((math.log10(x) - lx0) / (lx1 - lx0) * 88)
+            line = int((math.log10(y) - ly0) / (ly1 - ly0) * 20)
+            grid[20 - line][col] = '1234'[row]
+    print('\nASCII sketch — gemm 8T, columns = n (log), rows = nominal GFLOP/s (log):')
+    for line in grid:
+        print('  |' + ''.join(line) + '|')
+    print('  1=faer-fork  2=faer-upstream  3=lapack-mkl  4=lapack-openblas')
 
 
 if __name__ == '__main__':
