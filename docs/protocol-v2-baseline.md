@@ -34,8 +34,9 @@ different contract are not comparable.
 - **The observing side stays off the measured L3 domains.** The recorder derives
   the measured set and the free CPUs from sysfs and refuses to start when its own
   affinity overlaps; the agent's own pin lives in its process and is
-  re-established after a restart. A run that needs every domain can only proceed
-  with `FBENCH_OBSERVER_SHARES_L3=1`, which records the residual sharing.
+  re-established after a restart. A host whose measured set covers
+  every L3 domain has nowhere to park the observer; that is recorded as a warning (a fact about the
+  machine), while an observer that may land on a measured CPU is still refused.
 - **The idle guard watches whole L3 domains**, SMT siblings and cache peers
   included, so a partially filled domain cannot hide unrelated work. 3 s window,
   `max_busy=0.05`, `PINNED_RETRIES=8`, `PINNED_WAIT=30`; a rejected attempt is
