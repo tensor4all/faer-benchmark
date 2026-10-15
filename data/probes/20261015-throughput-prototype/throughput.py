@@ -158,9 +158,9 @@ def panel(checker, family, threads, blocks, origin):
         if not pts:
             continue
         style = f' stroke-dasharray="{dash}"' if dash else ''
-        width = 1.9 if name == 'faer-fork' else 1.3
+        stroke_w = 1.9 if name == 'faer-fork' else 1.3      # not `width`: that is the panel geometry
         out.append('<polyline points="' + ' '.join(f'{sx(x):.1f},{sy(y):.1f}' for x, y, _ in pts)
-                   + f'" fill="none" stroke="{colour}" stroke-width="{width}"{style}/>')
+                   + f'" fill="none" stroke="{colour}" stroke-width="{stroke_w}"{style}/>')
         for x, y, err in pts:
             out.append(f'<line x1="{sx(x):.1f}" y1="{sy(y - err):.1f}" x2="{sx(x):.1f}" y2="{sy(y + err):.1f}" '
                        f'stroke="{colour}" stroke-width="1.1"/>')
