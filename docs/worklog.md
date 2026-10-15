@@ -2,6 +2,65 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-15 — the fork-vs-upstream column is not a controlled comparison
+
+**What was asked.** The two recorded pages show `faer-fork` slower than `faer-upstream` in 63 (MKL) and
+78 (OpenBLAS) cells out of ~1259, up to 1.5x. The question was whether those are regressions.
+
+**How it was checked.** Three binaries from this harness, measuring the same cells with `--reps 5
+--prime-ms 500`, pinned to the page's CPU sets, at the page's revisions (`bfe4041` fork, `0539947`
+upstream):
+
+- **real** -- the page's build: row 1 = the fork's code, row 2 = upstream's.
+- **null fork** -- upstream's own tree with only the crate rename applied, so *both* rows are
+  upstream's code and any ratio is the row bias itself.
+- **swapped** -- the same two trees with the rename reversed, so row 1 = upstream's code and row 2 =
+  the fork's. A bias that follows the *position* inverts here; a difference that follows the *code*
+  does not.
+
+| cell (C order unless noted) | real | null fork | swapped |
+|---|---|---|---|
+| `gemm/256x256x256` f64 1T | 1.398 | 1.397 | 1.354 |
+| `gemm/256x256x256` f64 1T f | 0.999 | 1.001 | 0.998 |
+| `solve/n256` c64 4T | 1.345 | 1.001 | **0.708** |
+| `solve/n256` c64 4T f | 1.011 | 1.458 | **0.768** |
+| `solve/n256` c64 8T | 1.373 | 0.999 | **0.732** |
+| `solve/n256` c64 8T f | 1.446 | 0.992 | 0.973 |
+| `lu/n256` c64 4T | 1.188 | 1.010 | **0.813** |
+| `lu/n256` c64 4T f | 1.345 | 1.001 | **0.746** |
+| `lu/n512` f64 1T (page 1.38x) | 0.998 | 0.985 | 1.007 |
+| `qr_factor/64x1024` f64 1T (page 1.37x) | 0.970 | 0.995 | 1.013 |
+| `qr_factor/4096x256` f64 1T (page 1.32x) | 0.982 | 0.985 | 0.993 |
+
+**What it says.** None of the sampled cells is a code regression.
+
+- The `gemm` row is the proof of the mechanism: its source is byte-identical in both revisions, and
+  it still reads **1.40x** in the real build, **1.40x** in the null fork, and **1.35x** in the
+  swapped one — so the penalty follows *which row is measured first for that case*, not the code.
+  Whoever is first gets buffers (the state's `a0`/`a`/`qc`/`c`, and the packing buffers the gemm
+  crate allocates inside the call) at addresses that conflict harder for that size; at `257x257x257`,
+  `255x255x255`, `256x256x256` with `batch 2`, and the F order it is 0.996-1.001 in all builds.
+- `solve/n256` and `lu/n256` c64 *invert* in the swapped build (0.71-0.81, i.e. the fork's code is
+  the faster row there), so those page cells are the same artifact seen from the other side.
+- `lu/n512` f64 and the `qr_factor` cells are ~1.00 in all three builds: the page's 1.32-1.38x is a
+  single-scan outlier, and it does not reproduce at the same revision (the page's fork row reads
+  6.1417 ms where every local build reads 4.45-4.51).
+- `solve/n256` c64 8T f (real 1.446, null 0.992, swapped 0.973) is reproduced by neither control and
+  is within-run variance on the eight-core domain; the pages carry no A/A to bound it, which they say.
+
+**Why it matters.** The two pages are one scan each, and their `faer-fork` column is the campaign's
+whole reason for existing. A per-cell bias of up to 1.4x that lands on the first-measured row -- the
+fork's, in every cell -- is larger than most of the differences the campaign is trying to report, and
+it is deterministic, so repeating a run does not remove it. Nothing here is a fork defect; the fork's
+own changes are not implicated by any cell sampled.
+
+**What would fix it, for the maintainer to decide.** Measure each row of a case from both positions
+and keep the per-row minimum (doubles the timing pass), or rotate the row order per case so the
+first position is not always the fork's (cheap, but leaves each individual cell biased), and publish
+a null-fork control run beside a page so the reader can see the bias per cell. This entry does not
+change the measurement protocol; it records that the page's fork-vs-upstream column cannot be read at
+the 1.4x level without one of those.
+
 ## 2026-10-15 — a rectangular LU cell exists now, in both orders
 
 **What was wrong.** `fbench` gated `lu` and `full_piv_lu` on `square(case, family)`, so every
