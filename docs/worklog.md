@@ -131,6 +131,14 @@ sizes the upstream project itself reports: small 32/64/96, mid 128/192/256/384/5
 large 1024/1536, adoption-only 2048/3072/4096, plus our block-boundary diagnostics
 255/257/511/513. 4/8/16 remain out of the campaign.
 
+`linalg-mid` keeps only 128/256/512 (the 192/384/768 EVD/SVD steps are too
+expensive for the baseline; they stay in the gemm tier and in adoption runs),
+bringing the all-sizes baseline to roughly 12,000 rows per set per arm pair and an
+estimated 5-7 h for both arms. A 150 ms priming check on four representative cells
+found no effect where calls are microseconds or tens of milliseconds, but a ~3%
+systematic read in the `cholesky` 512^2 f64 8T cell and noisier rows, so 250 ms
+stays frozen.
+
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
 1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of

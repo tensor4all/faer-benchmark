@@ -180,8 +180,9 @@ runs:
       - regime: gemm-small
         groups: [gemm]
         # Sizes follow faer's own published benchmark distribution (faer-bench tables: powers of
-        # two plus the x1.5 intermediates 96/192/384/768/1536/3072), minus 4,8,16 which belong to
-        # a separate small-matrix loop bench.
+        # two plus the x1.5 intermediates), minus 4,8,16 which belong to a separate small-matrix
+        # loop bench. linalg-mid keeps only 128/256/512 because the EVD/SVD calls there are the
+        # expensive ones; the 192/384/768 steps stay in the gemm tier and in adoption runs.
         n: ["32x32x32", "64x64x64", "96x96x96"]
         batch: [1]
       - regime: gemm-mid
@@ -208,7 +209,7 @@ runs:
         batch: [1]
       - regime: linalg-mid
         groups: [factor, decompose, heavy, householder]
-        n: ["128", "192", "256", "384", "512", "768"]
+        n: ["128", "256", "512"]
         batch: [1]
       - regime: linalg-tall
         groups: [factor, decompose, householder]

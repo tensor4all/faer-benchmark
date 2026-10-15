@@ -9,7 +9,7 @@ different contract are not comparable.
 
 | Setting | Value |
 | --- | --- |
-| `--prime-ms` | **250** (calibrated: 250/10 and 250/30 are within 0.978-1.006 of 3000/30 over 18 rows, far below the 0.5-35% between-start range) |
+| `--prime-ms` | **250** (calibrated twice: 250/10 and 250/30 are within 0.978-1.006 of 3000/30 over 18 rows; and 150 ms was not adopted because one of four representative cells read ~3% fast in all rotations and its rows were noisier - see `data/probes/20261015-priming-150/`) |
 | `--reps` | **5** |
 | `--aa` | **3** for the 3-row MKL arm, **2** for the 2-row OpenBLAS arm - a complete rotation cycle either way, so every row occupies every position once (the recorder requires `aa % len(engines) == 0`) |
 | `--statistic` | `median` |
