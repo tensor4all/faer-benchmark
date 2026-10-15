@@ -16,14 +16,39 @@ which own the same job one layer up.
 | Design record | [`docs/worklog.md`](docs/worklog.md) — decisions, fixed failures, open items |
 | Provenance | [`docs/provenance.md`](docs/provenance.md) — what was copied from which sibling and under what terms |
 
-## Status: skeleton
+## Status
 
-The declarations, schemas, scripts, pins and CI are in place. The harness crate
-`fbench` is **not written here** — [`fbench/Cargo.toml`](fbench/Cargo.toml) is a
-placeholder with no `src/`, so no run has been recorded and `result/INDEX.md`
-lists empty cells. `scripts/record_run.py` and `scripts/build_for_faer_rev.sh`
-describe the build, verify and timing contract that harness has to satisfy; they
-cannot run until the crate exists.
+`fbench` exists and records runs: the timing-v2 baseline is in
+[`result/INDEX.md`](result/INDEX.md) (daily suite, both vendor arms), the harness
+owns the workloads and the numerical checks, and the timing protocol lives in
+`benchmarks/scripts/`. The frozen settings, the enforced machine preconditions and
+the candidate-mode procedure for optimization iterations are in
+[`docs/protocol-v2-baseline.md`](docs/protocol-v2-baseline.md); the per-run audit of
+the baseline is in [`docs/reviews/`](docs/reviews/).
+
+## From a page to its raw data
+
+Every published number comes from one recorded run directory; nothing is copied by
+hand, and the mapping is the same for every page.
+
+| artifact | where | what it is |
+|---|---|---|
+| raw run | `data/results/<profile>/<suite>/<timestamp>-<label>/` | one recorded run |
+| `run.yaml` | in that directory | identities (library, upstream, harness, toolkit), host and `host.power`, CPU sets, timing policy, guard policy, and the exact result/verification file names |
+| `run<N>-<regime>-<T>t.csv` | in that directory | one CSV per complete process set: every row carries its chronological `samples_ms`, the observed thread budgets, status and note |
+| `verify-<regime>-<T>t.csv` | in that directory | the verification census the timing was gated on, including declared skips |
+| `*.guard` | in that directory | that process's idle-guard log, including discarded attempts |
+| `build-info.json` / `binary-info.txt` | in that directory | build metadata (pins, rustc/cargo, features) and the vendor/thread identity the binary reported |
+| `report.md` | in that directory | the run's local rendering of the same numbers |
+| page | `result/<profile>/<suite>/<fork12>-<upstream12>[-<vendor>][-timing-v<N>].md` | the published numbers, generated from those CSVs |
+| index | `result/INDEX.md` | generated: which pages exist, and whether a page is `current`, `partial` or `declaration-changed` |
+
+`-timing-v2` marks a page recorded under the timing-v2 contract
+([`docs/reliable-measurement.md`](docs/reliable-measurement.md)); historical v1
+pages keep their original names and semantics. Spread is judged from the raw data:
+within-process from each row's `samples_ms`, between process starts from the
+`run0`/`run1`/`run2` files of the same cell, and admission history from the guard
+logs.
 
 ## How it works
 
