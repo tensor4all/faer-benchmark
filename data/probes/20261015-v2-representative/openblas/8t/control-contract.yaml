@@ -1,0 +1,181 @@
+schema_version: 1
+target_profile: zen5-cpu
+suite_id: faer-kernels
+suite_file: benchmarks/suites/faer-kernels.yaml
+suite_sha256: ebe6cadfc84bbbe467f641cffd64fd56f87ab6fa992681295e2d8a97afb0bb2d
+timestamp: '2026-10-15T08:38:03.614314+00:00'
+command: python3 data/probes/20261015-v2-representative/run.py (see metadata.json
+  commands)
+library:
+  url: https://github.com/tensor4all/faer
+  commit: bfe4041cd9918815e3b3f766ac0332b792badb7d
+  dirty: false
+  features:
+  - std
+  - rayon
+  measured_path: /home/shinaoka/projects/tensor4all/faer-benchmark/extern/t4a-faer
+  version: 0.24.4
+upstream:
+  url: https://codeberg.org/sarah-quinones/faer
+  commit: 0539947ffb757a739d7e703a7d2fa0c792a909c1
+  version: 0.24.4
+  ref: faer-v0.24.4
+  dirty: false
+  measured_path: /home/shinaoka/projects/tensor4all/faer-benchmark/extern/upstream-faer
+vendor:
+  name: openblas
+  linkage: static
+  version: 0.3.32
+  config: OpenBLAS 0.3.32 DYNAMIC_ARCH NO_AFFINITY Cooperlake MAX_THREADS=24
+  corename: Cooperlake
+  parallel: pthread
+  procs: 24
+  build_env: OPENBLAS_DYNAMIC_ARCH=1 FC=/opt/intel/oneapi/compiler/2026.1/bin/ifx
+    LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/2026.1/lib:/opt/intel/oneapi/2026.1/lib
+    rpath=/opt/intel/oneapi/compiler/2026.1/lib:/opt/intel/oneapi/2026.1/lib
+harness:
+  commit: 198730904711fe841e87c8f027f8c953419d7dad
+  dirty: false
+toolkit:
+  commit: 916dace82589f9066f824c5cbfaa311140df2fed
+  dirty: false
+  measured_path: /home/shinaoka/projects/tensor4all/campaign-toolkit
+verification_files:
+- verify-qr-8t.csv
+- verify-decompose-8t.csv
+- verify-householder-8t.csv
+binary:
+  path: /home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-openblas/release/fbench
+  sha256: d59f5a802112d8fe331fa7d3b683b5c2093abba3c409d4733c4f0024d3eeb651
+host:
+  hostname: shinaoka-EVO-X1Pro
+  cpu: AMD Ryzen AI 9 HX 470
+  os: Linux 7.0.0-38-generic
+  arch: x86_64
+  logical_cpus: 24
+  l3: 24 MiB (2 instances)
+  l3_domains: '0-3: 16 MiB shared; 4-11: 8 MiB shared'
+  notes: 'AMD Ryzen AI 9 HX 470 (Zen5 mobile APU), 12 physical / 24 logical cores.
+    Heterogeneous L3: CPUs 0-3 share 16 MiB, CPUs 4-11 share 8 MiB, so a thread set
+    must be stated together with the domain it sits in. SMT siblings of CPUs 4-11
+    are 16-23; the idle gate checks them too, because a busy sibling contends with
+    the physical core being measured.'
+threads:
+  counts:
+  - 8
+  cpu_sets:
+    '8': 4-11
+  env:
+    OPENBLAS_NUM_THREADS: null
+    MKL_NUM_THREADS: null
+    MKL_DOMAIN_NUM_THREADS: null
+    MKL_INTERFACE_LAYER: null
+    MKL_THREADING_LAYER: null
+    MKL_DYNAMIC: null
+    MKL_ENABLE_INSTRUCTIONS: null
+    MKL_CBWR: null
+    OMP_NUM_THREADS: null
+    OMP_THREAD_LIMIT: null
+    OMP_PROC_BIND: null
+    OMP_PLACES: null
+    KMP_AFFINITY: null
+    GOMP_CPU_AFFINITY: null
+    RAYON_NUM_THREADS: null
+  note: the vendor's budget is set by the harness from the row's thread count and
+    read back before each measurement; these variables were removed from the measured
+    process's environment so it cannot inherit a different one
+timing_policy:
+  version: 2
+  minimum_untimed_priming_ms: 3000
+  statistic: median
+  row_rotation_step: 1
+  repetitions: 30
+  notes: DIAGNOSTIC candidate protocol, not yet a validated full-suite policy
+guards:
+  idle_window_seconds: 3
+  max_busy_percent: 5.0
+  attempts: 1
+  sibling_aware: true
+  logs:
+  - verify-qr-8t.guard
+  - verify-decompose-8t.guard
+  - verify-householder-8t.guard
+  - run0-qr-8t.guard
+  - run0-decompose-8t.guard
+  - run0-householder-8t.guard
+  - run1-qr-8t.guard
+  - run1-decompose-8t.guard
+  - run1-householder-8t.guard
+  - run2-qr-8t.guard
+  - run2-decompose-8t.guard
+  - run2-householder-8t.guard
+providers:
+- name: faer-fork
+  version: null
+  commit: null
+  path: null
+  note: the provider in the measured revision; see library and upstream above
+- name: faer-upstream
+  version: null
+  commit: null
+  path: null
+  note: the provider in the measured revision; see library and upstream above
+- name: openblas
+  version: 0.3.32
+  commit: null
+  path: null
+  note: linked static, kernel dispatched to Cooperlake, config OpenBLAS 0.3.32 DYNAMIC_ARCH
+    NO_AFFINITY Cooperlake MAX_THREADS=24
+invalidated_by:
+- faer/src/**
+- faer-traits/src/**
+- faer-macros/src/**
+- Cargo.toml
+- Cargo.lock
+result_files:
+- run0-qr-8t.csv
+- run0-decompose-8t.csv
+- run0-householder-8t.csv
+- run1-qr-8t.csv
+- run1-decompose-8t.csv
+- run1-householder-8t.csv
+- run2-qr-8t.csv
+- run2-decompose-8t.csv
+- run2-householder-8t.csv
+run_spec:
+  populations:
+  - regime: qr
+    families:
+    - qr_factor
+    - qr
+    n:
+    - 4096x256
+    batch:
+    - 1
+  - regime: decompose
+    families:
+    - cholesky
+    - eigh
+    - svd_values
+    n:
+    - '512'
+    batch:
+    - 1
+  - regime: householder
+    families:
+    - householder_apply
+    n:
+    - 4096x256
+    batch:
+    - 1
+  dtypes:
+  - f64
+  order:
+  - c
+  - f
+  engines:
+  - faer-fork
+  - faer-upstream
+  - lapack-openblas
+  aa: 3
+  covers_declared_suite: false
