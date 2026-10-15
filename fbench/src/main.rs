@@ -559,6 +559,7 @@ fn main() -> ExitCode {
                                             );
                                         }
                                         Err(e) => {
+                                            let e = format!("{}; {e}", ops.note);
                                             all_ok = false;
                                             emit(
                                                 &mut records,
@@ -605,6 +606,7 @@ fn main() -> ExitCode {
                                             );
                                         }
                                         Err(e) => {
+                                            let e = format!("{}; {e}", ops.note);
                                             println!("MISMATCH {label} {e}");
                                             all_ok = false;
                                             emit(

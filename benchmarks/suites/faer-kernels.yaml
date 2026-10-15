@@ -153,9 +153,10 @@ engines_doc:
       vendor-owned, as for OpenBLAS.
 
 # Populations are sampled as the shape classes the issue names: the ends of each
-# axis, with the middle dropped where it buys nothing. Priming is a fixed 0.5 s
-# per engine row per case and does not scale with the shape, so a middle point
-# costs what an end point costs while adding the least. `gemm` and the linalg
+# axis, with the middle dropped where it buys nothing. Historical v1 used a 0.5 s
+# priming floor. V2 budgets are explicit in each manifest and are frozen only after
+# representative controls; per-operation priming makes the case count itself a
+# resource cost, so the population is intentionally bounded. `gemm` and the linalg
 # families cannot share one population: a gemm shape is a triple and a linalg
 # shape is not, and the schema's shape grammar is per population. A regime label
 # is therefore the *population's* identity, not a bare shape class, and it must
@@ -170,8 +171,9 @@ runs:
     # C (row-major) and F (column-major) for every case, as a declared axis: faer's
     # gemm and its Householder paths dispatch differently on layout, and the fork's
     # row-split gates were chosen on F-order shapes. The order is part of the cell
-    # identity, and the manifest records the actual strides at the call boundary,
-    # not only the fixture's nominal order.
+    # identity. It names the primary input view's layout, not explicit stride
+    # measurements: provider-native allocations may include padding, and physical
+    # strides are not columns in the CSV.
     order: [c, f]
     engines: [faer-fork, faer-upstream, lapack-openblas, lapack-mkl]
     populations:

@@ -16,6 +16,13 @@ separate binaries/runs because their symbols collide, not separate measurement
 implementations. A comparison is about the declared public-API workload, not
 proof of identical low-level algorithms or vendor internals.
 
+V2 recording requires an **editable toolkit installation from its own clean Git
+checkout**. The pinned editable VCS entry in `requirements.txt` retains that
+checkout; local development can use `pip install -e ../campaign-toolkit` at the
+same pinned commit. An ordinary installed distribution is refused rather than
+attributing the enclosing harness repository's commit to the toolkit. Historical
+v1 readers do not require this installation mode.
+
 ## Contract
 
 Inputs match across providers for each `(family, dtype, shape, batch, order)`.
@@ -60,8 +67,10 @@ and one coefficient block; multi-panel sequences are not covered.
   vendor budget are observed in the measured process and checked per row;
   neither is described as an active-worker trace.
 - All chronological calls remain in `samples_ms`. V2 uses each process median,
-  then the median across complete-set process repeats. Reported between-process
-  SD includes the rotating-order schedule; within-process SD remains separate.
+  then the median across at least two complete-set process repeats (and complete
+  engine-rotation cycles). Order remains a report dimension even if omitted from
+  display-axis configuration. Reported between-process SD includes the
+  rotating-order schedule; within-process SD remains separate.
   These are descriptive statistics, not confidence intervals or causal evidence.
 - Verification emits a cell census, including separately timed variants in
   `note`. Every repeat must match it exactly: no missing/duplicate/failed cells,

@@ -50,11 +50,45 @@ refuses v2 rather than silently merging variants/taking minima; candidate
 comparison remains deferred until the baseline is measured. A no-publish mode
 allows recording smoke/control artifacts without publishing numerical pages.
 
+Two initial production-recorder `--no-publish` software smokes (one per vendor,
+GEMM-small f64 C/F 1T) passed: each 90 timed rows/180 samples and four first-attempt
+idle guards, with identical library/upstream/harness/toolkit paths and revisions.
+They deliberately used only 2 calls and 1 ms priming; they are **not** new baseline
+performance results or a validated priming policy. Their original manifests/raw
+files remain in the `20261015T052425Z-v2-smoke-mkl` and
+`20261015T052450Z-v2-smoke-openblas` result directories.
+
+An in-progress scoped GPT audit identified two recording-gate defects: a normal
+installed distribution could inherit an enclosing Git repository's toolkit
+identity, and publication/index failures could return success. The toolkit now
+requires its own Git root, the requirement encodes a pinned editable install, and
+both child statuses propagate. Regression tests exercise enclosing/non-Git refusal,
+index status 37 through the real publisher/recorder paths, and no-publish status 0.
+The corrected toolkit passes 27 tests and Ruff; source checkpoint `ad2a339` remains
+local/unpushed. Corrected-source smokes are still required before controls.
+
+Three bounded GPT POST reports then completed (raw text and dispositions archived
+in `docs/reviews/20261015-timing-v2/`). The numerical/runtime report found no
+must-fix defect; two MINOR diagnostics were corrected locally: failed rows keep
+their variant label, and a stale vendor-QR comment was replaced. The core
+accounting report reproduced two IMPORTANT findings against the source: a v2
+report key could omit validated `order`, and a single-engine one-process set was
+accepted even though between-process SD is undefined. Both now fail under
+pre-fix behavior and pass after correction; v2 also requires >=2 process sets and
+complete engine rotations. Toolkit `916dace` is committed and pinned; the
+numerical grid runs on the previous binaries until the corrected-source rebuild.
+
 The broad delegated implementation and first broad GPT post-review both stopped
 at their execution limits and are **not** counted as completed work/review. The
-remaining numerical implementation was integrated locally; a narrowed GPT review
-and the final coherent-diff review remain required. Representative pilot budgets
-are proposed, not frozen suite defaults. No full baseline re-record has run yet.
+remaining numerical implementation was integrated locally; completed bounded
+numerical/core/orchestration reports are still required before adoption. The full
+declared-shape numerical grid has been launched separately, without builds or
+timings; its final result has not been accepted yet. Representative pilot budgets
+are proposed, not frozen suite defaults. At the proposed 3 s x 3 sets, the current
+route inventory estimates nearly 20 hours of priming alone for both vendor arms,
+before calls/checks/verification/guards. This is a resource estimate, not measured
+performance or a reason to choose a more favorable statistic. No full baseline
+re-record has run yet.
 Older statements below about the ambient pool or hardware mechanism are historical
 hypotheses, not established findings for this new harness.
 
@@ -203,7 +237,7 @@ The clean build reports `all comparisons within tolerance` for `qr_factor` over
 `linalg-small`, `linalg-medium`, `linalg-large`, `linalg-tall` and `linalg-wide`, both dtypes,
 both orders.
 
-## 2026-10-15 — the eight-thread gap in `cholesky`, `eigh` and `svd_values` is a scan, and it is not the pool
+## 2026-10-15 — the eight-thread gap is an exploratory scan, not a pool diagnosis
 
 **What was measured, and how.** A scan, not a recorded page and not a paired comparison: one
 `fbench run --n 512 --dtype f64 --reps 3 --prime-ms 500` per thread count, pinned to the row's CPU
@@ -212,27 +246,22 @@ threads — `cholesky` faer 1.238 / 0.921 / 0.705 / 0.709 against the vendor's 2
 0.582; `eigh` 29.249 / 20.784 / 16.933 / 15.191 against 36.445 / 21.604 / 12.935 / 9.006;
 `svd_values` 39.465 / 31.638 / 28.640 / 30.369 against 28.712 / 20.076 / 15.620 / 13.647.
 
-**What it says.** The fork leads this vendor at one thread on `cholesky` (0.62x) and `eigh` (0.80x)
-and loses from four threads on, where the vendor keeps scaling and the fork stops: 1.75x over eight
-cores for `cholesky`, 1.93x for `eigh`, and `svd_values` is *slower* at eight threads than at four.
-`svd_values` also trails at one thread (1.38x), which is a serial deficit and not a scaling one, and
-is the only one of the three where a fork-side kernel question is still open. These are scans, not
-paired comparisons, and they are not page evidence.
+**Observation, not an inference.** Those point estimates appeared to flatten with the faer
+budget and improve further for this vendor. They do not establish stable relative performance,
+a physical bottleneck, or which kernels should change; the measurement limitations above apply.
 
-**What was ruled out.** The fork's thread budget is a decomposition degree, not a pool size —
-`set_global_parallelism(Par::rayon(n))` only tells faer how many pieces to split work into, and the
-ambient rayon pool stays at the machine's core count, which the recorder does not pin for the faer
-arms. That looked like the explanation, so the scan was repeated at eight threads with
-`RAYON_NUM_THREADS=8`: `cholesky` 0.709 -> 0.723, `eigh` 15.191 -> 15.691, `svd_values` 30.369 ->
-29.833, and the C order 0.978 -> 1.362. All within noise. The pool is not the cause and no harness
-change follows from this.
+**What was probed, not ruled out.** `Par::rayon(n)` is a decomposition hint, not ownership or
+observation of an N-worker pool. CPU affinity constrains the process but does not itself specify
+pool size. A further unreplicated scan with `RAYON_NUM_THREADS=8` gave `cholesky` 0.709 -> 0.723,
+`eigh` 15.191 -> 15.691, `svd_values` 30.369 -> 29.833, and C order 0.978 -> 1.362. That is not
+consistent improvement, but calling all these changes "within noise" without distributions was
+unjustified. The experiment did not establish the effective pool size or rule out pool effects.
+V2 now owns and checks that budget; it still does not trace simultaneously active workers.
 
-**What it does not say.** No fork change: the two candidates a fork can gate locally — the
-tridiagonalisation/bidiagonalisation floors and the compact factor's region floor — are already
-measured and dropped in the fork's own records (`2026-10-14-evd-svd-floor-sweep.md`,
-`2026-10-14-bidiag-parallel-hint.md`, `2026-10-14-compact-factor-region-floor.md`) with the numbers
-that dropped them, and re-walking them would be repeating a dead end. What is left is the work model
-itself, which is the fork ledger's `Thread policy` row (`tenferro-rs#2000`, `strided-rs#6`).
+**Decision remains deferred.** Earlier floor scans and their decisions are archived in the
+fork's `2026-10-14-evd-svd-floor-sweep.md`, `2026-10-14-bidiag-parallel-hint.md` and
+`2026-10-14-compact-factor-region-floor.md`. They are historical evidence, not universal clearance
+or a reason to resume optimization before the new baseline. The work-model questions remain open.
 
 ## 2026-10-15 — the `qr` row timed the full `Q` and checked the compact one
 
@@ -240,9 +269,9 @@ itself, which is the fork ledger's `Thread policy` row (`tenferro-rs#2000`, `str
 the two arms did not build the same Q. The `faer-fork`/`faer-upstream` arm called
 `Qr::compute_Q()`, which forms the full `m x m` completion; the `lapack-*` arm called
 `orgqr(m, r, r)` with `r = min(m, n)`, which is the compact `m x r` factor, and the run's own check
-called `compute_thin_Q()`. On a square or wide shape the two coincide, so the row looked consistent
-where it was not the point; on a tall shape the faer arm was doing eight times the vendor arm's work,
-and the recorded page's C-order `qr/4096x256` reads 490.6519 / 162.0838 / 118.9852 against the
+called `compute_thin_Q()`. On a square or wide shape the Q dimensions coincide; on a tall shape
+the faer arm formed an additional unitary completion. These are wall times of different workloads,
+not normalized operation-count ratios: the page's C-order `qr/4096x256` reads 490.6519 / 162.0838 / 118.9852 against the
 vendor's 57.7822 / 19.5388 / 13.6884 — 8.49x / 8.30x / 8.69x at one, four and eight threads — while
 the compact comparison beside it (`qr_factor`, the same page) is 1.71x at one thread and behind only
 at four and eight.
@@ -276,127 +305,9 @@ declaration" -- and the manifest hash is the coarser gate for whether declaratio
 can be run at all. Since neither this entry nor the rectangular-LU change adds a shape to a
 population, the content grid is untouched and `full` stays right for the recorded pages.
 
-## 2026-10-15 — the eight-thread gap in `cholesky`, `eigh` and `svd_values` is a scan, and it is not the pool
-
-**What was measured, and how.** A scan, not a recorded page and not a paired comparison: one
-`fbench run --n 512 --dtype f64 --reps 3 --prime-ms 500` per thread count, pinned to the row's CPU
-set, at `10ee1c9` with the compact-`Q` harness above. `f64`, `n = 512`, F order, ms at 1 / 2 / 4 / 8
-threads — `cholesky` faer 1.238 / 0.921 / 0.705 / 0.709 against the vendor's 2.003 / 1.369 / 0.848 /
-0.582; `eigh` 29.249 / 20.784 / 16.933 / 15.191 against 36.445 / 21.604 / 12.935 / 9.006;
-`svd_values` 39.465 / 31.638 / 28.640 / 30.369 against 28.712 / 20.076 / 15.620 / 13.647.
-
-**What it says.** The fork leads this vendor at one thread on `cholesky` (0.62x) and `eigh` (0.80x)
-and loses from four threads on, where the vendor keeps scaling and the fork stops: 1.75x over eight
-cores for `cholesky`, 1.93x for `eigh`, and `svd_values` is *slower* at eight threads than at four.
-`svd_values` also trails at one thread (1.38x), which is a serial deficit and not a scaling one, and
-is the only one of the three where a fork-side kernel question is still open. These are scans, not
-paired comparisons, and they are not page evidence.
-
-**What was ruled out.** The fork's thread budget is a decomposition degree, not a pool size —
-`set_global_parallelism(Par::rayon(n))` only tells faer how many pieces to split work into, and the
-ambient rayon pool stays at the machine's core count, which the recorder does not pin for the faer
-arms. That looked like the explanation, so the scan was repeated at eight threads with
-`RAYON_NUM_THREADS=8`: `cholesky` 0.709 -> 0.723, `eigh` 15.191 -> 15.691, `svd_values` 30.369 ->
-29.833, and the C order 0.978 -> 1.362. All within noise. The pool is not the cause and no harness
-change follows from this.
-
-**What it does not say.** No fork change: the two candidates a fork can gate locally — the
-tridiagonalisation/bidiagonalisation floors and the compact factor's region floor — are already
-measured and dropped in the fork's own records (`2026-10-14-evd-svd-floor-sweep.md`,
-`2026-10-14-bidiag-parallel-hint.md`, `2026-10-14-compact-factor-region-floor.md`) with the numbers
-that dropped them, and re-walking them would be repeating a dead end. What is left is the work model
-itself, which is the fork ledger's `Thread policy` row (`tenferro-rs#2000`, `strided-rs#6`).
-
-## 2026-10-15 — the `qr` row timed the full `Q` and checked the compact one
-
-**What was wrong.** The `qr` family is declared as "the composite returning explicit Q and R", and
-the two arms did not build the same Q. The `faer-fork`/`faer-upstream` arm called
-`Qr::compute_Q()`, which forms the full `m x m` completion; the `lapack-*` arm called
-`orgqr(m, r, r)` with `r = min(m, n)`, which is the compact `m x r` factor, and the run's own check
-called `compute_thin_Q()`. On a square or wide shape the two coincide, so the row looked consistent
-where it was not the point; on a tall shape the faer arm was doing eight times the vendor arm's work,
-and the recorded page's C-order `qr/4096x256` reads 490.6519 / 162.0838 / 118.9852 against the
-vendor's 57.7822 / 19.5388 / 13.6884 — 8.49x / 8.30x / 8.69x at one, four and eight threads — while
-the compact comparison beside it (`qr_factor`, the same page) is 1.71x at one thread and behind only
-at four and eight.
-
-**What it does now.** The timed call is `compute_thin_Q()`, the same `m x min(m, n)` factor the check
-consumes and the vendor route builds, and the declaration says so. Nothing about the acceptance
-criterion changed and no case was dropped.
-
-**What moved.** A probe at fork `10ee1c9` (`run --reps 3 --prime-ms 500`, one thread, `f64`, C order):
-`qr/4096x256` 30.24 ms, against the page's 490.6519 for the full-`Q` call and its vendor's 57.7822.
-The wide cell `qr/64x1024` is 0.3164 against the page's 0.4998, but that difference is *not* this
-change: with `m < n` the compact factor is `m x m`, so `compute_Q` and `compute_thin_Q` build the
-same matrix there and the op is unchanged. The verify grid for `qr` over `linalg-tall` still ends
-`all comparisons within tolerance`.
-
-**What this costs.** The two recorded pages were taken with the old harness, so their `qr` rows now
-describe a different op from the one the harness runs; `qr_factor`, which was always the compact
-call, is unaffected. The pages are also stale for a second reason: the `faer-fork` revision has moved
-and its `lu`, `full_piv_lu` and `qr` C-order cells change with it (the fork's
-`2026-10-15-row-major-adaptation-lu-colpiv.md`). Re-recording is the pin move's job rather than a
-separate one, and the index's currency is computed from the pins, so `gen_index.py --check` stays
-green until that happens. Do not quote a `qr` row from the 2026-10-14 pages beside a new
-`faer-fork` number.
-
-## 2026-10-15 — the eight-thread gap in `cholesky`, `eigh` and `svd_values` is a scan, and it is not the pool
-
-**What was measured, and how.** A scan, not a recorded page and not a paired comparison: one
-`fbench run --n 512 --dtype f64 --reps 3 --prime-ms 500` per thread count, pinned to the row's CPU
-set, at `10ee1c9` with the compact-`Q` harness above. `f64`, `n = 512`, F order, ms at 1 / 2 / 4 / 8
-threads — `cholesky` faer 1.238 / 0.921 / 0.705 / 0.709 against the vendor's 2.003 / 1.369 / 0.848 /
-0.582; `eigh` 29.249 / 20.784 / 16.933 / 15.191 against 36.445 / 21.604 / 12.935 / 9.006;
-`svd_values` 39.465 / 31.638 / 28.640 / 30.369 against 28.712 / 20.076 / 15.620 / 13.647.
-
-**What it says.** The fork leads this vendor at one thread on `cholesky` (0.62x) and `eigh` (0.80x)
-and loses from four threads on, where the vendor keeps scaling and the fork stops: 1.75x over eight
-cores for `cholesky`, 1.93x for `eigh`, and `svd_values` is *slower* at eight threads than at four.
-`svd_values` also trails at one thread (1.38x), which is a serial deficit and not a scaling one, and
-is the only one of the three where a fork-side kernel question is still open. These are scans, not
-paired comparisons, and they are not page evidence.
-
-**What was ruled out.** The fork's thread budget is a decomposition degree, not a pool size —
-`set_global_parallelism(Par::rayon(n))` only tells faer how many pieces to split work into, and the
-ambient rayon pool stays at the machine's core count, which the recorder does not pin for the faer
-arms. That looked like the explanation, so the scan was repeated at eight threads with
-`RAYON_NUM_THREADS=8`: `cholesky` 0.709 -> 0.723, `eigh` 15.191 -> 15.691, `svd_values` 30.369 ->
-29.833, and the C order 0.978 -> 1.362. All within noise. The pool is not the cause and no harness
-change follows from this.
-
-**What it does not say.** No fork change: the two candidates a fork can gate locally — the
-tridiagonalisation/bidiagonalisation floors and the compact factor's region floor — are already
-measured and dropped in the fork's own records (`2026-10-14-evd-svd-floor-sweep.md`,
-`2026-10-14-bidiag-parallel-hint.md`, `2026-10-14-compact-factor-region-floor.md`) with the numbers
-that dropped them, and re-walking them would be repeating a dead end. What is left is the work model
-itself, which is the fork ledger's `Thread policy` row (`tenferro-rs#2000`, `strided-rs#6`).
-
-## 2026-10-15 — the `qr` row timed the full `Q` and checked the compact one
-
-**What was wrong.** The `qr` family is declared as "the composite returning explicit Q and R", and
-the two arms did not build the same Q. The `faer-fork`/`faer-upstream` arm called
-`Qr::compute_Q()`, which forms the full `m x m` completion; the `lapack-*` arm called
-`orgqr(m, r, r)` with `r = min(m, n)`, which is the compact `m x r` factor, and the run's own check
-called `compute_thin_Q()`. On a square shape the two coincide, so the row looked consistent; on
-`4096x256` the faer arm was doing eight times the work the vendor arm and its own check were doing,
-and the row read 1.7x / 4.9x / 5.2x behind the vendor where the compact comparison is ahead of it.
-
-**What it does now.** The timed call is `compute_thin_Q()`, the same `m x min(m, n)` factor the
-check consumes and the vendor route builds, and the declaration says so. Nothing about the
-acceptance criterion changed and no case was dropped.
-
-**What moved.** A probe at fork `10ee1c9` (this run's own baseline, `run --reps 3 --prime-ms 500`,
-one thread, `f64`, C order): `qr/4096x256` 30.24 ms and `qr/64x1024` 0.3164 ms, against the
-recorded page's 490.65 and 0.4998 for the full-`Q` call and the page's vendor column of 57.78 and
-0.8601. The verify grid for `qr` over `linalg-tall` still ends `all comparisons within tolerance`.
-
-**What this costs.** The two recorded pages were taken with the old harness, so their `qr` rows now
-describe a different op from the one the harness runs; `qr_factor`, which was always the compact
-call, is unaffected. Re-recording is the pin move's job rather than a separate one — a page is
-one `(suite, profile, fork revision, upstream revision, vendor arm)` and the fork revision has
-moved — and the index's currency is computed from the pins, so `gen_index.py --check` stays green
-until that happens. Do not quote the `qr` row from the 2026-10-14 pages beside a new `faer-fork`
-number.
+> Editorial correction: duplicate copies of the two entries above were consolidated.
+> The raw historical pages/CSVs are unchanged; the remaining entries retain the
+> recorded point estimates without the withdrawn pool diagnosis or mislabelled ratios.
 
 ## 2026-10-14 — the campaign's first page is recorded
 

@@ -811,7 +811,7 @@ mod imp {
     }
 
     /// `qr_factor` times `geqrf`; `qr` also forms Q with `orgqr`. The check
-    /// reconstructs `A = Q R` from a fresh factorization.
+    /// reconstructs `A = Q R` from the retained factors (and Q when requested).
     fn qr_op<T: LapackScalar>(
         m: usize,
         n: usize,
