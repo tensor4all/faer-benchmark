@@ -126,8 +126,9 @@ accounting report reproduced two IMPORTANT findings against the source: a v2
 report key could omit validated `order`, and a single-engine one-process set was
 accepted even though between-process SD is undefined. Both now fail under
 pre-fix behavior and pass after correction; v2 also requires >=2 process sets and
-complete engine rotations. Toolkit `916dace` is committed and pinned; the
-numerical grid runs on the previous binaries until the corrected-source rebuild.
+complete engine rotations. The report now also carries the v2 rotation-averaged
+engine ratios with a marker for cells whose schedule is not position-balanced and
+a per-cell between-start warning; toolkit `401dff6` is committed and pinned.
 
 The broad delegated implementation and first broad GPT post-review both stopped
 at their execution limits and are **not** counted as completed work/review. The
