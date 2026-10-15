@@ -240,7 +240,17 @@ macro_rules! define_backend {
                 let block_size = qrf::recommended_block_size::<T>(m, n);
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, size));
                 let par = get_global_parallelism();
-                let scratch = qrf::qr_in_place_scratch::<T>(m, n, block_size, par, Default::default());
+                // The check rebuilds the compact `Q` from the basis and the
+                // coefficients the timed call left behind, so it needs the
+                // sequence apply's own temporary on top of the factorisation's.
+                let scratch = StackReq::all_of(&[
+                    qrf::qr_in_place_scratch::<T>(m, n, block_size, par, Default::default()),
+                    householder::apply_block_householder_sequence_on_the_left_in_place_scratch::<T>(
+                        m,
+                        size,
+                        size,
+                    ),
+                ]);
                 struct S<T> {
                     a: Vec<T>,
                     a0: Vec<T>,
@@ -297,17 +307,39 @@ macro_rules! define_backend {
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let qr = mref(a0, s.m, s.n, s.order).qr();
-                            let recon = to_layout(qr.reconstruct().as_ref(), s.m, s.n, s.order);
+                            let a = &s.a[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            let qc = &s.qc[bi * s.block_size * s.size
+                                ..(bi + 1) * s.block_size * s.size];
+                            // Against the state the timed call left, which is what
+                            // `Op`'s own contract says a check inspects: `R` is the
+                            // upper trapezoid of what is now in the factor buffer and
+                            // `Q` is the compact basis applied to an identity, the
+                            // same two things `Qr::compute_thin_Q` would build. The
+                            // previous check re-ran the *composite* on the original
+                            // fixture, which copies into a column-major matrix first,
+                            // so it never saw what a row-major call left.
+                            let mut r = vec![T::zero(); s.size * s.n];
+                            for i in 0..s.size {
+                                for j in i..s.n {
+                                    r[idx(i, j, s.size, s.n, s.order)] =
+                                        a[idx(i, j, s.m, s.n, s.order)];
+                                }
+                            }
+                            let mut q = vec![T::zero(); s.m * s.size];
+                            for i in 0..s.size {
+                                q[idx(i, i, s.m, s.size, s.order)] = T::one();
+                            }
+                            householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
+                                mref(a, s.m, s.n, s.order).get(.., ..s.size),
+                                mref(qc, s.block_size, s.size, Order::F),
+                                Conj::No,
+                                mmut(&mut q, s.m, s.size, s.order),
+                                s.par,
+                                MemStack::new(&mut s.mem),
+                            );
+                            let mut recon = vec![T::zero(); s.m * s.n];
+                            mul(s.m, s.size, s.n, s.order, &q, &r, &mut recon);
                             within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "qr_factor")?;
-                            // Only the first `size` columns of Q enter A = QR; the
-                            // remaining columns of the full Q are an arbitrary unitary
-                            // completion that the reconstruction above never touches, so
-                            // orthonormality of the compact Q is the factorization's own
-                            // acceptance criterion. Checking the full Q costs O(m^2 size)
-                            // to form and O(m^3) to reduce here, which is what made a
-                            // 4096x256 verify run for minutes.
-                            let q = to_layout(qr.compute_thin_Q().as_ref(), s.m, s.size, s.order);
                             within::<T>(gram_residual(&q, s.m, s.size, s.order), 1.0, s.m, "qr Q")?;
                         }
                         Ok(())

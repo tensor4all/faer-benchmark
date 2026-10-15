@@ -2,6 +2,32 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-15 — `qr_factor`'s check never saw what its timed call left
+
+**What was wrong.** `Op`'s own contract says the three closures exist so that the timing loop
+"clocks only `run` ... and still verify the exact state the timed call left behind", and
+`verify` drives `prepare -> run -> check`. Every composite family satisfies it by construction --
+its `check` re-runs the same composite on the same restored input, which is the same computation.
+`qr_factor` did not: its timed call is the low-level `qr_in_place` on a row-major view, and its
+check re-ran the *composite* (`mref(a0, ...).qr()`), which copies into a column-major matrix first.
+So the one family whose timed call is a low-level call on the caller's layout was the one family
+whose check could not see the layout it produced.
+
+**What it does now.** The check rebuilds `R` from the factor buffer and `Q` from the compact basis
+and coefficients the timed call left, exactly as `Qr::compute_thin_Q` does, and checks
+`A ~ Q R` and `Q^H Q ~ I` against the reference math as before. No tolerance, case or criterion
+changed; the op's scratch requirement gains the sequence apply's temporary
+(`StackReq::all_of`).
+
+**Why it matters, demonstrated.** Perturbing the fork's row-major copy-back so that the first
+element of each tile keeps the destination's seeded value makes this check report
+`MISMATCH faer-fork qr_factor f64 c 1024x64 qr_factor residual 9.99e-1 exceeds
+1.51e-5` (and the same at `4096x256`). The previous check passed that build, because the composite
+it re-ran never reads the row-major buffer. The perturbation was scratch-only and is not committed.
+The clean build reports `all comparisons within tolerance` for `qr_factor` over
+`linalg-small`, `linalg-medium`, `linalg-large`, `linalg-tall` and `linalg-wide`, both dtypes,
+both orders.
+
 ## 2026-10-15 — the eight-thread gap in `cholesky`, `eigh` and `svd_values` is a scan, and it is not the pool
 
 **What was measured, and how.** A scan, not a recorded page and not a paired comparison: one
