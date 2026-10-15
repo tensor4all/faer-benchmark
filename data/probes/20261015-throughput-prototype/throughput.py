@@ -43,8 +43,11 @@ SERIES = [   # legend order: main row first
 ]
 DRAW_ORDER = ['faer-upstream', 'lapack-mkl', 'lapack-openblas', 'faer-fork']
 ORDER, DTYPE = 'c', 'f64'
-PANEL_W, PANEL_H = 560, 400          # one panel per thread budget, stacked so GitHub renders it large
-PAD_L, PAD_R, PAD_T, PAD_B = 92, 24, 46, 40
+PANEL_W, PANEL_H = 620, 480          # one panel per thread budget, stacked so GitHub renders it large
+PAD_L, PAD_R, PAD_T, PAD_B = 132, 24, 56, 44
+# Doubled label/legend sizes: at GitHub's page width the SVG is not scaled down, so a bigger font is
+# really bigger on screen. The panels, margins and tick count below give the text room for it.
+FONT = {'title': 26, 'panel': 24, 'tick': 17, 'axis': 19, 'legend': 16}
 CANVAS_W, CANVAS_H = PAD_L + PANEL_W + PAD_R, PAD_T + 3 * PANEL_H + PAD_B
 
 
@@ -120,8 +123,8 @@ def marker(kind, x, y, colour, size=2.7):
 def panel(checker, family, threads, blocks, origin):
     """One thread budget for one family: axes, ticks, error bars, markers and an inside legend."""
     ox, oy = origin
-    x0, y0 = ox + 44, oy + 30
-    width, height = PANEL_W - 64, PANEL_H - 92
+    x0, y0 = ox + 92, oy + 32
+    width, height = PANEL_W - 116, PANEL_H - 100
     data = [p for pts in blocks.values() for p in pts]
     if not data:
         return f'<g><text x="{x0}" y="{y0 + 20}" font-size="12">no data</text></g>'
@@ -139,18 +142,18 @@ def panel(checker, family, threads, blocks, origin):
     panel_key = (ox, oy)
     out = [f'<rect x="{ox + 6}" y="{oy + 6}" width="{PANEL_W - 12}" height="{PANEL_H - 12}" fill="#ffffff" '
            f'stroke="#d0d0d0"/>',
-           checker.text(ox + 14, oy + 24, 13, f'{threads}T')]
+           checker.text(ox + 16, oy + 32, FONT['panel'], f'{threads}T')]
     for size in sorted(set(xs)):
         out.append(f'<line x1="{sx(size):.1f}" y1="{y0}" x2="{sx(size):.1f}" y2="{y0 + height}" stroke="#f2f2f2"/>')
-        out.append(checker.text(sx(size), y0 + height + 15, 9, f'{size}', 'middle', panel=panel_key))
+        out.append(checker.text(sx(size), y0 + height + 26, FONT['tick'], f'{size}', 'middle', panel=panel_key))
     for power in range(math.ceil(ly0), math.floor(ly1) + 1):   # only powers inside the axis
         value = 10.0 ** power
         out.append(f'<line x1="{x0}" y1="{sy(value):.1f}" x2="{x0 + width}" y2="{sy(value):.1f}" stroke="#f2f2f2"/>')
-        out.append(checker.text(x0 - 6, sy(value) + 3, 9, f'{value:g}', 'end', panel=panel_key))
+        out.append(checker.text(x0 - 8, sy(value) + 6, FONT['tick'], f'{value:g}', 'end', panel=panel_key))
     out.append(f'<rect x="{x0}" y="{y0}" width="{width}" height="{height}" fill="none" stroke="#c8c8c8"/>')
-    out.append(checker.text(ox + 20, oy + PANEL_H - 18, 10, 'n (matrix size)', 'start', panel=panel_key))
-    out.append(checker.text(ox + 18, oy + PANEL_H / 2, 10, 'nominal GFLOP/s', 'middle', rotate=True,
-                            panel=panel_key))
+    out.append(checker.text(ox + 28, oy + PANEL_H - 14, FONT['axis'], 'n (matrix size)', 'start', panel=panel_key))
+    out.append(checker.text(ox + 30, oy + PANEL_H / 2, FONT['axis'], 'nominal GFLOP/s', 'middle',
+                            rotate=True, panel=panel_key))
     by_name = {name: (vendor, colour, kind, dash, size) for name, vendor, colour, kind, dash, size in SERIES}
     for name in DRAW_ORDER:
         vendor, colour, kind, dash, size = by_name[name]
@@ -166,17 +169,19 @@ def panel(checker, family, threads, blocks, origin):
                        f'stroke="{colour}" stroke-width="1.1"/>')
             out.append(marker(kind, sx(x), sy(y), colour, size))
     # legend inside the panel: the lower-right corner is the one a rising curve leaves free
-    legend_x, legend_y = x0 + width - 140, y0 + height - 12 - 13 * len(SERIES)
-    out.append(f'<rect x="{legend_x - 6}" y="{legend_y - 6}" width="144" height="{13 + 13 * len(SERIES)}" '
+    legend_row, legend_w = 2.1 * FONT['legend'], 13.6 * FONT['legend']
+    legend_x = x0 + width - legend_w + 8
+    legend_y = y0 + height - 10 - legend_row * len(SERIES)
+    out.append(f'<rect x="{legend_x - 8}" y="{legend_y - 12}" width="{legend_w:.0f}" '
+               f'height="{legend_row * len(SERIES) + 16:.0f}" '
                f'fill="#ffffff" fill-opacity="0.86" stroke="#e0e0e0"/>')
     for index, (name, vendor, colour, kind, dash, size) in enumerate(SERIES):
-        row_y = legend_y + index * 13
+        row_y = legend_y + index * legend_row
         style = f' stroke-dasharray="{dash}"' if dash else ''
-        out.append(f'<line x1="{legend_x}" y1="{row_y}" x2="{legend_x + 18}" y2="{row_y}" stroke="{colour}" '
-                   f'stroke-width="{1.9 if name == "faer-fork" else 1.3}"{style}/>')
-        out.append(marker(kind, legend_x + 9, row_y, colour, size))
-        label = name + ('' if name != 'faer-fork' else ' (main)')
-        out.append(checker.text(legend_x + 22, row_y + 3, 9, label, panel=panel_key))
+        out.append(f'<line x1="{legend_x}" y1="{row_y}" x2="{legend_x + 30}" y2="{row_y}" stroke="{colour}" '
+                   f'stroke-width="{2.6 if name == "faer-fork" else 1.8}"{style}/>')
+        out.append(marker(kind, legend_x + 15, row_y, colour, size * 1.5))
+        out.append(checker.text(legend_x + 38, row_y + 5, FONT['legend'], name, panel=panel_key))
     return '<g>' + ''.join(out) + '</g>'
 
 
@@ -187,18 +192,17 @@ def main():
         checker = Checker()          # one file per family: boxes only have to be disjoint within it
         svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{CANVAS_W}" height="{CANVAS_H}" '
                f'viewBox="0 0 {CANVAS_W} {CANVAS_H}">',
-               checker.text(12, 20, 14, f'{family}: nominal GFLOP/s vs matrix size, f64, C order '
-                                        f'(median of process medians, bar = between-start SD)')]
+               checker.text(12, 30, FONT['title'], f'{family}: nominal GFLOP/s vs n')]
         for index, threads in enumerate(BUDGETS):
             blocks = {name: points(cells[vendor], threads, family, name)
                       for name, vendor, *_ in SERIES}
             svg.append(panel(checker, family, threads, blocks,
                              (PAD_L, PAD_T + index * PANEL_H)))
         svg.append('</svg>')
-        (HERE / f'throughput-{family}-v2.svg').write_text('\n'.join(svg) + '\n')
+        (HERE / f'throughput-{family}-v3.svg').write_text('\n'.join(svg) + '\n')
         families.append((family, FLOPS[family][1],
                           {threads: len(points(cells['mkl'], threads, family, 'faer-fork')) for threads in BUDGETS}))
-    toc = '\n'.join(f'| [{family}](throughput-{family}-v2.svg) | `{flops}` | ' +
+    toc = '\n'.join(f'| [{family}](throughput-{family}-v3.svg) | `{flops}` | ' +
                     ', '.join(f'{t}T: {count}' for t, count in counts.items()) + ' |'
                     for family, flops, counts in families)
     (HERE / 'README.md').write_text(
@@ -210,7 +214,7 @@ def main():
         'values are not comparable across families. The `lapack-openblas` line comes from the other\n'
         'arm (its own binary, its own processes); the other three share one process.\n\n'
         '## Contents\n\n| family | nominal flops | points per budget |\n|---|---|---|\n' + toc + '\n\n' +
-        '\n'.join(f'## {family}\n\n![{family}](throughput-{family}-v2.svg)\n'
+        '\n'.join(f'## {family}\n\n![{family}](throughput-{family}-v3.svg)\n'
                   f'Nominal operation count: `{flops}`.\n' for family, flops, _ in families) +
         '\nLayout is checked by the script: no label may overlap another or leave its panel.\n')
     print('charts:', ', '.join(f'{family}({sum(counts.values())} pts)' for family, _, counts in families))

@@ -11,41 +11,41 @@ arm (its own binary, its own processes); the other three share one process.
 
 | family | nominal flops | points per budget |
 |---|---|---|
-| [gemm](throughput-gemm-v2.svg) | `2n^3` | 1T: 9, 4T: 9, 8T: 9 |
-| [lu](throughput-lu-v2.svg) | `2n^3/3` | 1T: 6, 4T: 6, 8T: 6 |
-| [cholesky](throughput-cholesky-v2.svg) | `n^3/3` | 1T: 6, 4T: 6, 8T: 6 |
-| [qr](throughput-qr-v2.svg) | `8n^3/3 (factor + Q)` | 1T: 6, 4T: 6, 8T: 6 |
-| [svd_values](throughput-svd_values-v2.svg) | `4n^3` | 1T: 6, 4T: 6, 8T: 6 |
-| [eigh](throughput-eigh-v2.svg) | `8n^3/3` | 1T: 6, 4T: 6, 8T: 6 |
+| [gemm](throughput-gemm-v3.svg) | `2n^3` | 1T: 9, 4T: 9, 8T: 9 |
+| [lu](throughput-lu-v3.svg) | `2n^3/3` | 1T: 6, 4T: 6, 8T: 6 |
+| [cholesky](throughput-cholesky-v3.svg) | `n^3/3` | 1T: 6, 4T: 6, 8T: 6 |
+| [qr](throughput-qr-v3.svg) | `8n^3/3 (factor + Q)` | 1T: 6, 4T: 6, 8T: 6 |
+| [svd_values](throughput-svd_values-v3.svg) | `4n^3` | 1T: 6, 4T: 6, 8T: 6 |
+| [eigh](throughput-eigh-v3.svg) | `8n^3/3` | 1T: 6, 4T: 6, 8T: 6 |
 
 ## gemm
 
-![gemm](throughput-gemm-v2.svg)
+![gemm](throughput-gemm-v3.svg)
 Nominal operation count: `2n^3`.
 
 ## lu
 
-![lu](throughput-lu-v2.svg)
+![lu](throughput-lu-v3.svg)
 Nominal operation count: `2n^3/3`.
 
 ## cholesky
 
-![cholesky](throughput-cholesky-v2.svg)
+![cholesky](throughput-cholesky-v3.svg)
 Nominal operation count: `n^3/3`.
 
 ## qr
 
-![qr](throughput-qr-v2.svg)
+![qr](throughput-qr-v3.svg)
 Nominal operation count: `8n^3/3 (factor + Q)`.
 
 ## svd_values
 
-![svd_values](throughput-svd_values-v2.svg)
+![svd_values](throughput-svd_values-v3.svg)
 Nominal operation count: `4n^3`.
 
 ## eigh
 
-![eigh](throughput-eigh-v2.svg)
+![eigh](throughput-eigh-v3.svg)
 Nominal operation count: `8n^3/3`.
 
 Layout is checked by the script: no label may overlap another or leave its panel.
