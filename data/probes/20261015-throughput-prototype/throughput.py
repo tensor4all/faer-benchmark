@@ -195,10 +195,10 @@ def main():
             svg.append(panel(checker, family, threads, blocks,
                              (PAD_L, PAD_T + index * PANEL_H)))
         svg.append('</svg>')
-        (HERE / f'throughput-{family}.svg').write_text('\n'.join(svg) + '\n')
+        (HERE / f'throughput-{family}-v2.svg').write_text('\n'.join(svg) + '\n')
         families.append((family, FLOPS[family][1],
                           {threads: len(points(cells['mkl'], threads, family, 'faer-fork')) for threads in BUDGETS}))
-    toc = '\n'.join(f'| [{family}](throughput-{family}.svg) | `{flops}` | ' +
+    toc = '\n'.join(f'| [{family}](throughput-{family}-v2.svg) | `{flops}` | ' +
                     ', '.join(f'{t}T: {count}' for t, count in counts.items()) + ' |'
                     for family, flops, counts in families)
     (HERE / 'README.md').write_text(
@@ -210,7 +210,7 @@ def main():
         'values are not comparable across families. The `lapack-openblas` line comes from the other\n'
         'arm (its own binary, its own processes); the other three share one process.\n\n'
         '## Contents\n\n| family | nominal flops | points per budget |\n|---|---|---|\n' + toc + '\n\n' +
-        '\n'.join(f'## {family}\n\n![{family}](throughput-{family}.svg)\n'
+        '\n'.join(f'## {family}\n\n![{family}](throughput-{family}-v2.svg)\n'
                   f'Nominal operation count: `{flops}`.\n' for family, flops, _ in families) +
         '\nLayout is checked by the script: no label may overlap another or leave its panel.\n')
     print('charts:', ', '.join(f'{family}({sum(counts.values())} pts)' for family, _, counts in families))
