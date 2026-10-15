@@ -2,6 +2,33 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-15 — the `qr` row timed the full `Q` and checked the compact one
+
+**What was wrong.** The `qr` family is declared as "the composite returning explicit Q and R", and
+the two arms did not build the same Q. The `faer-fork`/`faer-upstream` arm called
+`Qr::compute_Q()`, which forms the full `m x m` completion; the `lapack-*` arm called
+`orgqr(m, r, r)` with `r = min(m, n)`, which is the compact `m x r` factor, and the run's own check
+called `compute_thin_Q()`. On a square shape the two coincide, so the row looked consistent; on
+`4096x256` the faer arm was doing eight times the work the vendor arm and its own check were doing,
+and the row read 1.7x / 4.9x / 5.2x behind the vendor where the compact comparison is ahead of it.
+
+**What it does now.** The timed call is `compute_thin_Q()`, the same `m x min(m, n)` factor the
+check consumes and the vendor route builds, and the declaration says so. Nothing about the
+acceptance criterion changed and no case was dropped.
+
+**What moved.** A probe at fork `10ee1c9` (this run's own baseline, `run --reps 3 --prime-ms 500`,
+one thread, `f64`, C order): `qr/4096x256` 30.24 ms and `qr/64x1024` 0.3164 ms, against the
+recorded page's 490.65 and 0.4998 for the full-`Q` call and the page's vendor column of 57.78 and
+0.8601. The verify grid for `qr` over `linalg-tall` still ends `all comparisons within tolerance`.
+
+**What this costs.** The two recorded pages were taken with the old harness, so their `qr` rows now
+describe a different op from the one the harness runs; `qr_factor`, which was always the compact
+call, is unaffected. Re-recording is the pin move's job rather than a separate one — a page is
+one `(suite, profile, fork revision, upstream revision, vendor arm)` and the fork revision has
+moved — and the index's currency is computed from the pins, so `gen_index.py --check` stays green
+until that happens. Do not quote the `qr` row from the 2026-10-14 pages beside a new `faer-fork`
+number.
+
 ## 2026-10-14 — the campaign's first page is recorded
 
 With the cost and `orgqr` fixes in place the MKL arm's whole declaration built,

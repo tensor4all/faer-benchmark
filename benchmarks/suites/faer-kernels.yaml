@@ -11,7 +11,11 @@ description: >-
   of the same family measure the same work:
   `gemm` is `linalg::matmul::matmul` into a caller-prepared destination with
   `Accum::Replace`; `qr_factor` is the compact `qr_in_place`; `qr` is the
-  composite returning explicit Q and R; `upgrade_factor` is the public but
+  composite returning explicit Q and R, with Q the compact `m x min(m, n)`
+  factor that the vendor route's `orgqr(m, min(m, n))` builds and that this
+  suite's own check consumes -- not the full `m x m` completion, which on a tall
+  shape is eight times the work and is not what either row would be buying;
+  `upgrade_factor` is the public but
   `#[doc(hidden)]` `upgrade_householder_factor`; `householder_apply` is the
   block apply with an explicit basis/target width plus the sequence form, as two
   rows; the rest are the corresponding public composite.
