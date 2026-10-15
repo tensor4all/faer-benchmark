@@ -348,14 +348,9 @@ macro_rules! define_backend {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let qr = mref(a0, s.m, s.n, s.order).qr();
-                            // The composite returns explicit Q and R, and the Q it
-                            // returns is the one the check below consumes and the one
-                            // the vendor route builds: `m x min(m, n)`. Asking for the
-                            // full `m x m` completion instead made this row 8x the
-                            // vendor's work on a tall shape while the check, and the
-                            // vendor's `orgqr(m, min(m, n))`, both stopped at the
-                            // compact factor. A black box keeps the work from being
-                            // optimised away.
+                            // The compact `m x min(m, n)` Q: what the check below
+                            // consumes and what the vendor route's `orgqr` builds. A
+                            // black box keeps the work from being optimised away.
                             let q = qr.compute_thin_Q();
                             let r = qr.R();
                             black_box((q.as_ref()[(0, 0)].clone(), r[(0, 0)].clone()));
