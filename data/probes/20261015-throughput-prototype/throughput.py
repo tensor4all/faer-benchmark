@@ -188,6 +188,30 @@ def panel(checker, family, threads, blocks, origin):
     return '<g>' + ''.join(out) + '</g>'
 
 
+def data_markdown(family, cells):
+    """The plotted numbers as text, next to the chart: same name, so a reader (or a model) can read
+    the trend without a rasteriser."""
+    lines = [f'# {family} - plotted data (nominal GFLOP/s)', '',
+             f'Nominal operation count: `{FLOPS[family][1]}`. Each value is the median of the process',
+             'medians for that cell, `±` is the between-start sample SD, `·` means that row is not',
+             'measured in that arm (the vendor rows come from their own binaries). Same numbers as the',
+             'same-named `.svg`.', '']
+    for threads in BUDGETS:
+        table = {name: {x: (y, err) for x, y, err in points(cells[vendor], threads, family, name)}
+                 for name, vendor, *_ in SERIES}
+        sizes = sorted({x for rows in table.values() for x in rows})
+        if not sizes:
+            continue
+        lines += [f'## {threads}T', '', '| n | ' + ' | '.join(name for name, *_ in SERIES) + ' |',
+                  '|---|' + '---|' * len(SERIES)]
+        for size in sizes:
+            row = [f'{table[name][size][0]:.3g} ± {table[name][size][1]:.2g}' if size in table[name] else '·'
+                   for name, *_ in SERIES]
+            lines.append(f'| {size} | ' + ' | '.join(row) + ' |')
+        lines.append('')
+    return '\n'.join(lines) + '\n'
+
+
 def main():
     cells = {vendor: load(vendor, run) for vendor, run in RUNS.items()}
     families = []
@@ -203,9 +227,11 @@ def main():
                              (PAD_L, PAD_T + index * PANEL_H)))
         svg.append('</svg>')
         (HERE / f'throughput-{family}-v4.svg').write_text('\n'.join(svg) + '\n')
+        (HERE / f'throughput-{family}-v4.md').write_text(data_markdown(family, cells))
         families.append((family, FLOPS[family][1],
                           {threads: len(points(cells['mkl'], threads, family, 'faer-fork')) for threads in BUDGETS}))
-    toc = '\n'.join(f'| [{family}](throughput-{family}-v4.svg) | `{flops}` | ' +
+    toc = '\n'.join(f'| [{family}](throughput-{family}-v4.svg) '
+                    f'([data](throughput-{family}-v4.md)) | `{flops}` | ' +
                     ', '.join(f'{t}T: {count}' for t, count in counts.items()) + ' |'
                     for family, flops, counts in families)
     (HERE / 'README.md').write_text(
@@ -216,7 +242,9 @@ def main():
         'medians. GFLOP/s is **nominal**: one algorithmic operation count per family, so absolute\n'
         'values are not comparable across families. The `lapack-openblas` line comes from the other\n'
         'arm (its own binary, its own processes); the other three share one process.\n\n'
-        '## Contents\n\n| family | nominal flops | points per budget |\n|---|---|---|\n' + toc + '\n\n' +
+        'Each chart also has a same-named `.md` ([data](throughput-gemm-v4.md) column in the contents)\n'
+        'holding exactly the plotted numbers, so the trend can be read as text.\n\n'
+        '## Contents\n\n| family (chart, data) | nominal flops | points per budget |\n|---|---|---|\n' + toc + '\n\n' +
         '\n'.join(f'## {family}\n\n![{family}](throughput-{family}-v4.svg)\n'
                   f'Nominal operation count: `{flops}`.\n' for family, flops, _ in families) +
         '\nLayout is checked by the script: no label may overlap another or leave its panel.\n')
