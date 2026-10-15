@@ -17,8 +17,8 @@ rather than being implied by the other arm's page.
 
 | suite | profile | vendor | fork/upstream | version | date | coverage | status | page |
 |---|---|---|---|---|---|---|---|---|
-| `faer-kernels` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | full | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md) |
-| `faer-kernels` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | full | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md) |
+| `faer-kernels` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | declaration-changed | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md) |
+| `faer-kernels` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | declaration-changed | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md) |
 
 `missing` is a normal cell, not an error: the campaign is not run on every
 profile for every commit. It becomes an error only for a profile a suite lists
@@ -32,7 +32,7 @@ partial or declaration-changed page never displaces a full-coverage one.
 
 | suite | profile | vendor | fork/upstream | version | date | coverage | status | page |
 |---|---|---|---|---|---|---|---|---|
-| `faer-kernels` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | full | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md) |
-| `faer-kernels` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | full | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md) |
-| `faer-kernels` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | full | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md) |
-| `faer-kernels` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | full | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md) |
+| `faer-kernels` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | declaration-changed | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md) |
+| `faer-kernels` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | declaration-changed | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas.md) |
+| `faer-kernels` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | declaration-changed | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md) |
+| `faer-kernels` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-14 | declaration-changed | current | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-mkl.md) |
