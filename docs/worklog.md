@@ -62,6 +62,35 @@ unpinned, upstream +37.4% vs +37.2%); its value is removing a guard-rejection
 source and an uncontrolled variable, and it is recorded as such rather than as an
 accuracy improvement.
 
+Three follow-ups after that review changed the planned budget.
+
+Turbo was disabled on the host (`cpufreq_boost=0`, governor/EPP/PPD `performance`);
+the recorder now records the power state in `host.power` so a page carries it. Under
+that state the priming calibration (three process starts per setting, 27 processes,
+zero guard rejections) shows the setting barely matters: the rotation-paired ratio
+of `--prime-ms 250 --reps 10` and `250/30` to `3000/30` is **0.978-1.006** across 18
+rows, far below the 0.5-35% between-process range in the same cells. Meanwhile the
+worst process-median ranges collapsed: `cholesky` 512^2 f64 8T went from 40-73% to
+1.5-5%, `lu` 256^2 c64 4T from 74% to 33% (its faer F-order row keeps a systematic
+rotation-2 bump of 2.009/2.017/2.503 ms). Boost was a major but not the only
+contributor to the shift phenomenon.
+
+A small-shape probe answers the "is this thread start-up?" question: `gemm` 4^3
+never enters a parallel path (0.11 us/call, identical at 1/4/8T), `gemm` 32^3 pays a
+roughly constant **+8 to +11 us** for 4T/8T (thread-region start-up, not kernel
+work; MKL's step is +0.3-0.8 us), and 256^3 is kernel-dominated (1077 -> 209 us).
+Small-regime cells at 4T/8T therefore measure dispatch policy, not kernel scaling,
+and stay as coverage with that label rather than as evidence about large shapes.
+
+The L3 rule from the same review was corrected in the other direction too: a measured
+set that spans L3 domains is legal (so the hard one-domain refusal is gone and it
+warns instead), and the idle guard now watches **every CPU sharing the measured
+cores' last-level cache**, not only their SMT siblings - that is what makes a
+partially filled domain safe, because unrelated work on the free cores of a touched
+domain would otherwise contend for the same cache invisibly. A run that needs every
+domain can only proceed with `FBENCH_OBSERVER_SHARES_L3=1`, which records the
+residual sharing explicitly.
+
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
 1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of

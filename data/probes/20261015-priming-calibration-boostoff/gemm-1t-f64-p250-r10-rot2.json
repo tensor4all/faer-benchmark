@@ -1,0 +1,59 @@
+{
+  "cell": "gemm-1t-f64",
+  "threads": 1,
+  "prime_ms": 250,
+  "reps": 10,
+  "rotation": 2,
+  "guard_rc": 0,
+  "rows": {
+    "c/lapack-mkl": {
+      "median": 1.2131755,
+      "first": 1.2132049999999999,
+      "last": 1.210952,
+      "max": 1.217514,
+      "relative_sd": 0.002878963577924165,
+      "n": 10
+    },
+    "c/faer-fork": {
+      "median": 1.0770110000000002,
+      "first": 1.07669,
+      "last": 1.077312,
+      "max": 1.079446,
+      "relative_sd": 0.0010620963452301303,
+      "n": 10
+    },
+    "c/faer-upstream": {
+      "median": 1.077197,
+      "first": 1.074286,
+      "last": 1.08162,
+      "max": 1.087141,
+      "relative_sd": 0.00454689068855064,
+      "n": 10
+    },
+    "f/lapack-mkl": {
+      "median": 1.208312,
+      "first": 1.2137669999999998,
+      "last": 1.210942,
+      "max": 1.214428,
+      "relative_sd": 0.0022361992275199143,
+      "n": 10
+    },
+    "f/faer-fork": {
+      "median": 1.077642,
+      "first": 1.079677,
+      "last": 1.07641,
+      "max": 1.080268,
+      "relative_sd": 0.0015369728350968235,
+      "n": 10
+    },
+    "f/faer-upstream": {
+      "median": 1.0832025,
+      "first": 1.075939,
+      "last": 1.080838,
+      "max": 1.088242,
+      "relative_sd": 0.004701762943626437,
+      "n": 10
+    }
+  },
+  "guard": "pinned.sh: cpus 4 idle before and after (attempt 1)"
+}
