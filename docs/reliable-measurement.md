@@ -1,0 +1,115 @@
+# Reliable baseline re-record (timing policy v2)
+
+## Frozen identities
+
+The optimization candidate is saved at fork `fe41bbdfb88c0528e0726dca3b1764f47222ad56`.
+It is not the baseline and no optimization is adopted from the old scans.
+
+The re-record uses exactly one clean checkout per library:
+
+- `extern/t4a-faer`: `bfe4041cd9918815e3b3f766ac0332b792badb7d`.
+- `extern/upstream-faer`: `0539947ffb757a739d7e703a7d2fa0c792a909c1`.
+
+Both vendor builds link these same paths/revisions. The faer adapters share a
+macro body, fixtures, and the `Op` prepare/run/check timer. MKL and OpenBLAS are
+separate binaries/runs because their symbols collide, not separate measurement
+implementations. A comparison is about the declared public-API workload, not
+proof of identical low-level algorithms or vendor internals.
+
+## Contract
+
+Inputs match across providers for each `(family, dtype, shape, batch, order)`.
+The shared flat seeded buffer is interpreted according to the requested order;
+C/F are separate fixtures, not asserted to be the same logical matrix. A C/F
+ratio is therefore not a pure layout experiment. Baseline/candidate comparisons
+must keep the entire cell fixed.
+
+| Family | Fixture salt | Actual retained result / check |
+| --- | --- | --- |
+| GEMM | A: `(m,k,n)`, B: `(k,n,m)` | caller C / reference product |
+| factor-only QR | `min(m,n)` | packed factors + coefficients / reconstruct + orthogonality |
+| explicit-Q QR | 3 | thin Q + R / reconstruct + orthogonality |
+| partial / full-pivot LU | 5 / 7 | factors + permutations / reconstruct; vendor full-pivot skipped |
+| Cholesky | 11, SPD | L / reconstruct |
+| solve | A: 13, b: 17 | solution / residual; temporary factors die inside run |
+| triangular solve | U: 19, b: 23 | solution / residual; vendor route skipped |
+| singular values | 29 | spectrum / finiteness, ordering and Frobenius identity |
+| thin SVD | 31 | U, S, V / reconstruct + orthogonality |
+| self-adjoint EVD | 37, Hermitian | eigenvalues + vectors / residual + orthogonality |
+| Householder apply | basis: 41, target: 43 | transformed target / alternate apply form |
+| nonsymmetric EVD, factor upgrade | — | unimplemented, explicitly skipped |
+
+The salt is the third argument of shared `seed(m,n,salt)` except the fully shown
+GEMM arguments. Structured fixtures and batching are the same in both adapters.
+Values-only SVD's invariant check is not a reference verification of every
+singular value. Householder rows use basis width `min(m,n)`, target width `n`,
+and one coefficient block; multi-panel sequences are not covered.
+
+- GEMM, factor-only QR and Householder apply are retained-buffer calls: caller
+  buffer initialization/restoration is outside the clock. Allocations internal
+  to the provider API remain timed, including LAPACKE-owned workspace/adaptation.
+- Factorization composites produce and retain actual outputs. Public-API
+  allocation/copy/factorization and explicit-Q construction are timed; prior
+  output destruction happens in prepare, outside timing. Solve consumes its
+  temporary factor in the measured pipeline and retains the solution.
+- Checks inspect the actual last execution's factors/values/vectors/solution,
+  not a replacement factorization of the original input. They do not check every
+  timed call. Corrupting retained outputs must fail validation.
+- The process owns one N-worker Rayon pool; both faer adapters use it, with
+  `Par::Seq` for 1T. The vendor maximum budget is set/read back. Pool size and
+  vendor budget are observed in the measured process and checked per row;
+  neither is described as an active-worker trace.
+- All chronological calls remain in `samples_ms`. V2 uses each process median,
+  then the median across complete-set process repeats. Reported between-process
+  SD includes the rotating-order schedule; within-process SD remains separate.
+  These are descriptive statistics, not confidence intervals or causal evidence.
+- Verification emits a cell census, including separately timed variants in
+  `note`. Every repeat must match it exactly: no missing/duplicate/failed cells,
+  changed skip status, merged variants, missing processes, wrong rotation,
+  nonfinite samples or inconsistent aggregates. Census base cells must match
+  the declared population, dtype, order, shape, batch, engine and budget grid.
+- V1 artifacts/readers retain their historical interpretation. V2 pages use a
+  timing-version suffix, so a new measurement contract does not overwrite the
+  old numerical page. The exact clean toolkit commit is pinned and recorded as
+  well as the harness and both library revisions.
+
+## Adoption gate
+
+First verify numerics and thread budgets, then examine representative A/A cells
+covering small/alignment-sensitive/rectangular GEMM, factor and composite QR,
+LU/solve, Cholesky/EVD/SVD, both dtypes/layouts, and 1/4/8T. Retain process starts
+and execution order. Existing f64 GEMM evidence does not establish a universal
+priming duration. Neither matching fork/upstream estimates nor selecting a
+minimum is a validity criterion.
+
+The proposed representative pilot uses both vendor binaries and C/F order, with
+30 chronological calls, 3 complete process starts/row rotations, and a 3000 ms
+priming floor. These are pilot settings, not yet suite defaults:
+
+| Threads | Families | Shapes | Dtype |
+| --- | --- | --- | --- |
+| 1 | GEMM | 4, 256 | f64 |
+| 1 | factor-only QR | 64x8, 8x64 | f64 |
+| 4 | GEMM | 16x4096x240 | c64 |
+| 8 | factor-only and explicit-Q QR | 4096x256 | f64 |
+| 4 | LU, solve | 256 | c64 |
+| 8 | Cholesky, EVD, values-only SVD | 512 | f64 |
+| 4 | thin SVD | 64x1024 | c64 |
+| 8 | Householder apply (both variants) | 4096x256 | f64 |
+
+Correctness, declared/observed budgets and host guards must pass. Set
+`PINNED_RETRIES=1`: preserve the first attempt and abort on a spoiled process,
+not retry until favorable data appear. Inspect per-cell process-median range
+relative to its median; flag a range above 5% as unstable, without discarding
+calls or replacing it with the minimum. This is an explicit descriptive warning
+threshold, not a confidence bound. Record within-process SD separately; an
+isolated retained outlier does not by itself invalidate a median estimate.
+
+Freeze the priming floor, calls/process, complete-set count, order schedule,
+summary and noise/validity rules before the full suite. If representative cells
+remain unstable, report that limitation rather than silently selecting/retrying
+favorable results. The full data set records declared skips; it does not imply a
+LAPACK equivalent exists for every faer operation.
+
+Only after the full baseline data and distributions are available are the saved
+optimizations reconsidered under the same fixed protocol.

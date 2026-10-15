@@ -18,12 +18,13 @@ macro_rules! define_backend {
             use crate::op::{op_from, Op};
             use crate::shared::*;
             use num_complex::Complex64;
-            use std::hint::black_box;
 
             use $krate::dyn_stack::{MemBuffer, MemStack, StackReq};
             use $krate::linalg::householder;
             use $krate::linalg::qr::no_pivoting::factor as qrf;
-            use $krate::linalg::solvers::{DenseSolveCore, Solve};
+            use $krate::linalg::solvers::{
+                DenseSolveCore, FullPivLu, Llt, PartialPivLu, Qr, SelfAdjointEigen, Solve, Svd,
+            };
             use $krate::traits::ComplexField;
             use $krate::{get_global_parallelism, Accum, Conj, MatMut, MatRef, Par, Side};
 
@@ -347,52 +348,63 @@ macro_rules! define_backend {
                 order: Order,
             ) -> Result<Op, String> {
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 3));
+                let size = m.min(n);
                 struct S<T> {
                     a0: Vec<T>,
-                    sink: T,
+                    outputs: Vec<(Qr<T>, $krate::Mat<T>)>,
                     m: usize,
                     n: usize,
+                    size: usize,
                     batch: usize,
                     order: Order,
                 }
                 let state = S {
                     a0,
-                    sink: T::zero(),
+                    outputs: Vec::with_capacity(batch),
                     m,
                     n,
+                    size,
                     batch,
                     order,
                 };
                 Ok(op_from(
                     state,
                     String::new(),
-                    |_s| Ok(()),
+                    |s| {
+                        s.outputs.clear();
+                        Ok(())
+                    },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            // The composite the vendor route's `orgqr` arm matches:
+                            // factor, then form the compact `m x min(m, n)` Q. Both the
+                            // actual Q and R this call returns are retained, so the
+                            // check below sees the run's own output.
                             let qr = mref(a0, s.m, s.n, s.order).qr();
-                            // The compact `m x min(m, n)` Q: what the check below
-                            // consumes and what the vendor route's `orgqr` builds. A
-                            // black box keeps the work from being optimised away.
                             let q = qr.compute_thin_Q();
-                            let r = qr.R();
-                            black_box((q.as_ref()[(0, 0)].clone(), r[(0, 0)].clone()));
-                            acc(&mut s.sink, q.as_ref()[(0, 0)].clone());
+                            s.outputs.push((qr, q));
                         }
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let qr = mref(a0, s.m, s.n, s.order).qr();
-                            let recon = to_layout(qr.reconstruct().as_ref(), s.m, s.n, s.order);
+                            let (qr, q) = &s.outputs[bi];
+                            let q = to_layout(q.as_ref(), s.m, s.size, s.order);
+                            let r = to_layout(qr.thin_R(), s.size, s.n, s.order);
+                            let mut recon = vec![T::zero(); s.m * s.n];
+                            mul(s.m, s.size, s.n, s.order, &q, &r, &mut recon);
                             within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "qr")?;
                             // Same acceptance criterion as `qr_factor`: the compact Q is
                             // the factor that multiplies R, and the full Q's remaining
                             // columns are an arbitrary completion.
-                            let size = s.m.min(s.n);
-                            let q = to_layout(qr.compute_thin_Q().as_ref(), s.m, size, s.order);
-                            within::<T>(gram_residual(&q, s.m, size, s.order), 1.0, s.m, "qr Q")?;
+                            within::<T>(
+                                gram_residual(&q, s.m, s.size, s.order),
+                                1.0,
+                                s.m,
+                                "qr Q",
+                            )?;
                         }
                         Ok(())
                     },
@@ -410,7 +422,7 @@ macro_rules! define_backend {
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 5));
                 struct S<T> {
                     a0: Vec<T>,
-                    sink: T,
+                    lus: Vec<PartialPivLu<T>>,
                     m: usize,
                     n: usize,
                     batch: usize,
@@ -418,7 +430,7 @@ macro_rules! define_backend {
                 }
                 let state = S {
                     a0,
-                    sink: T::zero(),
+                    lus: Vec::with_capacity(batch),
                     m,
                     n,
                     batch,
@@ -427,21 +439,24 @@ macro_rules! define_backend {
                 Ok(op_from(
                     state,
                     String::new(),
-                    |_s| Ok(()),
                     |s| {
-                        for bi in 0..s.batch {
-                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let lu = mref(a0, s.m, s.n, s.order).partial_piv_lu();
-                            black_box(lu.L()[(0, 0)].clone());
-                            acc(&mut s.sink, lu.U()[(0, 0)].clone());
-                        }
+                        s.lus.clear();
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let lu = mref(a0, s.m, s.n, s.order).partial_piv_lu();
-                            let recon = to_layout(lu.reconstruct().as_ref(), s.m, s.n, s.order);
+                            s.lus.push(lu);
+                        }
+                        Ok(())
+                    },
+                    |s| {
+                        // The reconstruct is computed from the actual factorization
+                        // object the timed call returned, not from a fresh one.
+                        for bi in 0..s.batch {
+                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            let recon = to_layout(s.lus[bi].reconstruct().as_ref(), s.m, s.n, s.order);
                             within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "lu")?;
                         }
                         Ok(())
@@ -458,7 +473,7 @@ macro_rules! define_backend {
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 7));
                 struct S<T> {
                     a0: Vec<T>,
-                    sink: T,
+                    lus: Vec<FullPivLu<T>>,
                     m: usize,
                     n: usize,
                     batch: usize,
@@ -466,7 +481,7 @@ macro_rules! define_backend {
                 }
                 let state = S {
                     a0,
-                    sink: T::zero(),
+                    lus: Vec::with_capacity(batch),
                     m,
                     n,
                     batch,
@@ -475,22 +490,28 @@ macro_rules! define_backend {
                 Ok(op_from(
                     state,
                     String::new(),
-                    |_s| Ok(()),
                     |s| {
-                        for bi in 0..s.batch {
-                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let lu = mref(a0, s.m, s.n, s.order).full_piv_lu();
-                            black_box(lu.L()[(0, 0)].clone());
-                            acc(&mut s.sink, lu.U()[(0, 0)].clone());
-                        }
+                        s.lus.clear();
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let lu = mref(a0, s.m, s.n, s.order).full_piv_lu();
-                            let recon = to_layout(lu.reconstruct().as_ref(), s.m, s.n, s.order);
-                            within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "full_piv_lu")?;
+                            s.lus.push(lu);
+                        }
+                        Ok(())
+                    },
+                    |s| {
+                        for bi in 0..s.batch {
+                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            let recon = to_layout(s.lus[bi].reconstruct().as_ref(), s.m, s.n, s.order);
+                            within::<T>(
+                                max_diff(a0, &recon),
+                                frob(a0),
+                                s.n.max(s.m),
+                                "full_piv_lu",
+                            )?;
                         }
                         Ok(())
                     },
@@ -507,14 +528,14 @@ macro_rules! define_backend {
                 let a0 = spd::<T>(n, batch, order, seed(n, n, 11));
                 struct S<T> {
                     a0: Vec<T>,
-                    sink: T,
+                    outputs: Vec<Llt<T>>,
                     n: usize,
                     batch: usize,
                     order: Order,
                 }
                 let state = S {
                     a0,
-                    sink: T::zero(),
+                    outputs: Vec::with_capacity(batch),
                     n,
                     batch,
                     order,
@@ -522,25 +543,21 @@ macro_rules! define_backend {
                 Ok(op_from(
                     state,
                     String::new(),
-                    |_s| Ok(()),
+                    |s| { s.outputs.clear(); Ok(()) },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
                             let llt = mref(a0, s.n, s.n, s.order)
                                 .llt(Side::Lower)
                                 .map_err(|e| format!("llt failed: {e:?}"))?;
-                            black_box(llt.L()[(0, 0)].clone());
-                            acc(&mut s.sink, llt.L()[(s.n - 1, s.n - 1)].clone());
+                            s.outputs.push(llt);
                         }
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let llt = mref(a0, s.n, s.n, s.order)
-                                .llt(Side::Lower)
-                                .map_err(|e| format!("llt failed: {e:?}"))?;
-                            let recon = to_layout(llt.reconstruct().as_ref(), s.n, s.n, s.order);
+                            let recon = to_layout(s.outputs[bi].reconstruct().as_ref(), s.n, s.n, s.order);
                             within::<T>(max_diff(a0, &recon), frob(a0), s.n, "cholesky")?;
                         }
                         Ok(())
@@ -670,7 +687,7 @@ macro_rules! define_backend {
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 29));
                 struct S<T> {
                     a0: Vec<T>,
-                    sink: f64,
+                    outputs: Vec<Vec<f64>>,
                     m: usize,
                     n: usize,
                     batch: usize,
@@ -678,7 +695,7 @@ macro_rules! define_backend {
                 }
                 let state = S {
                     a0,
-                    sink: 0.0,
+                    outputs: Vec::with_capacity(batch),
                     m,
                     n,
                     batch,
@@ -687,23 +704,21 @@ macro_rules! define_backend {
                 Ok(op_from(
                     state,
                     String::new(),
-                    |_s| Ok(()),
+                    |s| { s.outputs.clear(); Ok(()) },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let sv = mref(a0, s.m, s.n, s.order)
                                 .singular_values()
                                 .map_err(|e| format!("singular_values failed: {e:?}"))?;
-                            s.sink += sv.first().copied().unwrap_or(0.0);
+                            s.outputs.push(sv);
                         }
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let sv = mref(a0, s.m, s.n, s.order)
-                                .singular_values()
-                                .map_err(|e| format!("singular_values failed: {e:?}"))?;
+                            let sv = &s.outputs[bi];
                             let r = sv.len();
                             let eps = tol_of::<T>(s.n.max(s.m));
                             for i in 0..r {
@@ -739,7 +754,7 @@ macro_rules! define_backend {
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 31));
                 struct S<T> {
                     a0: Vec<T>,
-                    sink: T,
+                    outputs: Vec<Svd<T>>,
                     m: usize,
                     n: usize,
                     batch: usize,
@@ -747,7 +762,7 @@ macro_rules! define_backend {
                 }
                 let state = S {
                     a0,
-                    sink: T::zero(),
+                    outputs: Vec::with_capacity(batch),
                     m,
                     n,
                     batch,
@@ -756,24 +771,21 @@ macro_rules! define_backend {
                 Ok(op_from(
                     state,
                     String::new(),
-                    |_s| Ok(()),
+                    |s| { s.outputs.clear(); Ok(()) },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let svd = mref(a0, s.m, s.n, s.order)
                                 .thin_svd()
                                 .map_err(|e| format!("thin_svd failed: {e:?}"))?;
-                            black_box(svd.U()[(0, 0)].clone());
-                            acc(&mut s.sink, svd.S()[0].clone());
+                            s.outputs.push(svd);
                         }
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let svd = mref(a0, s.m, s.n, s.order)
-                                .thin_svd()
-                                .map_err(|e| format!("thin_svd failed: {e:?}"))?;
+                            let svd = &s.outputs[bi];
                             let r = svd.S().dim();
                             let u = to_layout(svd.U(), s.m, r, s.order);
                             let v = to_layout(svd.V(), s.n, r, s.order);
@@ -798,12 +810,14 @@ macro_rules! define_backend {
                 let a0 = replicate(&a0, batch);
                 struct S<T> {
                     a0: Vec<T>,
+                    outputs: Vec<SelfAdjointEigen<T>>,
                     n: usize,
                     batch: usize,
                     order: Order,
                 }
                 let state = S {
                     a0,
+                    outputs: Vec::with_capacity(batch),
                     n,
                     batch,
                     order,
@@ -811,23 +825,21 @@ macro_rules! define_backend {
                 Ok(op_from(
                     state,
                     String::new(),
-                    |_s| Ok(()),
+                    |s| { s.outputs.clear(); Ok(()) },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
                             let evd = mref(a0, s.n, s.n, s.order)
                                 .self_adjoint_eigen(Side::Lower)
                                 .map_err(|e| format!("self_adjoint_eigen failed: {e:?}"))?;
-                            black_box(&evd);
+                            s.outputs.push(evd);
                         }
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let evd = mref(a0, s.n, s.n, s.order)
-                                .self_adjoint_eigen(Side::Lower)
-                                .map_err(|e| format!("self_adjoint_eigen failed: {e:?}"))?;
+                            let evd = &s.outputs[bi];
                             let u = to_layout(evd.U(), s.n, s.n, s.order);
                             let scale = frob(a0);
                             within::<T>(gram_residual(&u, s.n, s.n, s.order), 1.0, s.n, "eigh U")?;
@@ -845,11 +857,15 @@ macro_rules! define_backend {
             // -------------------------------------------------- householder_apply
 
             fn householder_ops<T: Scalar + ComplexField>(
-                m: usize,
-                n: usize,
-                batch: usize,
-                order: Order,
+                m: usize, n: usize, batch: usize, order: Order,
             ) -> Result<Vec<Op>, String> {
+                Ok(vec![householder_op::<T>(m, n, batch, order, false)?,
+                        householder_op::<T>(m, n, batch, order, true)?])
+            }
+
+            fn householder_op<T: Scalar + ComplexField>(
+                m: usize, n: usize, batch: usize, order: Order, sequence: bool,
+            ) -> Result<Op, String> {
                 let size = m.min(n);
                 let target = n;
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 41));
@@ -899,34 +915,35 @@ macro_rules! define_backend {
                 };
                 let block = op_from(
                     state,
-                    "block".to_owned(),
+                    format!("{}(basis={size},target={target})", if sequence { "sequence" } else { "block" }),
                     |s| {
                         s.a.copy_from_slice(&s.a0);
                         s.qc.fill(T::zero());
                         s.c.copy_from_slice(&s.c0);
-                        Ok(())
-                    },
-                    |s| {
                         for bi in 0..s.batch {
                             let a = mmut(&mut s.a[bi * s.m * s.n..], s.m, s.n, s.order);
                             let qc = mmut(&mut s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
                             qrf::qr_in_place(a, qc, s.par, MemStack::new(&mut s.mem), Default::default());
-                            let basis = mref(&s.a[bi * s.m * s.n..], s.m, s.n, s.order).get(.., ..s.size);
-                            let factor = mref(&s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
-                            let dst = mmut(&mut s.c[bi * s.m * s.target..], s.m, s.target, s.order);
-                            householder::apply_block_householder_on_the_left_in_place_with_conj(
-                                basis,
-                                factor,
-                                Conj::No,
-                                dst,
-                                s.par,
-                                MemStack::new(&mut s.mem),
-                            );
                         }
                         Ok(())
                     },
-                    |s| {
-                        // The same transform, applied by the sequence form, must agree.
+                    move |s| {
+                        for bi in 0..s.batch {
+                            let basis = mref(&s.a[bi * s.m * s.n..], s.m, s.n, s.order).get(.., ..s.size);
+                            let factor = mref(&s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
+                            let dst = mmut(&mut s.c[bi * s.m * s.target..], s.m, s.target, s.order);
+                            if sequence {
+                                householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
+                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
+                            } else {
+                                householder::apply_block_householder_on_the_left_in_place_with_conj(
+                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
+                            }
+                        }
+                        Ok(())
+                    },
+                    move |s| {
+                        // Compare the actual timed result with the other public form.
                         for bi in 0..s.batch {
                             let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
                             let mut qc = vec![T::zero(); s.size * s.size];
@@ -938,14 +955,16 @@ macro_rules! define_backend {
                                 Default::default(),
                             );
                             let mut reference = s.c0[bi * s.m * s.target..(bi + 1) * s.m * s.target].to_vec();
-                            householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
-                                mref(&a, s.m, s.n, s.order).get(.., ..s.size),
-                                mref(&qc, s.size, s.size, Order::F),
-                                Conj::No,
-                                mmut(&mut reference, s.m, s.target, s.order),
-                                s.par,
-                                MemStack::new(&mut s.mem),
-                            );
+                            let basis = mref(&a, s.m, s.n, s.order).get(.., ..s.size);
+                            let factor = mref(&qc, s.size, s.size, Order::F);
+                            let dst = mmut(&mut reference, s.m, s.target, s.order);
+                            if sequence {
+                                householder::apply_block_householder_on_the_left_in_place_with_conj(
+                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
+                            } else {
+                                householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
+                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
+                            }
                             let got = &s.c[bi * s.m * s.target..(bi + 1) * s.m * s.target];
                             within::<T>(
                                 max_diff(got, &reference),
@@ -957,7 +976,7 @@ macro_rules! define_backend {
                         Ok(())
                     },
                 );
-                Ok(vec![block])
+                Ok(block)
             }
 
             fn replicate<T: Copy>(values: &[T], batch: usize) -> Vec<T> {

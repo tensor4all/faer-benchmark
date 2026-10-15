@@ -1,4 +1,18 @@
-# Timing policy, version 1
+# Timing policies
+
+## Version 2: reliable re-record
+
+The revised contract is in [reliable-measurement.md](reliable-measurement.md).
+It retains actual outputs for checks, aligns the factor-only QR boundary, owns
+and observes the Rayon pool, retains chronological samples and separate process
+sets, and reports median-of-process-medians with distinct within/between SD.
+Representative controls must freeze the budgets before the full re-record; the
+old GEMM pilot alone does not establish a universal priming duration.
+
+Historical numerical pages remain version 1. The new policy does not retroactively
+repair those measurements or support comparing ratios across timing versions.
+
+## Historical version 1
 
 Recorded in every `run.yaml` as `timing_policy`. A run carries the version in
 force when it was taken; do not compare ratios across versions, and do not use an
@@ -10,9 +24,9 @@ The common loop clocks `Op::run`; `Op::prepare`, fixture construction, and
 `Op::check` are outside it. GEMM uses preallocated input/output buffers and restores
 the output outside timing. Composite families allocate through their public API
 inside `run`, and their local outputs are also destroyed before `run` returns;
-that destruction is timed. In particular, the current vendor `qr_factor` also copies input and
-allocates tau inside `run`, whereas faer's low-level route prepares buffers
-outside it: these are not yet equivalent factorization-only measurements.
+that destruction is timed. In particular, the historical vendor `qr_factor` also copied input and
+allocated tau inside `run`, whereas faer's low-level route prepared buffers
+outside it: these were not equivalent factorization-only measurements.
 Common timer code alone is not evidence of equivalent work or steady state.
 Several composite checks refactor input instead of inspecting the timed result;
 a successful check there does not validate the exact result that was timed.
@@ -41,7 +55,7 @@ the value it was asked for.
 
 `--threads N` is required. At `N=1` both faer adapters select `Par::Seq`.
 At larger budgets they select `Par::rayon(N)`, which is a splitting hint, not a
-host-owned pool; this harness currently does not create or measure an N-worker
+host-owned pool; the v1 harness did not create or measure an N-worker
 Rayon pool. Do not treat its threaded faer labels as verified worker counts.
 The vendor budget is set and read back once at startup (`openblas_*num_threads`
 for OpenBLAS, OpenMP setter plus `mkl_get_max_threads` for MKL); a mismatch is an
@@ -60,7 +74,7 @@ reports the best time per row; the report aggregates repeats and prints the A/A
 spread. A single scan flags suspects; a complete-set repeat alone also does not
 remove systematic order or process-state effects.
 
-New harness CSVs additionally retain `samples_ms`, an optional JSON array of
+The intermediate v1 harness additionally retained `samples_ms`, an optional JSON array of
 **all** timed calls in chronological order, for each successful row. It is empty
 for skipped/failed rows. Historical CSVs have no such array; its absence is not a
 measurement of zero variance. Existing `total_ms`/`per_item_us` remain best-of,

@@ -247,7 +247,7 @@ pub fn gram_residual<T: Scalar>(q: &[T], m: usize, n: usize, order: Order) -> f6
                 );
             }
             let target = if i == j { T::one() } else { T::zero() };
-            worst = worst.max(acc.sub(target).abs());
+            worst = residual_max(worst, acc.sub(target).abs());
         }
     }
     worst
@@ -264,18 +264,30 @@ pub fn gram_adj_residual<T: Scalar>(q: &[T], m: usize, n: usize, order: Order) -
                 acc.add_assign(q[idx(i, p, m, n, order)].mul(q[idx(j, p, m, n, order)].conj()));
             }
             let target = if i == j { T::one() } else { T::zero() };
-            worst = worst.max(acc.sub(target).abs());
+            worst = residual_max(worst, acc.sub(target).abs());
         }
     }
     worst
 }
 
+fn residual_max(a: f64, b: f64) -> f64 {
+    // f64::max ignores NaN, which would turn a corrupt result into a zero residual.
+    if a.is_finite() && b.is_finite() {
+        a.max(b)
+    } else {
+        f64::INFINITY
+    }
+}
+
 /// `max |a_i - b_i|` over two buffers in the same layout.
 pub fn max_diff<T: Scalar>(a: &[T], b: &[T]) -> f64 {
+    if a.len() != b.len() {
+        return f64::INFINITY;
+    }
     a.iter()
         .zip(b.iter())
         .map(|(x, y)| x.sub(*y).abs())
-        .fold(0.0_f64, f64::max)
+        .fold(0.0_f64, residual_max)
 }
 
 /// The Frobenius norm of a buffer.
@@ -312,6 +324,14 @@ pub fn scale_cols<T: Scalar>(u: &[T], m: usize, r: usize, s: &[T], order: Order)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn residuals_reject_missing_and_nonfinite_values() {
+        assert!(!max_diff(&[f64::NAN], &[1.0]).is_finite());
+        assert!(!max_diff(&[1.0, 2.0], &[1.0]).is_finite());
+        assert!(!gram_residual(&[f64::NAN], 1, 1, Order::C).is_finite());
+        assert!(!gram_adj_residual(&[f64::NAN], 1, 1, Order::F).is_finite());
+    }
 
     #[test]
     fn reference_matmul_is_layout_independent() {

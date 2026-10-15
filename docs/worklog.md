@@ -2,6 +2,60 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-15 — align timing-v2 contracts before the baseline re-record
+
+Optimization is frozen: candidate `fe41bbdfb88c0528e0726dca3b1764f47222ad56`
+is saved separately. Both vendor builds use the same clean baseline paths:
+`extern/t4a-faer` at `bfe4041cd9918815e3b3f766ac0332b792badb7d` and
+`extern/upstream-faer` at `0539947ffb757a739d7e703a7d2fa0c792a909c1`.
+No new optimization or performance conclusion is adopted.
+
+The v2 contract is in [reliable-measurement.md](reliable-measurement.md). Composites
+retain actual outputs until the outside-clock prepare/check boundary. Factor-only
+vendor QR restores preallocated input/tau outside the clock; its check constructs
+Q from the actual retained compact factors rather than factoring original input.
+Checks for composite QR/LU/Cholesky/SVD/EVD likewise consume their actual results.
+Solve still consumes its temporary factors inside the timed pipeline.
+
+Two additional audit defects were reproduced and corrected. Shared residuals used
+`f64::max`, which silently ignored NaN and could accept a corrupt result as zero
+error; nonfinite and length-mismatched residuals now fail. A missing-execution
+regression test failed first at faer factor-only QR through that NaN hole, then
+at vendor factor-only QR's replacement factorization. It now passes across the
+supported provider/dtype/order/variant routes. The declared Householder sequence
+row was absent and QR fixture preparation was inside its block-apply clock;
+both block and one-block-sequence rows now exist, label their actual basis/target
+widths, and exclude QR preparation from timing. Old pages are not repaired by this.
+
+The process now creates its own N-worker Rayon pool. `info --threads N` and raw
+CSV record pool-size/vendor-budget observations, and budgets are checked before
+rows. Tests with ambient `RAYON_NUM_THREADS=24` still observed requested 1/4/8
+pool sizes for both vendor binaries. These are not traces of active workers.
+
+Observed checks so far: five harness tests pass for MKL and OpenBLAS; both
+binaries pass the complete verification grid `8,32,64x8,8x64`, batch `1,2`,
+f64/c64, at 1/4/8T. Build/test/thread-info/verify logs are under
+`/tmp/baseline-v2-*`. The full numerical grid and full timing suite remain pending.
+The store check `kache doctor --verify` passed, with no corruption or repair.
+
+Recording/reporting v2 retains chronological samples, exact verification-cell
+census (including variants), observed budgets, binary SHA-256/build metadata and
+clean toolkit/harness/library identities. It reports median of process medians
+with separate within-process and scheduled between-process SD, not minima or a
+confidence interval. V1 reports keep their historical interpretation and the
+new timing-version page suffix prevents overwrite. Legacy revision comparison
+refuses v2 rather than silently merging variants/taking minima; candidate
+comparison remains deferred until the baseline is measured. A no-publish mode
+allows recording smoke/control artifacts without publishing numerical pages.
+
+The broad delegated implementation and first broad GPT post-review both stopped
+at their execution limits and are **not** counted as completed work/review. The
+remaining numerical implementation was integrated locally; a narrowed GPT review
+and the final coherent-diff review remain required. Representative pilot budgets
+are proposed, not frozen suite defaults. No full baseline re-record has run yet.
+Older statements below about the ambient pool or hardware mechanism are historical
+hypotheses, not established findings for this new harness.
+
 ## 2026-10-15 — retain repetitions before interpreting performance differences
 
 Reliability now takes priority over optimization. The earlier cache-conflict claim

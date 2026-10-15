@@ -22,7 +22,6 @@ mod imp {
     use crate::shared::*;
     use core::ffi::{c_char, c_void};
     use num_complex::Complex64;
-    use std::hint::black_box;
 
     const COL_MAJOR: i32 = 102;
     const ROW_MAJOR: i32 = 101;
@@ -824,7 +823,9 @@ mod imp {
         let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, salt));
         struct S<T> {
             a0: Vec<T>,
-            sink: T,
+            a: Vec<Vec<T>>,
+            tau: Vec<Vec<T>>,
+            r: Vec<Vec<T>>,
             m: usize,
             n: usize,
             batch: usize,
@@ -832,8 +833,18 @@ mod imp {
             with_q: bool,
         }
         let state = S {
+            a: if with_q {
+                Vec::with_capacity(batch)
+            } else {
+                a0.chunks_exact(m * n).map(|a| a.to_vec()).collect()
+            },
+            tau: if with_q {
+                Vec::with_capacity(batch)
+            } else {
+                vec![vec![T::zero(); m.min(n)]; batch]
+            },
+            r: Vec::with_capacity(batch),
             a0,
-            sink: T::zero(),
             m,
             n,
             batch,
@@ -843,24 +854,47 @@ mod imp {
         Ok(op_from(
             state,
             String::new(),
-            |_s| Ok(()),
+            |s| {
+                s.r.clear();
+                if s.with_q {
+                    s.a.clear();
+                    s.tau.clear();
+                } else {
+                    for bi in 0..s.batch {
+                        s.a[bi].copy_from_slice(&s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n]);
+                        s.tau[bi].fill(T::zero());
+                    }
+                }
+                Ok(())
+            },
             |s| {
                 let r = s.m.min(s.n);
                 for bi in 0..s.batch {
-                    let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
-                    let mut tau = vec![T::zero(); r];
+                    if s.with_q {
+                        s.a.push(s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec());
+                        s.tau.push(vec![T::zero(); r]);
+                    }
+                    let a = &mut s.a[bi];
+                    let tau = &mut s.tau[bi];
                     let info = T::geqrf(
                         layout(s.order),
                         s.m,
                         s.n,
-                        &mut a,
+                        a,
                         leading(s.m, s.n, s.order),
-                        &mut tau,
+                        tau,
                     );
                     if info != 0 {
                         return Err(format!("geqrf returned {info}"));
                     }
                     if s.with_q {
+                        let mut rmat = vec![T::zero(); r * s.n];
+                        for i in 0..r {
+                            for j in i..s.n {
+                                rmat[idx(i, j, r, s.n, s.order)] = a[idx(i, j, s.m, s.n, s.order)];
+                            }
+                        }
+                        s.r.push(rmat);
                         // Q is m x r with r = min(m, n) columns; asking orgqr for
                         // more columns than Q has (n > m on a wide shape) is invalid
                         // and MKL rejects it. The m x n buffer keeps its own leading
@@ -870,16 +904,14 @@ mod imp {
                             s.m,
                             r,
                             r,
-                            &mut a,
+                            a,
                             leading(s.m, s.n, s.order),
-                            &tau,
+                            tau,
                         );
                         if info != 0 {
                             return Err(format!("orgqr returned {info}"));
                         }
                     }
-                    s.sink.add_assign(tau[0]);
-                    black_box(&a);
                 }
                 Ok(())
             },
@@ -887,37 +919,31 @@ mod imp {
                 let r = s.m.min(s.n);
                 for bi in 0..s.batch {
                     let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                    let mut a = a0.to_vec();
-                    let mut tau = vec![T::zero(); r];
-                    let info = T::geqrf(
-                        layout(s.order),
-                        s.m,
-                        s.n,
-                        &mut a,
-                        leading(s.m, s.n, s.order),
-                        &mut tau,
-                    );
-                    if info != 0 {
-                        return Err(format!("geqrf returned {info}"));
-                    }
-                    // R is the upper triangle of the first `r` rows.
-                    let mut rmat = vec![T::zero(); r * s.n];
-                    for i in 0..r {
-                        for j in i..s.n {
-                            rmat[idx(i, j, r, s.n, s.order)] = a[idx(i, j, s.m, s.n, s.order)];
+                    let mut a = s.a[bi].clone();
+                    let mut rmat = if s.with_q {
+                        s.r[bi].clone()
+                    } else {
+                        vec![T::zero(); r * s.n]
+                    };
+                    if !s.with_q {
+                        // Derive Q from the ACTUAL compact factors, never re-factor input.
+                        for i in 0..r {
+                            for j in i..s.n {
+                                rmat[idx(i, j, r, s.n, s.order)] = a[idx(i, j, s.m, s.n, s.order)];
+                            }
                         }
-                    }
-                    let info = T::orgqr(
-                        layout(s.order),
-                        s.m,
-                        r,
-                        r,
-                        &mut a,
-                        leading(s.m, s.n, s.order),
-                        &tau,
-                    );
-                    if info != 0 {
-                        return Err(format!("orgqr returned {info}"));
+                        let info = T::orgqr(
+                            layout(s.order),
+                            s.m,
+                            r,
+                            r,
+                            &mut a,
+                            leading(s.m, s.n, s.order),
+                            &s.tau[bi],
+                        );
+                        if info != 0 {
+                            return Err(format!("orgqr returned {info}"));
+                        }
                     }
                     let mut qmat = vec![T::zero(); s.m * r];
                     for i in 0..s.m {
@@ -935,7 +961,6 @@ mod imp {
         ))
     }
 
-    /// `lu` times `getrf`; the check solves with the factors via `getrs`.
     /// `lu` times `getrf`; the check rebuilds `L` and `U` from the factors and
     /// compares `P A` against `L U`, which is the factorization's own contract
     /// for any shape (`L` is `m x min(m, n)` unit-lower trapezoidal, `U` is
@@ -950,7 +975,7 @@ mod imp {
         let size = m.min(n);
         struct S<T> {
             a0: Vec<T>,
-            sink: T,
+            outputs: Vec<(Vec<T>, Vec<i32>)>,
             m: usize,
             n: usize,
             size: usize,
@@ -959,7 +984,7 @@ mod imp {
         }
         let state = S {
             a0,
-            sink: T::zero(),
+            outputs: Vec::with_capacity(batch),
             m,
             n,
             size,
@@ -969,7 +994,10 @@ mod imp {
         Ok(op_from(
             state,
             String::new(),
-            |_s| Ok(()),
+            |s| {
+                s.outputs.clear();
+                Ok(())
+            },
             |s| {
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
@@ -985,26 +1013,14 @@ mod imp {
                     if info != 0 {
                         return Err(format!("getrf returned {info}"));
                     }
-                    s.sink.add_assign(a[0]);
+                    s.outputs.push((a, ipiv));
                 }
                 Ok(())
             },
             |s| {
                 for bi in 0..s.batch {
                     let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                    let mut a = a0.to_vec();
-                    let mut ipiv = vec![0i32; s.size];
-                    let info = T::getrf(
-                        layout(s.order),
-                        s.m,
-                        s.n,
-                        &mut a,
-                        leading(s.m, s.n, s.order),
-                        &mut ipiv,
-                    );
-                    if info != 0 {
-                        return Err(format!("getrf returned {info}"));
-                    }
+                    let (a, ipiv) = &s.outputs[bi];
                     // L is the lower trapezoid of `a` with a unit diagonal, U its
                     // upper trapezoid.
                     let mut l = vec![T::zero(); s.m * s.size];
@@ -1021,8 +1037,7 @@ mod imp {
                     }
                     for i in 0..s.size {
                         for j in i..s.n {
-                            u[idx(i, j, s.size, s.n, s.order)] =
-                                a[idx(i, j, s.m, s.n, s.order)];
+                            u[idx(i, j, s.size, s.n, s.order)] = a[idx(i, j, s.m, s.n, s.order)];
                         }
                     }
                     let mut lu = vec![T::zero(); s.m * s.n];
@@ -1031,13 +1046,13 @@ mod imp {
                     // input. `ipiv` is one-based.
                     let mut pa = a0.to_vec();
                     for k in 0..s.size {
+                        if ipiv[k] < 1 || ipiv[k] as usize > s.m {
+                            return Err("getrf returned an invalid pivot".to_owned());
+                        }
                         let t = (ipiv[k] - 1) as usize;
                         if t != k {
                             for j in 0..s.n {
-                                pa.swap(
-                                    idx(k, j, s.m, s.n, s.order),
-                                    idx(t, j, s.m, s.n, s.order),
-                                );
+                                pa.swap(idx(k, j, s.m, s.n, s.order), idx(t, j, s.m, s.n, s.order));
                             }
                         }
                     }
@@ -1052,14 +1067,14 @@ mod imp {
         let a0 = spd::<T>(n, batch, order, seed(n, n, 11));
         struct S<T> {
             a0: Vec<T>,
-            sink: T,
+            outputs: Vec<Vec<T>>,
             n: usize,
             batch: usize,
             order: Order,
         }
         let state = S {
             a0,
-            sink: T::zero(),
+            outputs: Vec::with_capacity(batch),
             n,
             batch,
             order,
@@ -1067,7 +1082,10 @@ mod imp {
         Ok(op_from(
             state,
             String::new(),
-            |_s| Ok(()),
+            |s| {
+                s.outputs.clear();
+                Ok(())
+            },
             |s| {
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n].to_vec();
@@ -1075,18 +1093,14 @@ mod imp {
                     if info != 0 {
                         return Err(format!("potrf returned {info}"));
                     }
-                    s.sink.add_assign(a[0]);
+                    s.outputs.push(a);
                 }
                 Ok(())
             },
             |s| {
                 for bi in 0..s.batch {
                     let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                    let mut a = a0.to_vec();
-                    let info = T::potrf(layout(s.order), s.n, &mut a, leading(s.n, s.n, s.order));
-                    if info != 0 {
-                        return Err(format!("potrf returned {info}"));
-                    }
+                    let a = &s.outputs[bi];
                     // L is the lower triangle potrf left behind.
                     let mut l = vec![T::zero(); s.n * s.n];
                     for j in 0..s.n {
@@ -1176,7 +1190,7 @@ mod imp {
         let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, if thin { 31 } else { 29 }));
         struct S<T> {
             a0: Vec<T>,
-            sink: f64,
+            outputs: Vec<(Vec<f64>, Vec<T>, Vec<T>)>,
             m: usize,
             n: usize,
             batch: usize,
@@ -1185,7 +1199,7 @@ mod imp {
         }
         let state = S {
             a0,
-            sink: 0.0,
+            outputs: Vec::with_capacity(batch),
             m,
             n,
             batch,
@@ -1195,14 +1209,27 @@ mod imp {
         Ok(op_from(
             state,
             String::new(),
-            |_s| Ok(()),
+            |s| {
+                s.outputs.clear();
+                Ok(())
+            },
             |s| {
                 let r = s.m.min(s.n);
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
                     let mut sigma = vec![0.0f64; r];
-                    let mut u = vec![T::zero(); s.m * r];
-                    let mut vt = vec![T::zero(); r * s.n];
+                    let mut u = if s.thin {
+                        vec![T::zero(); s.m * r]
+                    } else {
+                        Vec::new()
+                    };
+                    let mut vt = if s.thin {
+                        vec![T::zero(); r * s.n]
+                    } else {
+                        Vec::new()
+                    };
+                    let mut dummy_u = [T::zero()];
+                    let mut dummy_vt = [T::zero()];
                     let jobz = if s.thin { JOB_S } else { JOB_N };
                     let info = T::gesdd(
                         layout(s.order),
@@ -1212,15 +1239,25 @@ mod imp {
                         &mut a,
                         leading(s.m, s.n, s.order),
                         &mut sigma,
-                        &mut u,
+                        if s.thin {
+                            u.as_mut_slice()
+                        } else {
+                            &mut dummy_u
+                        },
+                        // LAPACKE validates leading dimensions even for JOB_N,
+                        // although U and VT are not referenced in that mode.
                         ld_u(s.m, r, s.order),
-                        &mut vt,
+                        if s.thin {
+                            vt.as_mut_slice()
+                        } else {
+                            &mut dummy_vt
+                        },
                         ld_vt(r, s.n, s.order),
                     );
                     if info != 0 {
                         return Err(format!("gesdd returned {info}"));
                     }
-                    s.sink += sigma.first().copied().unwrap_or(0.0);
+                    s.outputs.push((sigma, u, vt));
                 }
                 Ok(())
             },
@@ -1228,27 +1265,7 @@ mod imp {
                 let r = s.m.min(s.n);
                 for bi in 0..s.batch {
                     let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                    let mut a = a0.to_vec();
-                    let mut sigma = vec![0.0f64; r];
-                    let mut u = vec![T::zero(); s.m * r];
-                    let mut vt = vec![T::zero(); r * s.n];
-                    let jobz = if s.thin { JOB_S } else { JOB_N };
-                    let info = T::gesdd(
-                        layout(s.order),
-                        jobz,
-                        s.m,
-                        s.n,
-                        &mut a,
-                        leading(s.m, s.n, s.order),
-                        &mut sigma,
-                        &mut u,
-                        ld_u(s.m, r, s.order),
-                        &mut vt,
-                        ld_vt(r, s.n, s.order),
-                    );
-                    if info != 0 {
-                        return Err(format!("gesdd returned {info}"));
-                    }
+                    let (sigma, u, vt) = &s.outputs[bi];
                     let eps = tol_of::<T>(s.n.max(s.m));
                     for i in 0..r {
                         if !sigma[i].is_finite() || sigma[i] < -eps {
@@ -1307,14 +1324,14 @@ mod imp {
         let a0 = replicate(&a0, batch);
         struct S<T> {
             a0: Vec<T>,
-            sink: f64,
+            outputs: Vec<(Vec<T>, Vec<f64>)>,
             n: usize,
             batch: usize,
             order: Order,
         }
         let state = S {
             a0,
-            sink: 0.0,
+            outputs: Vec::with_capacity(batch),
             n,
             batch,
             order,
@@ -1322,7 +1339,10 @@ mod imp {
         Ok(op_from(
             state,
             String::new(),
-            |_s| Ok(()),
+            |s| {
+                s.outputs.clear();
+                Ok(())
+            },
             |s| {
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n].to_vec();
@@ -1338,27 +1358,14 @@ mod imp {
                     if info != 0 {
                         return Err(format!("syevd/heevd returned {info}"));
                     }
-                    s.sink += w[0];
+                    s.outputs.push((a, w));
                 }
                 Ok(())
             },
             |s| {
                 for bi in 0..s.batch {
                     let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                    let mut a = a0.to_vec();
-                    let mut w = vec![0.0f64; s.n];
-                    let info = T::evd(
-                        layout(s.order),
-                        JOB_V,
-                        s.n,
-                        &mut a,
-                        leading(s.n, s.n, s.order),
-                        &mut w,
-                    );
-                    if info != 0 {
-                        return Err(format!("syevd/heevd returned {info}"));
-                    }
-                    let u = a[..s.n * s.n].to_vec();
+                    let (u, w) = &s.outputs[bi];
                     let scale = frob(a0);
                     within::<T>(gram_residual(&u, s.n, s.n, s.order), 1.0, s.n, "eigh U")?;
                     let ws = w.iter().map(|x| T::from_f64(*x)).collect::<Vec<_>>();

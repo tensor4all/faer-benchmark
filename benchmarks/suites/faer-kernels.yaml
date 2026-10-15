@@ -17,8 +17,9 @@ description: >-
   shape is eight times the work and is not what either row would be buying;
   `upgrade_factor` is the public but
   `#[doc(hidden)]` `upgrade_householder_factor`; `householder_apply` is the
-  block apply with an explicit basis/target width plus the sequence form, as two
-  rows; the rest are the corresponding public composite.
+  block apply and the one-block sequence form, as two rows, with basis width
+  min(m,n) and target width n; QR fixture preparation is outside timing.
+  The rest are the corresponding public composite.
 # Only paths in the *measured* fork whose change can alter a measured result. The
 # harness and the timing protocol live in this repository, not in the fork, so
 # they cannot appear here; see docs/results.md for how a harness change is
@@ -84,9 +85,9 @@ workloads:
     rerun is reproducible.
   known_blind_spots:
     - "Only the faer entry points are measured. tlinalg's packing, batch loop and lane policy, tenferro's tensor construction and dtype dispatch, and the small-`m` decode-projection shapes are other repositories' rows (tlinalg-benchmark, tenferro-benchmark)."
-    - "The C-order vendor route is per family and is resolved by the harness, not here: a row-major LAPACK driver is a different operation from its transpose, so a vendor C-order cell is either a native row-major route, a timed adaptation, or an explicitly labelled prepared-layout comparison, and the manifest records which."
+    - "Vendor C-order cells use CBLAS/LAPACKE row-major entry points. Workspace allocation or layout conversion internal to those APIs remains timed; these are not prepared-column-major or transpose measurements."
     - "`gemm` covers the tall class's two Householder legs (a 16-wide basis and a 240-column target over 4096 rows: the reduction and the write-back) beside a vendor `?gemm` on the same leg. A single leg beside a vendor gemm is a diagnostic reference, not the equivalent implementation of the whole update, and the row is labelled accordingly."
-    - "`householder_apply` measures the block apply with an explicit basis width and target width, and the sequence form, as two rows; a reflector count the suite does not declare is not covered."
+    - "`householder_apply` measures block apply and the one-block sequence form as two distinct rows, labelled with basis width min(m,n) and target width n. QR fixture preparation is outside timing. Independently varied basis/target widths and multi-panel sequences are not covered."
     - "Allocation performed inside the measured call stays inside the clock. The fork's two row splits allocate their partial buffers inside the public call, and the public scratch function does not expose them; the campaign reports that as it is instead of changing faer's API to make the boundary look cleaner."
     - "`cholesky`, `eigh`, `solve` and `triangular_solve` are measured on square shapes only: the matrix they factor or solve with is square by definition (self-adjoint for the first two, a triangular factor for the last). `lu` and `full_piv_lu` are not gated that way -- they take the declared rectangular shapes too, with `min(m, n)` pivots and a trapezoidal `L` or `U`, which is what `dgetrf` does as well -- so a rectangular LU cell is measured in both orders beside its square one."
     - "`f32`/`c32`, the large regime's 1024 shapes, BLIS, sparse, iterative and GPU arms are later declarations, not machinery built now."
