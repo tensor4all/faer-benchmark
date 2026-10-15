@@ -111,6 +111,14 @@ gained a `--rows` filter so an arm does not pay for a row it does not need, and 
 recorder passes the declared engines through to it; the census and the page columns
 follow that declaration.
 
+The declared square tiers were restructured for optimization work: `small`
+32/64, `mid` 128/256/512, `large` 1024, plus adoption-only `linalg-big`/`gemm-huge`
+(2048/4096, `--threads 4,8 --dtypes f64`) and the diagnostic `linalg-boundary`
+(255/257/511/513). 4/8/16 are out of the campaign; they belong to a separate
+small-matrix loop bench, as does a "too many threads on too little work" check. The
+recorder gained `--shapes` so the daily loop measures one square per tier while the
+run still records the subset it covered. See protocol-v2-baseline.md section 5.
+
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
 1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of

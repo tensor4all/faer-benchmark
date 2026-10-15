@@ -179,18 +179,17 @@ runs:
     populations:
       - regime: gemm-small
         groups: [gemm]
-        # Trimmed from 4,8,16,32,64: the 4T/8T cells of these shapes measure thread-region
-        # start-up (gemm 32^3 pays a constant +8-11 us there; 4^3 never enters a parallel
-        # path), so the extra shapes buy machine time rather than kernel information.
-        n: ["8x8x8", "64x64x64"]
+        # 32/64 are the overhead and regression-check tier; 4,8,16 belong to a separate
+        # small-matrix loop bench, not to this campaign.
+        n: ["32x32x32", "64x64x64"]
         batch: [1]
-      - regime: gemm-medium
+      - regime: gemm-mid
         groups: [gemm]
-        n: ["256x256x256"]
+        n: ["128x128x128", "256x256x256", "512x512x512"]
         batch: [1]
       - regime: gemm-large
         groups: [gemm]
-        n: ["512x512x512"]
+        n: ["1024x1024x1024"]
         batch: [1]
       # The tall class carries both legs of the Householder update that
       # tlinalg-rs#46 separates, because they are different work and the
@@ -207,16 +206,16 @@ runs:
         batch: [1]
       - regime: linalg-small
         groups: [factor, decompose, heavy, householder]
-        # Trimmed from 4,8,16,32,64 for the same reason as gemm-small above.
-        n: ["8", "64"]
+        # 32/64 are the overhead and regression-check tier; 4,8,16 are not measured here.
+        n: ["32", "64"]
         batch: [1]
-      - regime: linalg-medium
+      - regime: linalg-mid
         groups: [factor, decompose, heavy, householder]
-        n: ["256"]
+        n: ["128", "256", "512"]
         batch: [1]
       - regime: linalg-large
         groups: [factor, decompose]
-        n: ["512"]
+        n: ["1024"]
         batch: [1]
       - regime: linalg-tall
         groups: [factor, decompose, householder]
@@ -225,4 +224,19 @@ runs:
       - regime: linalg-wide
         groups: [factor, decompose]
         n: ["64x1024", "256x4096"]
+        batch: [1]
+      # Adoption-only tiers: declared so a decision run can select them with
+      # --regimes, but not part of the daily optimization loop.
+      - regime: gemm-huge
+        groups: [gemm]
+        n: ["2048x2048x2048", "4096x4096x4096"]
+        batch: [1]
+      - regime: linalg-big
+        groups: [factor, decompose]
+        n: ["2048", "4096"]
+        batch: [1]
+      # Diagnostic tier for block-boundary overfitting (255/257, 511/513).
+      - regime: linalg-boundary
+        groups: [factor, decompose]
+        n: ["255", "257", "511", "513"]
         batch: [1]

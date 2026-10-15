@@ -98,7 +98,27 @@ Rules that make this honest rather than convenient:
   change: the candidate comparison above, the numerical verification grid, and an
   independent review of the finished diff.
 
-## 5. How the two arms are invoked
+## 5. Size tiers and the two operating modes
+
+The declared square tiers are `small` (32, 64 - overhead and regression checks),
+`mid` (128, 256, 512 - the block/parallel switchover region), `large` (1024), and
+two adoption-only tiers: `linalg-big` / `gemm-huge` (2048, 4096) and
+`linalg-boundary` (255, 257, 511, 513 - only for suspected block-boundary
+overfitting). 4, 8 and 16 are deliberately not in this campaign: they belong to a
+separate small-matrix loop bench, which is also where a "too many threads on too
+little work" side-effect check belongs.
+
+- **Daily optimization** measures one square per tier plus the tall/wide work:
+  `--shapes 64,64x64x64,256,256x256x256,1024,1024x1024x1024,1024x64,4096x256,64x1024,256x4096,4096x64x64,16x4096x240,4096x16x240,64x64x4096`
+  with `--regimes` naming the daily tiers. A run records the subset it covered, so
+  a daily subset is never mistaken for the whole declaration.
+- **Before adopting a change** the same arms run the full declared lists (no
+  `--shapes`), and the expensive tiers are added explicitly:
+  `--regimes linalg-big,gemm-huge --threads 4,8 --dtypes f64` (2048/4096 are not
+  worth 1T or c64 in the loop) and `--regimes linalg-boundary` only when a change
+  is suspected of fitting a block boundary.
+
+## 6. How the two arms are invoked
 
 ```sh
 PINNED_RETRIES=8 python3 scripts/record_run.py zen5-cpu faer-kernels \
@@ -117,7 +137,7 @@ declaration, so a run that measures a subset cannot claim coverage of a row it d
 not measure. The two arms are separate runs (the vendor symbols collide) and each
 publishes its own `-timing-v2` page.
 
-## 6. What is explicitly out of scope
+## 7. What is explicitly out of scope
 
 Establishing the mechanism of the remaining between-start variation; publishing
 candidate numbers as if they displaced the baseline; treating the vendor rows as
