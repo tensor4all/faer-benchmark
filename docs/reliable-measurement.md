@@ -1,5 +1,11 @@
 # Reliable baseline re-record (timing policy v2)
 
+The frozen contract for the baseline re-record and for candidate iterations is in
+[protocol-v2-baseline.md](protocol-v2-baseline.md): settings (prime 250 ms, 5 calls,
+3 process sets), the enforced machine preconditions (boost off, observer off the
+measured L3 domains, whole-domain idle guard), what a recorded number means, and
+the candidate-mode procedure. This file remains the reasoning behind it.
+
 ## Frozen identities
 
 The optimization candidate is saved at fork `fe41bbdfb88c0528e0726dca3b1764f47222ad56`.

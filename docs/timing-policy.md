@@ -102,6 +102,9 @@ fork's row splits are exactly a threaded-kernel change.
 
 ## Guarding the host
 
+The frozen settings and preconditions for the current baseline are in
+[protocol-v2-baseline.md](protocol-v2-baseline.md).
+
 Every measurement runs through `benchmarks/scripts/pinned.sh` in this repository
 (the harness owns the protocol, because faer has no `benchmarks/` directory and
 the fork's `AGENTS.md` forbids adding one): `taskset` to the declared CPU set, a

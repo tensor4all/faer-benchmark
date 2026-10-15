@@ -91,6 +91,18 @@ domain would otherwise contend for the same cache invisibly. A run that needs ev
 domain can only proceed with `FBENCH_OBSERVER_SHARES_L3=1`, which records the
 residual sharing explicitly.
 
+The contract is now written down in [protocol-v2-baseline.md](protocol-v2-baseline.md):
+250 ms priming, 5 calls, three process sets, boost off (enforced), observer off the
+measured L3 domains (enforced), whole-L3-domain idle guard, the small-shape grids
+trimmed to 8 and 64, the OpenBLAS arm without the duplicated `faer-upstream` row
+(the two arms' copies of the same faer code agree to 2% median, 26% worst), and the
+candidate mode for optimization iterations: identity + host-block equality, an
+in-run `faer-upstream` machine-state control on a predeclared overlap set, then
+fork-only measurement of a declared subset with the rotation-averaged ratio against
+the recorded baseline fork. Missing coverage is reported as missing, repeated
+candidate attempts are both kept, and adoption still needs the numerical grid and a
+finished-diff review.
+
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
 1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of
