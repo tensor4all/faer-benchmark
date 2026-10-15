@@ -34,9 +34,9 @@ BUDGETS = [1, 4, 8]
 SERIES = [('faer-fork', 'mkl', '#1f77b4', 'circle'), ('faer-upstream', 'mkl', '#ff7f0e', 'square'),
           ('lapack-mkl', 'mkl', '#2ca02c', 'triangle'), ('lapack-openblas', 'openblas', '#d62728', 'diamond')]
 ORDER, DTYPE = 'c', 'f64'
-PANEL_W, PANEL_H = 380, 380          # one panel per thread budget, drawn left to right
-PAD_L, PAD_R, PAD_T, PAD_B = 92, 24, 46, 62
-CANVAS_W, CANVAS_H = PAD_L + 3 * PANEL_W + PAD_R, PAD_T + PANEL_H + PAD_B
+PANEL_W, PANEL_H = 560, 400          # one panel per thread budget, stacked so GitHub renders it large
+PAD_L, PAD_R, PAD_T, PAD_B = 92, 24, 46, 40
+CANVAS_W, CANVAS_H = PAD_L + PANEL_W + PAD_R, PAD_T + 3 * PANEL_H + PAD_B
 
 
 @dataclass
@@ -179,7 +179,7 @@ def main():
         for index, threads in enumerate(BUDGETS):
             blocks = {name: points(cells[vendor], threads, family, name) for name, vendor, _, _ in SERIES}
             svg.append(panel(checker, family, threads, blocks,
-                             (PAD_L + index * PANEL_W, PAD_T)))
+                             (PAD_L, PAD_T + index * PANEL_H)))
         svg.append('</svg>')
         (HERE / f'throughput-{family}.svg').write_text('\n'.join(svg) + '\n')
         families.append((family, FLOPS[family][1],
