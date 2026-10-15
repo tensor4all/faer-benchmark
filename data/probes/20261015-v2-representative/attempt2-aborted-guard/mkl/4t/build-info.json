@@ -1,0 +1,65 @@
+{
+  "pin": {
+    "FAER_FORK_REV": "bfe4041cd9918815e3b3f766ac0332b792badb7d",
+    "FAER_FORK_DIRTY": "false",
+    "FAER_FORK_DIR": "/home/shinaoka/projects/tensor4all/faer-benchmark/extern/t4a-faer",
+    "FAER_FORK_VERSION": "0.24.4",
+    "FAER_FORK_FEATURES": "std,rayon",
+    "FAER_UPSTREAM_REV": "0539947ffb757a739d7e703a7d2fa0c792a909c1",
+    "FAER_UPSTREAM_DIRTY": "false",
+    "FAER_UPSTREAM_DIR": "/home/shinaoka/projects/tensor4all/faer-benchmark/extern/upstream-faer",
+    "FAER_UPSTREAM_VERSION": "0.24.4",
+    "FAER_UPSTREAM_FEATURES": "std,rayon",
+    "FAER_UPSTREAM_REF": "faer-v0.24.4",
+    "BIN_DIR": "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release",
+    "BUILD_FEATURES": "fbench/link-mkl",
+    "BUILD_ENV": "MKLROOT=/opt/intel/oneapi/mkl/2026.1 MKL_THREADING_LIB=/opt/intel/oneapi/compiler/2026.1/lib/libiomp5.so",
+    "BUILD_VENDOR": "mkl"
+  },
+  "admission": {
+    "harness": {
+      "commit": "780e91d20745683e2700f16978622529bb36dd9c",
+      "dirty": false
+    },
+    "toolkit": {
+      "commit": "916dace82589f9066f824c5cbfaa311140df2fed",
+      "dirty": false,
+      "measured_path": "/home/shinaoka/projects/tensor4all/campaign-toolkit"
+    },
+    "argv": [
+      "scripts/record_run.py",
+      "zen5-cpu",
+      "faer-kernels",
+      "--checkout",
+      "extern/t4a-faer",
+      "--upstream",
+      "extern/upstream-faer",
+      "--vendor",
+      "mkl",
+      "--regimes",
+      "gemm-small",
+      "--families",
+      "gemm",
+      "--threads",
+      "1",
+      "--dtypes",
+      "f64",
+      "--reps",
+      "2",
+      "--aa",
+      "3",
+      "--prime-ms",
+      "1",
+      "--label",
+      "v2-smoke2-mkl",
+      "--no-publish"
+    ]
+  },
+  "binary": {
+    "path": "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+    "sha256": "cce1442034a105ef6ad8c59d9c85964c7cdad9b50c515a89c28f6894d3c34751"
+  },
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+  "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)\nrelease: 1.99.0\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Ubuntu 24.4.0 (noble) [64-bit]\n",
+  "env": {}
+}

@@ -41,12 +41,33 @@ are written in `metadata.json` before/after each attempt.
 
 `target/campaign.lock` is held throughout. No builds or other timing campaigns may
 run concurrently. The existing sibling-aware 3-second/5% before-and-after guard is
-used with **one attempt only**. A spoiled, numerically invalid or timed-out process
-aborts the pilot and preserves its CSV/log/progress artifacts; it is not retried
-until favorable. Each process is bounded by GNU `timeout` (180 s, kill after 10 s)
+used with **the pinned protocol's own admission retry (8 attempts, 30 s wait)**:
+see the abort notes below. A numerically invalid or timed-out process aborts the
+pilot and preserves its CSV/log/progress artifacts; it is not retried until
+favourable. Each process is bounded by GNU `timeout` (180 s, kill after 10 s)
 for its owned process group. Inspect a timeout's logs/owned descendants before any
 changed attempt; do not restart this script into existing directories. An existing
 `metadata.json` is refused before it can be overwritten.
+
+### Attempt log (all preserved; never selected for favourable numbers)
+
+| attempt | directory | policy | outcome |
+| --- | --- | --- | --- |
+| 1 | `attempt1-aborted-guard/` | retries=1, unpinned observer | aborted at process 8/64: `run2-qr-factor-1t` exit 75, guard "cpus 4 busy after run" |
+| 2 | `attempt2-aborted-guard/` | retries=1, unpinned observer | aborted at process 23/64: `verify-householder-8t` exit 75, guard "cpus 4-11 busy after run" |
+| 3 | this directory | retries=8, observer pinned to CPUs 0-3 | results, guard logs and `metadata.json` in place |
+
+Attempts 1-2 failed the idle admission, not the measurement: the operator polling
+loop (attempt 1) and unrelated host activity (attempt 2, and the standalone repro
+runs) pushed a monitored CPU above the 5% threshold in a 3 s window. The rejection
+rate measured on this host with the agent active was about 3.5% per window
+(5 rejections in ~142 windows), which makes a one-attempt 64-process package
+impractical; the retry count is the pinned protocol's own admission retry and the
+same policy the production recorder uses. A rejected attempt's CSV is overwritten
+by the first attempt whose windows were idle, and every guard log records the
+attempts. The observer is pinned to CPUs 0-3 so the driver, the guard checker and
+the agent stay off the watched L3 domain; the measured set 4-11 (+ SMT siblings
+16-23) is unchanged.
 
 Each completed vendor/budget folder has a `control-contract.yaml`: it is an
 explicit *diagnostic* grid, **not** a declaration-valid `run.yaml` for the published

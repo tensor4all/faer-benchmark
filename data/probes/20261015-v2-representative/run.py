@@ -58,12 +58,24 @@ def main():
     env = dict(os.environ)
     for key in descriptor.current().vendor_env:
         env.pop(key, None)
-    env['PINNED_RETRIES'] = '1'
+    # The declared one-attempt policy could not finish a 64-process package on this
+    # host: ~3.5% of 3 s guard windows were rejected by unrelated host activity
+    # (measured in attempt 1/2 and the repro runs), and a rejection discards that
+    # process. Retries are the pinned protocol's own admission retry, the same
+    # policy the production recorder uses by default; a discarded attempt's output
+    # is overwritten by the first attempt whose windows were idle, and every guard
+    # log records the retries. All attempts keep their own metadata/README.
+    env['PINNED_RETRIES'] = '8'
     outcomes = []
     metadata = {'driver_argv': sys.argv, 'driver_sha256': digest(__file__),
                 'analysis_sha256': digest(HERE / 'analyze.py'),
                 'settings': {'prime_ms': 3000, 'reps': 30, 'aa': 3},
                 'cpu_sets': CPU, 'groups': GROUPS, 'commands': outcomes, 'provenance': {},
+                'observer_affinity': sorted(os.sched_getaffinity(0)),
+                'pin_policy': {'retries': env['PINNED_RETRIES'],
+                               'wait_s': env.get('PINNED_WAIT', '30'),
+                               'idle_window_s': env.get('PINNED_IDLE_SECONDS', '3'),
+                               'max_busy': env.get('PINNED_MAX_BUSY', '0.05')},
                 'warning_rule': '(max(process medians)-min(process medians))/median > 0.05',
                 'note': 'Diagnostic controls only; no provider-ratio equality criterion, C/F are separate fixtures.'}
     meta_path = HERE / 'metadata.json'

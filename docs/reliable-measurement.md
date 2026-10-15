@@ -106,13 +106,24 @@ priming floor. These are pilot settings, not yet suite defaults:
 | 4 | thin SVD | 64x1024 | c64 |
 | 8 | Householder apply (both variants) | 4096x256 | f64 |
 
-Correctness, declared/observed budgets and host guards must pass. Set
-`PINNED_RETRIES=1`: preserve the first attempt and abort on a spoiled process,
-not retry until favorable data appear. Inspect per-cell process-median range
-relative to its median; flag a range above 5% as unstable, without discarding
-calls or replacing it with the minimum. This is an explicit descriptive warning
-threshold, not a confidence bound. Record within-process SD separately; an
-isolated retained outlier does not by itself invalidate a median estimate.
+Correctness, declared/observed budgets and host guards must pass. The pinned
+protocol's idle admission is an **admission** retry, not a data-selection device:
+a run whose 3 s before/after windows were not idle is discarded, the process is
+re-run on the same declared schedule, and every attempt is echoed in the guard
+log; the retained CSV is the first attempt whose windows were idle. On this host
+the operator/agent and unrelated background activity reject roughly 3.5% of
+windows (5 rejections in ~142 measured windows, including two aborted one-attempt
+control packages), so a one-attempt, one-shot rule cannot finish a multi-hour
+package. Controls and the recorded suite therefore use `PINNED_RETRIES=8` with the
+declared 3 s window, `max_busy=0.05` and 30 s wait, and the observer (driver,
+guard checker, agent) is pinned to CPUs 0-3 so it stays off the measured L3
+domain. Increasing retries does not weaken the admission rule; it only decides how
+many contaminated attempts are discarded before the package is abandoned.
+Inspect per-cell process-median range relative to its median; flag a range above
+5% as unstable, without discarding calls or replacing it with the minimum. This is
+an explicit descriptive warning threshold, not a confidence bound. Record
+within-process SD separately; an isolated retained outlier does not by itself
+invalidate a median estimate.
 
 Freeze the priming floor, calls/process, complete-set count, order schedule,
 summary and noise/validity rules before the full suite. If representative cells
