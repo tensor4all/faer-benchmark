@@ -154,8 +154,8 @@ def panel(checker, family, threads, blocks, origin):
             out.append(f'<line x1="{sx(x):.1f}" y1="{sy(y - err):.1f}" x2="{sx(x):.1f}" y2="{sy(y + err):.1f}" '
                        f'stroke="{colour}" stroke-width="1.1"/>')
             out.append(marker(kind, sx(x), sy(y), colour))
-    # legend inside the panel, in the corner a rising curve leaves free
-    legend_x, legend_y = x0 + width - 128, y0 + 8
+    # legend inside the panel: the lower-right corner is the one a rising curve leaves free
+    legend_x, legend_y = x0 + width - 128, y0 + height - 12 - 13 * len(SERIES)
     out.append(f'<rect x="{legend_x - 6}" y="{legend_y - 6}" width="132" height="{13 + 13 * len(SERIES)}" '
                f'fill="#ffffff" fill-opacity="0.86" stroke="#e0e0e0"/>')
     for index, (name, vendor, colour, kind) in enumerate(SERIES):
