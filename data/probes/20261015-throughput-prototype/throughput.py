@@ -190,7 +190,8 @@ def main():
                checker.text(12, 20, 14, f'{family}: nominal GFLOP/s vs matrix size, f64, C order '
                                         f'(median of process medians, bar = between-start SD)')]
         for index, threads in enumerate(BUDGETS):
-            blocks = {name: points(cells[vendor], threads, family, name) for name, vendor, _, _ in SERIES}
+            blocks = {name: points(cells[vendor], threads, family, name)
+                      for name, vendor, *_ in SERIES}
             svg.append(panel(checker, family, threads, blocks,
                              (PAD_L, PAD_T + index * PANEL_H)))
         svg.append('</svg>')
@@ -216,12 +217,12 @@ def main():
     print('geometry check: no overlapping or out-of-panel text')
     # ASCII sketch of the 8T panel of gemm so the layout can be eyeballed without a rasteriser
     family = 'gemm'
-    blocks = {name: points(cells[vendor], 8, family, name) for name, vendor, _, _ in SERIES}
+    blocks = {name: points(cells[vendor], 8, family, name) for name, vendor, *_ in SERIES}
     grid = [[' '] * 92 for _ in range(22)]
     data = [p for pts in blocks.values() for p in pts]
     lx0, lx1 = math.log10(min(p[0] for p in data)), math.log10(max(p[0] for p in data))
     ly0, ly1 = math.log10(min(p[1] for p in data)), math.log10(max(p[1] for p in data))
-    for row, (name, _, _, _) in enumerate(SERIES):
+    for row, (name, *_) in enumerate(SERIES):
         for x, y, _ in blocks.get(name) or []:
             col = int((math.log10(x) - lx0) / (lx1 - lx0) * 88)
             line = int((math.log10(y) - ly0) / (ly1 - ly0) * 20)
