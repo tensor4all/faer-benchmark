@@ -49,11 +49,13 @@ of its own); it pins the cores and checks that those cores **and their SMT sibli
 before and after, and a run spoiled by other load is discarded, not published.
 
 The observing side is pinned too, because unrelated work on the measured cores is what the idle
-guard then has to reject: on `zen5-cpu` the agent, the recorder and the guard checker stay on
-`taskset -c 0-3`, off the measured `4-11` and their SMT siblings `16-23`. The recorder refuses to
-start when its own affinity overlaps the measured set (expanded with siblings), so an unpinned run
-fails before its build instead of recording a number nobody can trust. A pinned agent must be
-re-established after a harness restart: the affinity lives in the process, not in this file.
+guard then has to reject. The rule is not machine-specific: a cell's measured threads sit in one
+L3 domain, and everything else - the agent, the recorder, the guard checker - runs on the CPUs
+outside that domain. The recorder derives both sets from the machine's own topology, refuses to
+start when its affinity overlaps the measured set (SMT siblings included) or when a declared CPU
+set spans more than one L3 domain, and names the derived free CPUs in the refusal. The affinity
+lives in the process, so the agent's own pin must be re-established after a restart; the profile
+for the current host records the concrete CPU sets and their cache sizes.
 
 Priming is **time-based** and identical on every arm. A fixed
 call count is not a substitute: after an idle gate this host reads low for the first second or two

@@ -116,11 +116,15 @@ windows (5 rejections in ~142 measured windows, including two aborted one-attemp
 control packages), so a one-attempt, one-shot rule cannot finish a multi-hour
 package. Controls and the recorded suite therefore use `PINNED_RETRIES=8` with the
 declared 3 s window, `max_busy=0.05` and 30 s wait, and the observing side
-(driver, guard checker, agent) is launched on CPUs 0-3 so it stays off the
-measured L3 domain. The recorder **refuses to start** when its own affinity
-overlaps the measured set expanded with SMT siblings, so the pin is an enforced
-precondition rather than a remembered habit; the agent's own pin lives in its
-process and must be re-established after a restart. Increasing retries does not weaken the admission rule; it only decides how
+(driver, guard checker, agent) is launched on the CPUs outside the measured L3
+domain - derived from the machine topology, not a fixed list. The recorder
+**refuses to start** when its own affinity overlaps the measured set expanded with
+SMT siblings, or when a declared measured set spans two L3 domains, so the pin is
+an enforced precondition rather than a remembered habit; the agent's own pin lives
+in its process and must be re-established after a restart. One representative
+control (`data/probes/20261015-observer-pin/`) found the pin does not move the
+measured distribution there; it removes a guard-rejection source and an
+uncontrolled variable from the record. Increasing retries does not weaken the admission rule; it only decides how
 many contaminated attempts are discarded before the package is abandoned.
 Inspect per-cell process-median range relative to its median; flag a range above
 5% as unstable, without discarding calls or replacing it with the minimum. This is

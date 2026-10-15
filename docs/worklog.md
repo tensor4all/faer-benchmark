@@ -49,10 +49,18 @@ What the controls measured (baseline-vs-baseline, not the candidate):
 
 The observing side is now an enforced precondition, not a remembered habit: the
 recorder refuses to start when its own affinity overlaps the measured CPU set
-(expanded with SMT siblings), the harness `AGENTS.md`, `docs/timing-policy.md` and
-`docs/reliable-measurement.md` state the `taskset -c 0-3` rule for this host, and
-the control driver applies the same check. This followed a design-review question
-that exposed the agent process running unpinned while a measurement was in progress.
+(expanded with SMT siblings) or when a declared measured set spans two L3 domains,
+and it derives the free CPU set from the machine topology instead of a hardcoded
+list - the harness `AGENTS.md`, `docs/timing-policy.md` and
+`docs/reliable-measurement.md` state the general rule, and the per-host numbers live
+only in the profile. The control driver applies the same check. This followed a
+design-review question that exposed the agent process running unpinned while a
+measurement was in progress. A six-process diagnostic on one representative cell
+(`data/probes/20261015-observer-pin/`) then found the pin does not change the
+measured medians, spreads or the rotation-2 shift (fork +23.4% pinned vs +24.1%
+unpinned, upstream +37.4% vs +37.2%); its value is removing a guard-rejection
+source and an uncontrolled variable, and it is recorded as such rather than as an
+accuracy improvement.
 
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
