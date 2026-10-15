@@ -27,9 +27,12 @@ RUNS = {
 FLOPS = {
     'gemm': (2, '2n^3'), 'lu': (2 / 3, '2n^3/3'), 'full_piv_lu': (2 / 3, '2n^3/3'),
     'cholesky': (1 / 3, 'n^3/3'), 'qr_factor': (4 / 3, '4n^3/3'), 'qr': (8 / 3, '8n^3/3 (factor + Q)'),
-    'eigh': (8 / 3, '8n^3/3'), 'svd_values': (4, '4n^3'), 'svd_thin': (10, '10n^3'),
+    'eigh': (8 / 3, '8n^3/3'), 'svd_values': (4, '4n^3'), 'svd_thin': (10, '~10n^3 (Golub-Kahan, implementation dependent)'),
 }
-FAMILIES = ['gemm', 'lu', 'cholesky', 'qr', 'svd_values', 'eigh']
+FAMILIES = ['gemm', 'lu', 'full_piv_lu', 'cholesky', 'qr_factor', 'qr',
+            'svd_values', 'svd_thin', 'eigh']
+# `full_piv_lu` has no vendor row (the LAPACK adapters declare it unsupported), so that panel shows the
+# two faer lines only; `svd_values` is the singular values alone and `svd_thin` the composite with U and V.
 BUDGETS = [1, 4, 8]
 # The fork is the subject of the campaign, so it shares its colour with its upstream baseline and is
 # distinguished by line style (solid vs dashed) and a larger marker, and it is drawn **last** so a
@@ -199,10 +202,10 @@ def main():
             svg.append(panel(checker, family, threads, blocks,
                              (PAD_L, PAD_T + index * PANEL_H)))
         svg.append('</svg>')
-        (HERE / f'throughput-{family}-v3.svg').write_text('\n'.join(svg) + '\n')
+        (HERE / f'throughput-{family}-v4.svg').write_text('\n'.join(svg) + '\n')
         families.append((family, FLOPS[family][1],
                           {threads: len(points(cells['mkl'], threads, family, 'faer-fork')) for threads in BUDGETS}))
-    toc = '\n'.join(f'| [{family}](throughput-{family}-v3.svg) | `{flops}` | ' +
+    toc = '\n'.join(f'| [{family}](throughput-{family}-v4.svg) | `{flops}` | ' +
                     ', '.join(f'{t}T: {count}' for t, count in counts.items()) + ' |'
                     for family, flops, counts in families)
     (HERE / 'README.md').write_text(
@@ -214,7 +217,7 @@ def main():
         'values are not comparable across families. The `lapack-openblas` line comes from the other\n'
         'arm (its own binary, its own processes); the other three share one process.\n\n'
         '## Contents\n\n| family | nominal flops | points per budget |\n|---|---|---|\n' + toc + '\n\n' +
-        '\n'.join(f'## {family}\n\n![{family}](throughput-{family}-v3.svg)\n'
+        '\n'.join(f'## {family}\n\n![{family}](throughput-{family}-v4.svg)\n'
                   f'Nominal operation count: `{flops}`.\n' for family, flops, _ in families) +
         '\nLayout is checked by the script: no label may overlap another or leave its panel.\n')
     print('charts:', ', '.join(f'{family}({sum(counts.values())} pts)' for family, _, counts in families))
