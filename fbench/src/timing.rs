@@ -1,31 +1,77 @@
-//! The timing policy: time-based priming, then the best of `reps`.
+//! Time-based priming followed by every timed repetition, in execution order.
 //!
-//! Priming is a wall-clock duration, not a call count: after an idle gate this
-//! host reads low for the first second or two of sustained AVX-512 work, and a
-//! fixed count would not cover it. `prepare` is called outside every clocked
-//! region, so restoring the caller-visible inputs is never charged to the
-//! provider, and the same priming runs on every arm.
+//! `prepare` is outside each clocked region. All providers use this loop;
+//! equivalent work inside their `run` closures must be audited separately.
 
 use std::time::{Duration, Instant};
 
 use crate::op::Op;
 
-/// Prime for `prime_ms`, then return the best of `reps` timed runs, in
-/// milliseconds. The op's `check` runs once afterwards, outside the clock.
-pub fn measure(op: &mut Op, prime_ms: u64, reps: usize) -> Result<f64, String> {
+/// Prime for `prime_ms`, then return all `reps` times in milliseconds.
+/// The op's `check` runs once afterwards, outside the clock.
+pub fn measure(op: &mut Op, prime_ms: u64, reps: usize) -> Result<Vec<f64>, String> {
+    if reps == 0 {
+        return Err("--reps must be positive".to_owned());
+    }
+    let mut samples = Vec::with_capacity(reps);
     let until = Instant::now() + Duration::from_millis(prime_ms);
     while Instant::now() < until {
         op.prepare()?;
         op.run()?;
     }
-    let mut best = Duration::MAX;
-    for _ in 0..reps.max(1) {
+    for _ in 0..reps {
         op.prepare()?;
         let start = Instant::now();
         op.run()?;
-        best = best.min(start.elapsed());
+        let elapsed = start.elapsed();
+        samples.push(elapsed.as_secs_f64() * 1e3);
     }
     op.check()?;
     op.prepare()?;
-    Ok(best.as_secs_f64() * 1e3)
+    Ok(samples)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::op::op_from;
+    use std::{cell::RefCell, rc::Rc};
+
+    #[test]
+    fn retains_repetitions_and_checks_the_last_run() {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let mut op = op_from(
+            events.clone(),
+            String::new(),
+            |e| {
+                e.borrow_mut().push("prepare");
+                Ok(())
+            },
+            |e| {
+                e.borrow_mut().push("run");
+                Ok(())
+            },
+            |e| {
+                e.borrow_mut().push("check");
+                Ok(())
+            },
+        );
+        assert!(measure(&mut op, 0, 0).is_err());
+        assert!(events.borrow().is_empty());
+        let samples = measure(&mut op, 0, 3).unwrap();
+        assert_eq!(samples.len(), 3);
+        assert!(samples.iter().all(|v| v.is_finite() && *v >= 0.0));
+        assert_eq!(
+            *events.borrow(),
+            ["prepare", "run", "prepare", "run", "prepare", "run", "check", "prepare"]
+        );
+        let mut failed = op_from(
+            (),
+            String::new(),
+            |_| Ok(()),
+            |_| Ok(()),
+            |_| Err("bad result".to_owned()),
+        );
+        assert_eq!(measure(&mut failed, 0, 3).unwrap_err(), "bad result");
+    }
 }

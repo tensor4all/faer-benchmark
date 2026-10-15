@@ -35,7 +35,7 @@ use lapack_src as _;
 use shared::{Case, Dtype, Order};
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: fbench info | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--reps M] [--prime-ms MS] --csv PATH";
+const USAGE: &str = "usage: fbench info | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--reps M] [--prime-ms MS] [--rotate-rows K] --csv PATH";
 
 /// Every family name the suite declares, in the harness's priority order.
 const ALL_FAMILIES: &[&str] = &[
@@ -140,6 +140,8 @@ struct Args {
     regime: String,
     reps: usize,
     prime_ms: u64,
+    /// Explicit row-order probe, not a guarantee of equivalent conditions.
+    rotate_rows: usize,
     csv: Option<String>,
 }
 
@@ -175,6 +177,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             regime: "unspecified".to_owned(),
             reps: 5,
             prime_ms: 500,
+            rotate_rows: 0,
             csv: None,
         });
     }
@@ -191,6 +194,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         regime: "unspecified".to_owned(),
         reps: 5,
         prime_ms: 500,
+        rotate_rows: 0,
         csv: None,
     };
     let mut i = 2;
@@ -235,6 +239,9 @@ fn parse(args: &[String]) -> Result<Args, String> {
                 }
             }
             "--regime" => a.regime = value()?,
+            "--rotate-rows" => {
+                a.rotate_rows = value()?.parse().map_err(|e| format!("{e}"))?;
+            }
             "--reps" => a.reps = value()?.parse().map_err(|_| USAGE.to_owned())?,
             "--prime-ms" => a.prime_ms = value()?.parse().map_err(|_| USAGE.to_owned())?,
             "--csv" => a.csv = Some(value()?),
@@ -247,6 +254,9 @@ fn parse(args: &[String]) -> Result<Args, String> {
     }
     if a.threads == Some(0) {
         return Err("--threads must be positive".to_owned());
+    }
+    if a.reps == 0 {
+        return Err("--reps must be positive".to_owned());
     }
     if a.command == "run" && a.csv.is_none() {
         return Err("run needs --csv PATH".to_owned());
@@ -289,6 +299,12 @@ fn info(threads: Option<usize>) {
     );
     if let Some(n) = threads {
         println!("threads.requested={n}");
+        if n == 1 {
+            println!("threads.faer=sequential");
+        }
+    }
+    if let Some(n) = vendor::reported_threads() {
+        println!("threads.vendor_reported={n}");
     }
 }
 
@@ -312,6 +328,7 @@ struct Record {
     row: String,
     threads: usize,
     total_ms: Option<f64>,
+    samples_ms: Vec<f64>,
     status: &'static str,
     note: String,
 }
@@ -341,6 +358,11 @@ impl Record {
             per_item,
             self.status.to_owned(),
             self.note.clone(),
+            if self.samples_ms.is_empty() {
+                String::new()
+            } else {
+                format!("{:?}", self.samples_ms)
+            },
         ];
         fields
             .iter()
@@ -360,6 +382,20 @@ fn main() -> ExitCode {
         }
     };
     if args.command == "info" {
+        if let Some(n) = args.threads {
+            if n == 0 {
+                eprintln!("--threads must be positive");
+                return ExitCode::from(2);
+            }
+            if let Err(e) = vendor::set_threads(n) {
+                eprintln!("{e}");
+                return ExitCode::from(2);
+            }
+        }
+        if let Some(n) = args.threads {
+            backend::fork::set_threads(n);
+            backend::upstream::set_threads(n);
+        }
         info(args.threads);
         return ExitCode::SUCCESS;
     }
@@ -371,7 +407,11 @@ fn main() -> ExitCode {
     backend::fork::set_threads(threads);
     backend::upstream::set_threads(threads);
 
-    let rows = engine_rows();
+    let mut rows = engine_rows();
+    let n_rows = rows.len();
+    if n_rows > 0 {
+        rows.rotate_left(args.rotate_rows % n_rows);
+    }
     let orders = [Order::C, Order::F];
     let run = args.command == "run";
     let mut records = Vec::new();
@@ -448,7 +488,7 @@ fn main() -> ExitCode {
                             for mut ops in ops {
                                 if run {
                                     match timing::measure(&mut ops, args.prime_ms, args.reps) {
-                                        Ok(ms) => {
+                                        Ok(samples) => {
                                             let note = ops.note.clone();
                                             emit(
                                                 &mut records,
@@ -460,7 +500,7 @@ fn main() -> ExitCode {
                                                 case,
                                                 order,
                                                 row,
-                                                Some(ms),
+                                                Some(samples),
                                                 "ok",
                                                 note,
                                             );
@@ -520,7 +560,7 @@ fn main() -> ExitCode {
 
     let path = args.csv.as_ref().expect("run validated --csv");
     let mut text = String::from(
-        "regime,family,dtype,order,m,n,k,batch,row,threads,total_ms,per_item_us,status,note\n",
+        "regime,family,dtype,order,m,n,k,batch,row,threads,total_ms,per_item_us,status,note,samples_ms\n",
     );
     for record in &records {
         text.push_str(&record.line());
@@ -555,7 +595,7 @@ fn emit(
     case: Case,
     order: Order,
     row: &str,
-    total_ms: Option<f64>,
+    samples: Option<Vec<f64>>,
     status: &'static str,
     note: String,
 ) {
@@ -571,8 +611,71 @@ fn emit(
         batch: case.batch,
         row: row.to_owned(),
         threads,
-        total_ms,
+        total_ms: samples
+            .as_ref()
+            .and_then(|s| s.iter().copied().reduce(f64::min)),
+        samples_ms: samples.unwrap_or_default(),
         status,
         note,
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cli(extra: &[&str]) -> Result<Args, String> {
+        let mut args: Vec<String> = [
+            "fbench",
+            "run",
+            "--threads",
+            "1",
+            "--n",
+            "2",
+            "--csv",
+            "out.csv",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        args.extend(extra.iter().map(|s| (*s).to_owned()));
+        parse(&args)
+    }
+
+    #[test]
+    fn probe_flags_and_ordered_csv_samples() {
+        assert_eq!(cli(&[]).unwrap().rotate_rows, 0);
+        assert_eq!(cli(&["--rotate-rows", "2"]).unwrap().rotate_rows, 2);
+        for extra in [
+            &["--rotate-rows"][..],
+            &["--rotate-rows", "bad"],
+            &["--reps", "0"],
+        ] {
+            assert!(cli(extra).is_err());
+        }
+        assert!(parse(&["fbench", "info", "--rotate-rows", "1"].map(str::to_owned)).is_err());
+        let mut records = Vec::new();
+        emit(
+            &mut records,
+            true,
+            &cli(&[]).unwrap(),
+            1,
+            &Dtype::F64,
+            "gemm",
+            Case {
+                m: 2,
+                n: 2,
+                k: Some(2),
+                batch: 1,
+            },
+            Order::C,
+            "faer-fork",
+            Some(vec![3.0, 1.0, 2.0]),
+            "ok",
+            String::new(),
+        );
+        assert_eq!(records[0].total_ms, Some(1.0));
+        assert!(records[0].line().ends_with(",ok,,\"[3.0, 1.0, 2.0]\""));
+        assert_eq!(records[0].samples_ms, [3.0, 1.0, 2.0]);
+    }
 }

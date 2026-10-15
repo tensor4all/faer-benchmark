@@ -72,15 +72,6 @@ macro_rules! define_backend {
                 (0..diag.dim()).map(|i| diag[i].clone()).collect()
             }
 
-            /// The case seed, so `verify` and `run` see the same matrices.
-            fn seed(m: usize, n: usize, k: usize) -> u64 {
-                (m as u64)
-                    .wrapping_mul(0x9E37_79B9)
-                    .wrapping_add((n as u64).wrapping_mul(0x85EB_CA6B))
-                    .wrapping_add((k as u64).wrapping_mul(0xC2B2_AE35))
-                    .wrapping_add(0x5EED)
-            }
-
             /// The residual check: `max|residual| <= tol * scale`.
             fn within<T: Scalar>(residual: f64, scale: f64, size: usize, what: &str) -> Result<(), String> {
                 let tol = tol_of::<T>(size) * scale.max(1.0);

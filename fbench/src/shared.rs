@@ -167,6 +167,15 @@ pub fn acc<T: Scalar>(dst: &mut T, value: T) {
     <T as Scalar>::add_assign(dst, value);
 }
 
+/// One case seed formula for all providers. Callers must also agree on the salt.
+pub fn seed(m: usize, n: usize, salt: usize) -> u64 {
+    (m as u64)
+        .wrapping_mul(0x9E37_79B9)
+        .wrapping_add((n as u64).wrapping_mul(0x85EB_CA6B))
+        .wrapping_add((salt as u64).wrapping_mul(0xC2B2_AE35))
+        .wrapping_add(0x5EED)
+}
+
 /// Deterministic pseudo-random values in `[-1, 1]` (complex: both parts),
 /// seeded from the case so `verify` and `run` see the same matrices.
 pub fn fill_seeded<T: Scalar>(len: usize, seed: u64) -> Vec<T> {
@@ -311,8 +320,10 @@ mod tests {
         let mut c = [0.0; 4];
         mul(2, 3, 2, Order::C, &a, &b, &mut c);
         assert_eq!(c, [58.0, 64.0, 139.0, 154.0]);
+        let a_f = [1.0, 4.0, 2.0, 5.0, 3.0, 6.0];
+        let b_f = [7.0, 9.0, 11.0, 8.0, 10.0, 12.0];
         let mut d = [0.0; 4];
-        mul(2, 3, 2, Order::F, &a, &b, &mut d);
+        mul(2, 3, 2, Order::F, &a_f, &b_f, &mut d);
         assert_eq!(d, [58.0, 139.0, 64.0, 154.0]);
     }
 }

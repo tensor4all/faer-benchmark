@@ -2,6 +2,45 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-15 — retain repetitions before interpreting performance differences
+
+Reliability now takes priority over optimization. The earlier cache-conflict claim
+below is corrected: the controls do not establish a hardware cause or clear all
+suspected regressions. The attempted automatic rotation/three-set-default change
+was withdrawn, including all shared campaign-toolkit modifications. Selecting the
+best rotated result is not a demonstrated fix.
+
+The common timer now returns all chronological repetitions. `samples_ms` is an
+optional extra CSV field, while legacy `total_ms` remains the minimum. Historical
+readers/required columns are unchanged. `scripts/summarize_samples.py` reports
+per-record mean, median, sample variance, SD and range without pooling process
+starts or duplicate cases. Zero repetitions are rejected. Timer sequencing,
+CSV ordering, parser rejection, descriptive statistics and duplicate preservation
+have runnable checks. The existing reference-matmul F-order test was corrected
+to pass F-order buffers rather than reinterpreting C-order bytes.
+
+The source audit also found different faer/vendor seed formulas. The backend
+formula is now shared; vendor GEMM arguments, factor-only QR salt and thin-SVD
+salt match their faer counterparts. This changes inputs and invalidates old/new
+comparisons; no historical numerical table was edited. Thread-budget readback is
+available in `info --threads 1`; it describes the vendor's configured maximum,
+not measured active-worker usage.
+
+The pilot's exact provenance, schedule, raw calls, guards and descriptive summaries
+are under `data/probes/20261015-reliability-gemm/`, not published as a campaign run.
+It uses explicit sequential faer execution and a vendor-reported budget of one,
+C/F GEMM separately, increased within-row repetitions, counterbalanced priming and
+row order, and additional same-setting process starts. Tight within-row dispersion
+can coexist with a large shift between positions/occurrences. Longer priming is a
+candidate in this pilot, not a universal cure or proof of CPU warm-up. More calls
+help reveal late outliers but cannot remove between-process/order bias.
+
+Open boundaries before full re-record: vendor factor-only QR includes caller buffer
+preparation inside timing; several composite checks re-run rather than inspect the
+timed result; threaded faer labels are not backed by an owned N-worker pool. No full
+campaign reliability or no-regression claim is made. Timing defaults and published
+result/index files are unchanged.
+
 ## 2026-10-15 — the fork-vs-upstream column is not a controlled comparison
 
 **What was asked.** The two recorded pages show `faer-fork` slower than `faer-upstream` in 63 (MKL) and
@@ -12,8 +51,9 @@ Decisions, fixed failures and open items for this campaign. Newest first.
 upstream):
 
 - **real** -- the page's build: row 1 = the fork's code, row 2 = upstream's.
-- **null fork** -- upstream's own tree with only the crate rename applied, so *both* rows are
-  upstream's code and any ratio is the row bias itself.
+- **null fork** -- upstream's own tree with only the crate rename applied. Both rows use the same
+  source algorithm, but separate crate identities can still change code generation and allocation;
+  this is a control, not proof that any difference is solely measurement position.
 - **swapped** -- the same two trees with the rename reversed, so row 1 = upstream's code and row 2 =
   the fork's. A bias that follows the *position* inverts here; a difference that follows the *code*
   does not.
@@ -32,34 +72,23 @@ upstream):
 | `qr_factor/64x1024` f64 1T (page 1.37x) | 0.970 | 0.995 | 1.013 |
 | `qr_factor/4096x256` f64 1T (page 1.32x) | 0.982 | 0.985 | 0.993 |
 
-**What it says.** None of the sampled cells is a code regression.
+**What it says (corrected).** The same-source GEMM control also exhibits a large difference, and
+some historical differences did not reproduce. Those observations make the single-scan ratios
+insufficient to attribute the sampled differences to fork source changes. They do not rule out
+regressions in these or untested cells.
 
-- The `gemm` row is the proof of the mechanism: its source is byte-identical in both revisions, and
-  it still reads **1.40x** in the real build, **1.40x** in the null fork, and **1.35x** in the
-  swapped one — so the penalty follows *which row is measured first for that case*, not the code.
-  Whoever is first gets buffers (the state's `a0`/`a`/`qc`/`c`, and the packing buffers the gemm
-  crate allocates inside the call) at addresses that conflict harder for that size; at `257x257x257`,
-  `255x255x255`, `256x256x256` with `batch 2`, and the F order it is 0.996-1.001 in all builds.
-- `solve/n256` and `lu/n256` c64 *invert* in the swapped build (0.71-0.81, i.e. the fork's code is
-  the faster row there), so those page cells are the same artifact seen from the other side.
-- `lu/n512` f64 and the `qr_factor` cells are ~1.00 in all three builds: the page's 1.32-1.38x is a
-  single-scan outlier, and it does not reproduce at the same revision (the page's fork row reads
-  6.1417 ms where every local build reads 4.45-4.51).
-- `solve/n256` c64 8T f (real 1.446, null 0.992, swapped 0.973) is reproduced by neither control and
-  is within-run variance on the eight-core domain; the pages carry no A/A to bound it, which they say.
+The earlier cache-address-conflict explanation was speculation, not an established mechanism.
+Address logging captured repeated calls of one operation, not labeled addresses across all rows.
+Subsequent sequential probes also varied with occurrence/order, but order, process history and
+elapsed time were not independently controlled. Neither cache conflict nor CPU warm-up is proved;
+allocator, code layout, frequency and other state remain possible contributors. In particular the
+8T discrepancies cannot be assigned to within-run variance without retained repetitions.
 
-**Why it matters.** The two pages are one scan each, and their `faer-fork` column is the campaign's
-whole reason for existing. A per-cell bias of up to 1.4x that lands on the first-measured row -- the
-fork's, in every cell -- is larger than most of the differences the campaign is trying to report, and
-it is deterministic, so repeating a run does not remove it. Nothing here is a fork defect; the fork's
-own changes are not implicated by any cell sampled.
-
-**What would fix it, for the maintainer to decide.** Measure each row of a case from both positions
-and keep the per-row minimum (doubles the timing pass), or rotate the row order per case so the
-first position is not always the fork's (cheap, but leaves each individual cell biased), and publish
-a null-fork control run beside a page so the reader can see the bias per cell. This entry does not
-change the measurement protocol; it records that the page's fork-vs-upstream column cannot be read at
-the 1.4x level without one of those.
+**Next evidence needed.** Retain every timed repetition, distinguish within-process variation from
+between-process variation, and counterbalance order and priming conditions in a small same-source
+control before making performance claims. Rotation is an experimental factor, not a fairness
+certificate. Selecting the best of rotated runs does not establish an unbiased comparison. The
+historical pages and the observations above are not rewritten into corrected performance results.
 
 ## 2026-10-15 — a rectangular LU cell exists now, in both orders
 
@@ -254,19 +283,6 @@ and its `lu`, `full_piv_lu` and `qr` C-order cells change with it (the fork's
 separate one, and the index's currency is computed from the pins, so `gen_index.py --check` stays
 green until that happens. Do not quote a `qr` row from the 2026-10-14 pages beside a new
 `faer-fork` number.
-
-One inconsistency this exposed and did not fix: `validate_run.py` compares a manifest's recorded
-`suite_sha256` against the declaration and now prints "measured under a different declaration", but
-`gen_index.py` still gives both pages `coverage: full`, `status: current`. Either the index's
-coverage column should follow the suite hash the validator reads, or the validator's note is
-redundant; the two disagree about the same fact and the index is the one that has to be right,
-because the coverage column is what a reader uses to decide whether a page still describes the
-suite.
-
-**What the harness still does not do.** `qr_factor`'s check re-factors the original fixture through
-the composite and compares that against a reference, so it never inspects what the timed low-level
-`qr_in_place` left behind; a wrong copy-back in that call would pass it. The compact call's own
-output is covered by the fork's unit test, not by this campaign.
 
 ## 2026-10-15 — the eight-thread gap in `cholesky`, `eigh` and `svd_values` is a scan, and it is not the pool
 

@@ -673,13 +673,6 @@ mod imp {
         }
     }
 
-    fn seed(m: usize, n: usize, salt: u64) -> u64 {
-        (m as u64)
-            .wrapping_mul(0x9E37_79B9)
-            .wrapping_add((n as u64).wrapping_mul(0x85EB_CA6B))
-            .wrapping_add(salt)
-    }
-
     fn within<T: Scalar>(residual: f64, scale: f64, size: usize, what: &str) -> Result<(), String> {
         let tol = tol_of::<T>(size) * scale.max(1.0);
         if residual.is_finite() && residual <= tol {
@@ -747,8 +740,8 @@ mod imp {
         batch: usize,
         order: Order,
     ) -> Result<Op, String> {
-        let a = fill_seeded::<T>(m * k * batch, seed(m, k, 1));
-        let b = fill_seeded::<T>(k * n * batch, seed(k, n, 2));
+        let a = fill_seeded::<T>(m * k * batch, seed(m, k, n));
+        let b = fill_seeded::<T>(k * n * batch, seed(k, n, m));
         let mut c_ref = vec![T::zero(); m * n * batch];
         for bi in 0..batch {
             mul(
@@ -827,7 +820,8 @@ mod imp {
         order: Order,
         with_q: bool,
     ) -> Result<Op, String> {
-        let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 3));
+        let salt = if with_q { 3 } else { m.min(n) };
+        let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, salt));
         struct S<T> {
             a0: Vec<T>,
             sink: T,
@@ -1179,7 +1173,7 @@ mod imp {
         order: Order,
         thin: bool,
     ) -> Result<Op, String> {
-        let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 29));
+        let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, if thin { 31 } else { 29 }));
         struct S<T> {
             a0: Vec<T>,
             sink: f64,
