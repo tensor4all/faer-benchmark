@@ -8,7 +8,9 @@ Optimization is frozen: candidate `fe41bbdfb88c0528e0726dca3b1764f47222ad56`
 is saved separately. Both vendor builds use the same clean baseline paths:
 `extern/t4a-faer` at `bfe4041cd9918815e3b3f766ac0332b792badb7d` and
 `extern/upstream-faer` at `0539947ffb757a739d7e703a7d2fa0c792a909c1`.
-No new optimization or performance conclusion is adopted.
+No new optimization or performance conclusion is adopted. Library feature requests
+are now read from the harness's dependency declarations (`std,rayon`), not
+mislabelled with the harness's vendor-link selector; both remain in build metadata.
 
 The v2 contract is in [reliable-measurement.md](reliable-measurement.md). Composites
 retain actual outputs until the outside-clock prepare/check boundary. Factor-only
