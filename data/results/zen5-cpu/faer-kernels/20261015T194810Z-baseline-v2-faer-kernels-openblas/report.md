@@ -53,6 +53,7 @@ Each cell is median of process medians ± sample SD of those medians; W is the m
 within-process sample SD. All values are milliseconds. These are descriptive spreads,
 not confidence intervals. The between-process spread includes the rotating-order schedule.
 Each process retains 5 chronological calls; 2 complete process sets are recorded.
+Spread guide (computed from this run's own rows): per-engine between-start range median 0.61%, worst 39.43%, and 125 of 2328 engine cells exceed 5% and carry `!`; median within-process relative SD 0.45%. A cell whose `±`, `!` or `p` is as large as the difference you are reading is not evidence of a regression.
 The `vs faer-fork` column is the rotation-averaged ratio exp(mean over starts of
 log(engine median / faer-fork median)), with the per-start ratios beside it: `R > 1`
 means the engine was slower than that first-declared row in that start. It removes a
