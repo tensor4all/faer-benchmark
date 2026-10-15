@@ -100,9 +100,11 @@ Rules that make this honest rather than convenient:
 
 ## 5. Size tiers and the two operating modes
 
-The declared square tiers are `small` (32, 64 - overhead and regression checks),
-`mid` (128, 256, 512 - the block/parallel switchover region), `large` (1024), and
-two adoption-only tiers: `linalg-big` / `gemm-huge` (2048, 4096) and
+The declared square tiers follow faer's own published benchmark distribution
+(`faer-bench`: powers of two plus the x1.5 intermediates 96/192/384/768/1536/3072),
+minus 4/8/16: `small` (32, 64, 96 - overhead and regression checks), `mid` (128, 192,
+256, 384, 512, 768 - the block/parallel switchover region), `large` (1024, 1536), and
+two adoption-only tiers: `linalg-big` / `gemm-huge` (2048, 3072, 4096) and
 `linalg-boundary` (255, 257, 511, 513 - only for suspected block-boundary
 overfitting). 4, 8 and 16 are deliberately not in this campaign: they belong to a
 separate small-matrix loop bench, which is also where a "too many threads on too

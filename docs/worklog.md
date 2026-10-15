@@ -125,6 +125,12 @@ run dominated by the biggest shapes is not worth a 1T pass, and a second suite k
 each page a full cover of its own declaration rather than two partial pages
 fighting over one page name. The daily suite keeps small/mid/tall/wide at 1/4/8T.
 
+The tier sizes were aligned with faer's own published benchmark distribution
+(`faer-bench`: powers of two plus x1.5 intermediates), so the baseline measures the
+sizes the upstream project itself reports: small 32/64/96, mid 128/192/256/384/512/768,
+large 1024/1536, adoption-only 2048/3072/4096, plus our block-boundary diagnostics
+255/257/511/513. 4/8/16 remain out of the campaign.
+
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
 1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of

@@ -179,13 +179,14 @@ runs:
     populations:
       - regime: gemm-small
         groups: [gemm]
-        # 32/64 are the overhead and regression-check tier; 4,8,16 belong to a separate
-        # small-matrix loop bench, not to this campaign.
-        n: ["32x32x32", "64x64x64"]
+        # Sizes follow faer's own published benchmark distribution (faer-bench tables: powers of
+        # two plus the x1.5 intermediates 96/192/384/768/1536/3072), minus 4,8,16 which belong to
+        # a separate small-matrix loop bench.
+        n: ["32x32x32", "64x64x64", "96x96x96"]
         batch: [1]
       - regime: gemm-mid
         groups: [gemm]
-        n: ["128x128x128", "256x256x256", "512x512x512"]
+        n: ["128x128x128", "192x192x192", "256x256x256", "384x384x384", "512x512x512", "768x768x768"]
         batch: [1]
       # The tall class carries both legs of the Householder update that
       # tlinalg-rs#46 separates, because they are different work and the
@@ -203,11 +204,11 @@ runs:
       - regime: linalg-small
         groups: [factor, decompose, heavy, householder]
         # 32/64 are the overhead and regression-check tier; 4,8,16 are not measured here.
-        n: ["32", "64"]
+        n: ["32", "64", "96"]
         batch: [1]
       - regime: linalg-mid
         groups: [factor, decompose, heavy, householder]
-        n: ["128", "256", "512"]
+        n: ["128", "192", "256", "384", "512", "768"]
         batch: [1]
       - regime: linalg-tall
         groups: [factor, decompose, householder]
