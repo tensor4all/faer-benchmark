@@ -94,7 +94,12 @@ pub fn set_threads(threads: usize) -> Result<(), String> {
     require_threads(threads)
 }
 
-/// Check that the vendor library is running on `threads` threads.
+/// The library-reported maximum thread budget, not an active-worker trace.
+pub fn reported_threads() -> Option<usize> {
+    sys::threads()
+}
+
+/// Check that the vendor library is configured for `threads` threads.
 pub fn require_threads(threads: usize) -> Result<(), String> {
     if NAME == "none" {
         return Ok(());

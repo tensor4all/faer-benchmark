@@ -2,6 +2,457 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-15 — representative v2 controls: scheduled variation, a row-position effect, and the cost floor
+
+Optimization is still frozen. The three bounded POST reviews completed; the two
+IMPORTANT core findings (validated `order` cells, >=2 process sets) and the two
+recorder findings (own-Git-root toolkit provenance, publication exit propagation)
+are fixed, with raw reports archived in `docs/reviews/20261015-timing-v2/`. The
+numerical/runtime report found no must-fix defect; its two MINOR diagnostics are
+corrected and both vendors rebuilt (`cce14420...` mkl, `d59f5a80...` openblas).
+The full union `verify` grid (every declared shape, f64/c64, batch 1, 1/4/8T, both
+binaries) passes with 1448 ok / 2336 declared skips / 0 failures per grid and no
+budget-readback anomaly; gzipped raw grids are in
+`data/probes/20261015-full-numeric-grid/`.
+
+Two 64-process control attempts aborted on idle admission alone (exit 75), because
+~3.5% of 3 s guard windows on this host are pushed above the 5% busy threshold by
+unrelated activity (operator polling in the first attempt, plus the agent's own
+bursts; standalone repros reproduced it). Controls now use the pinned protocol's
+own admission retry (8 attempts, 30 s wait) and an observer launched on CPUs 0-3;
+retries are admission retries, not favourable-data retries, and every attempt stays
+archived. Attempt 3 completed all 64 processes with exit 0: 528 timed rows, 172
+cells, 15,480 samples. A pre-implementation design review of the frozen protocol
+found the position-balance claim overstated for cells where an engine has no row
+and for engine x position interactions; the analysis was reworked (`analysis.md`,
+`position-analysis.txt`) and the budget choice is still open.
+
+What the controls measured (baseline-vs-baseline, not the candidate):
+
+- within-process relative sample SD: 1.47% median;
+- **50/172 cells exceed a 5% range of their three process medians** (worst 74%,
+  `mkl/4T c64 lu 256^2` F-order 1.224/1.208/2.115 ms). This is scheduled
+  between-process variation - process state and row order both change - sometimes
+  shared across engines, sometimes not (the MKL vendor row barely moves in that
+  cell; an OpenBLAS GEMM cell moves only the vendor row). The historical ~1.4x
+  shifts are the same phenomenon; the mechanism is still unknown;
+- a **row-position effect**: median 1.010 over the 52 cells where every declared
+  engine has a row (10 above 1.05, worst 1.486 for `openblas/8T f64 cholesky
+  512^2` C-order). In 8 cells an engine has no row at all, the schedule is not a
+  Latin square there, and no position effect is identified. The rotation-averaged
+  ratio cancels a shared, start-invariant position effect only; 17 comparisons
+  differ from the naive median-of-three ratio by more than 5%;
+- retained outliers (upstream `qr` 8T max 34.9 ms vs 16.6 ms median) and
+  rotation-consistent real differences (F-order `qr_factor` `4096x256` f64 8T is
+  2.26x slower upstream than on the fork in all three rotations; MKL GEMM
+  `16x240x4096` c64 4T ~10x slower than faer) are kept.
+
+The observing side is now an enforced precondition, not a remembered habit: the
+recorder refuses to start when its own affinity overlaps the measured CPU set
+(expanded with SMT siblings) or when a declared measured set spans two L3 domains,
+and it derives the free CPU set from the machine topology instead of a hardcoded
+list - the harness `AGENTS.md`, `docs/timing-policy.md` and
+`docs/reliable-measurement.md` state the general rule, and the per-host numbers live
+only in the profile. The control driver applies the same check. This followed a
+design-review question that exposed the agent process running unpinned while a
+measurement was in progress. A six-process diagnostic on one representative cell
+(`data/probes/20261015-observer-pin/`) then found the pin does not change the
+measured medians, spreads or the rotation-2 shift (fork +23.4% pinned vs +24.1%
+unpinned, upstream +37.4% vs +37.2%); its value is removing a guard-rejection
+source and an uncontrolled variable, and it is recorded as such rather than as an
+accuracy improvement.
+
+Three follow-ups after that review changed the planned budget.
+
+Turbo was disabled on the host (`cpufreq_boost=0`, governor/EPP/PPD `performance`);
+the recorder now records the power state in `host.power` so a page carries it. Under
+that state the priming calibration (three process starts per setting, 27 processes,
+zero guard rejections) shows the setting barely matters: the rotation-paired ratio
+of `--prime-ms 250 --reps 10` and `250/30` to `3000/30` is **0.978-1.006** across 18
+rows, far below the 0.5-35% between-process range in the same cells. Meanwhile the
+worst process-median ranges collapsed: `cholesky` 512^2 f64 8T went from 40-73% to
+1.5-5%, `lu` 256^2 c64 4T from 74% to 33% (its faer F-order row keeps a systematic
+rotation-2 bump of 2.009/2.017/2.503 ms). Boost was a major but not the only
+contributor to the shift phenomenon.
+
+A small-shape probe answers the "is this thread start-up?" question: `gemm` 4^3
+never enters a parallel path (0.11 us/call, identical at 1/4/8T), `gemm` 32^3 pays a
+roughly constant **+8 to +11 us** for 4T/8T (thread-region start-up, not kernel
+work; MKL's step is +0.3-0.8 us), and 256^3 is kernel-dominated (1077 -> 209 us).
+Small-regime cells at 4T/8T therefore measure dispatch policy, not kernel scaling,
+and stay as coverage with that label rather than as evidence about large shapes.
+
+The L3 rule from the same review was corrected in the other direction too: a measured
+set that spans L3 domains is legal (so the hard one-domain refusal is gone and it
+warns instead), and the idle guard now watches **every CPU sharing the measured
+cores' last-level cache**, not only their SMT siblings - that is what makes a
+partially filled domain safe, because unrelated work on the free cores of a touched
+domain would otherwise contend for the same cache invisibly. A run that needs every
+domain can only proceed with `FBENCH_OBSERVER_SHARES_L3=1`, which records the
+residual sharing explicitly.
+
+The contract is now written down in [protocol-v2-baseline.md](protocol-v2-baseline.md):
+250 ms priming, 5 calls, three process sets, boost off (enforced), observer off the
+measured L3 domains (enforced), whole-L3-domain idle guard, the small-shape grids
+trimmed to 8 and 64, the OpenBLAS arm without the duplicated `faer-upstream` row
+(the two arms' copies of the same faer code agree to 2% median, 26% worst), and the
+candidate mode for optimization iterations: identity + host-block equality, an
+in-run `faer-upstream` machine-state control on a predeclared overlap set, then
+fork-only measurement of a declared subset with the rotation-averaged ratio against
+the recorded baseline fork. Missing coverage is reported as missing, repeated
+candidate attempts are both kept, and adoption still needs the numerical grid and a
+finished-diff review.
+
+The baseline run is invoked exactly as written in
+[protocol-v2-baseline.md](protocol-v2-baseline.md) section 5: MKL arm with three rows
+and `--aa 3`, OpenBLAS arm with two rows and `--aa 2` (a complete rotation cycle for
+two rows), both at `--prime-ms 250 --reps 5` with `PINNED_RETRIES=8`. The harness
+gained a `--rows` filter so an arm does not pay for a row it does not need, and the
+recorder passes the declared engines through to it; the census and the page columns
+follow that declaration.
+
+The declared square tiers were restructured for optimization work: `small`
+32/64, `mid` 128/256/512, `large` 1024, plus adoption-only `linalg-big`/`gemm-huge`
+(2048/4096, `--threads 4,8 --dtypes f64`) and the diagnostic `linalg-boundary`
+(255/257/511/513). 4/8/16 are out of the campaign; they belong to a separate
+small-matrix loop bench, as does a "too many threads on too little work" check. The
+recorder gained `--shapes` so the daily loop measures one square per tier while the
+run still records the subset it covered. See protocol-v2-baseline.md section 5.
+
+Large tiers are now a separate suite (`faer-kernels-large`) measured at 4T/8T only -
+1024 plus the adoption-only 2048/4096 and the diagnostic boundary sizes - because a
+run dominated by the biggest shapes is not worth a 1T pass, and a second suite keeps
+each page a full cover of its own declaration rather than two partial pages
+fighting over one page name. The daily suite keeps small/mid/tall/wide at 1/4/8T.
+
+The tier sizes were aligned with faer's own published benchmark distribution
+(`faer-bench`: powers of two plus x1.5 intermediates), so the baseline measures the
+sizes the upstream project itself reports: small 32/64/96, mid 128/192/256/384/512/768,
+large 1024/1536, adoption-only 2048/3072/4096, plus our block-boundary diagnostics
+255/257/511/513. 4/8/16 remain out of the campaign.
+
+`linalg-mid` keeps only 128/256/512 (the 192/384/768 EVD/SVD steps are too
+expensive for the baseline; they stay in the gemm tier and in adoption runs),
+bringing the all-sizes baseline to roughly 12,000 rows per set per arm pair and an
+estimated 5-7 h for both arms. A 150 ms priming check on four representative cells
+found no effect where calls are microseconds or tens of milliseconds, but a ~3%
+systematic read in the `cholesky` 512^2 f64 8T cell and noisier rows, so 250 ms
+stays frozen.
+
+Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
+of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
+1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of
+priming alone, before calls, checks, guard overhead and verification. Budget-freeze
+options are with the maintainer; the full re-record has not started.
+
+## 2026-10-15 — align timing-v2 contracts before the baseline re-record
+
+Optimization is frozen: candidate `fe41bbdfb88c0528e0726dca3b1764f47222ad56`
+is saved separately. Both vendor builds use the same clean baseline paths:
+`extern/t4a-faer` at `bfe4041cd9918815e3b3f766ac0332b792badb7d` and
+`extern/upstream-faer` at `0539947ffb757a739d7e703a7d2fa0c792a909c1`.
+No new optimization or performance conclusion is adopted. Library feature requests
+are now read from the harness's dependency declarations (`std,rayon`), not
+mislabelled with the harness's vendor-link selector; both remain in build metadata.
+
+The v2 contract is in [reliable-measurement.md](reliable-measurement.md). Composites
+retain actual outputs until the outside-clock prepare/check boundary. Factor-only
+vendor QR restores preallocated input/tau outside the clock; its check constructs
+Q from the actual retained compact factors rather than factoring original input.
+Checks for composite QR/LU/Cholesky/SVD/EVD likewise consume their actual results.
+Solve still consumes its temporary factors inside the timed pipeline.
+
+Two additional audit defects were reproduced and corrected. Shared residuals used
+`f64::max`, which silently ignored NaN and could accept a corrupt result as zero
+error; nonfinite and length-mismatched residuals now fail. A missing-execution
+regression test failed first at faer factor-only QR through that NaN hole, then
+at vendor factor-only QR's replacement factorization. It now passes across the
+supported provider/dtype/order/variant routes. The declared Householder sequence
+row was absent and QR fixture preparation was inside its block-apply clock;
+both block and one-block-sequence rows now exist, label their actual basis/target
+widths, and exclude QR preparation from timing. Old pages are not repaired by this.
+
+The process now creates its own N-worker Rayon pool. `info --threads N` and raw
+CSV record pool-size/vendor-budget observations, and budgets are checked before
+rows. Tests with ambient `RAYON_NUM_THREADS=24` still observed requested 1/4/8
+pool sizes for both vendor binaries. These are not traces of active workers.
+
+Observed checks so far: five harness tests pass for MKL and OpenBLAS; both
+binaries pass the complete verification grid `8,32,64x8,8x64`, batch `1,2`,
+f64/c64, at 1/4/8T. Build/test/thread-info/verify logs are under
+`/tmp/baseline-v2-*`. The full numerical grid and full timing suite remain pending.
+The store check `kache doctor --verify` passed, with no corruption or repair.
+
+Recording/reporting v2 retains chronological samples, exact verification-cell
+census (including variants), observed budgets, binary SHA-256/build metadata and
+clean toolkit/harness/library identities. It reports median of process medians
+with separate within-process and scheduled between-process SD, not minima or a
+confidence interval. V1 reports keep their historical interpretation and the
+new timing-version page suffix prevents overwrite. Legacy revision comparison
+refuses v2 rather than silently merging variants/taking minima; candidate
+comparison remains deferred until the baseline is measured. A no-publish mode
+allows recording smoke/control artifacts without publishing numerical pages.
+
+Two initial production-recorder `--no-publish` software smokes (one per vendor,
+GEMM-small f64 C/F 1T) passed: each 90 timed rows/180 samples and four first-attempt
+idle guards, with identical library/upstream/harness/toolkit paths and revisions.
+They deliberately used only 2 calls and 1 ms priming; they are **not** new baseline
+performance results or a validated priming policy. Their original manifests/raw
+files remain in the `20261015T052425Z-v2-smoke-mkl` and
+`20261015T052450Z-v2-smoke-openblas` result directories.
+
+An in-progress scoped GPT audit identified two recording-gate defects: a normal
+installed distribution could inherit an enclosing Git repository's toolkit
+identity, and publication/index failures could return success. The toolkit now
+requires its own Git root, the requirement encodes a pinned editable install, and
+both child statuses propagate. Regression tests exercise enclosing/non-Git refusal,
+index status 37 through the real publisher/recorder paths, and no-publish status 0.
+The corrected toolkit passes 27 tests and Ruff; source checkpoint `ad2a339` remains
+local/unpushed. Corrected-source smokes are still required before controls.
+
+Three bounded GPT POST reports then completed (raw text and dispositions archived
+in `docs/reviews/20261015-timing-v2/`). The numerical/runtime report found no
+must-fix defect; two MINOR diagnostics were corrected locally: failed rows keep
+their variant label, and a stale vendor-QR comment was replaced. The core
+accounting report reproduced two IMPORTANT findings against the source: a v2
+report key could omit validated `order`, and a single-engine one-process set was
+accepted even though between-process SD is undefined. Both now fail under
+pre-fix behavior and pass after correction; v2 also requires >=2 process sets and
+complete engine rotations. The report now also carries the v2 rotation-averaged
+engine ratios with a marker for cells whose schedule is not position-balanced and
+a per-cell between-start warning; toolkit `7127fa7` is committed and pinned; a post-implementation review of that report change found the first version measured engine-to-engine spread instead of each engine's own between-start spread and omitted the position warning, both fixed and marked `!`/`p` in the page.
+
+The broad delegated implementation and first broad GPT post-review both stopped
+at their execution limits and are **not** counted as completed work/review. The
+remaining numerical implementation was integrated locally; completed bounded
+numerical/core/orchestration reports are still required before adoption. The full
+declared-shape numerical grid has been launched separately, without builds or
+timings; its final result has not been accepted yet. Representative pilot budgets
+are proposed, not frozen suite defaults. At the proposed 3 s x 3 sets, the current
+route inventory estimates nearly 20 hours of priming alone for both vendor arms,
+before calls/checks/verification/guards. This is a resource estimate, not measured
+performance or a reason to choose a more favorable statistic. No full baseline
+re-record has run yet.
+Older statements below about the ambient pool or hardware mechanism are historical
+hypotheses, not established findings for this new harness.
+
+## 2026-10-15 — retain repetitions before interpreting performance differences
+
+Reliability now takes priority over optimization. The earlier cache-conflict claim
+below is corrected: the controls do not establish a hardware cause or clear all
+suspected regressions. The attempted automatic rotation/three-set-default change
+was withdrawn, including all shared campaign-toolkit modifications. Selecting the
+best rotated result is not a demonstrated fix.
+
+The common timer now returns all chronological repetitions. `samples_ms` is an
+optional extra CSV field, while legacy `total_ms` remains the minimum. Historical
+readers/required columns are unchanged. `scripts/summarize_samples.py` reports
+per-record mean, median, sample variance, SD and range without pooling process
+starts or duplicate cases. Zero repetitions are rejected. Timer sequencing,
+CSV ordering, parser rejection, descriptive statistics and duplicate preservation
+have runnable checks. The existing reference-matmul F-order test was corrected
+to pass F-order buffers rather than reinterpreting C-order bytes.
+
+The source audit also found different faer/vendor seed formulas. The backend
+formula is now shared; vendor GEMM arguments, factor-only QR salt and thin-SVD
+salt match their faer counterparts. This changes inputs and invalidates old/new
+comparisons; no historical numerical table was edited. Thread-budget readback is
+available in `info --threads 1`; it describes the vendor's configured maximum,
+not measured active-worker usage.
+
+The pilot's exact provenance, schedule, raw calls, guards and descriptive summaries
+are under `data/probes/20261015-reliability-gemm/`, not published as a campaign run.
+It uses explicit sequential faer execution and a vendor-reported budget of one,
+C/F GEMM separately, increased within-row repetitions, counterbalanced priming and
+row order, and additional same-setting process starts. Tight within-row dispersion
+can coexist with a large shift between positions/occurrences. Longer priming is a
+candidate in this pilot, not a universal cure or proof of CPU warm-up. More calls
+help reveal late outliers but cannot remove between-process/order bias.
+
+Open boundaries before full re-record: vendor factor-only QR includes caller buffer
+preparation inside timing; several composite checks re-run rather than inspect the
+timed result; threaded faer labels are not backed by an owned N-worker pool. No full
+campaign reliability or no-regression claim is made. Timing defaults and published
+result/index files are unchanged.
+
+## 2026-10-15 — the fork-vs-upstream column is not a controlled comparison
+
+**What was asked.** The two recorded pages show `faer-fork` slower than `faer-upstream` in 63 (MKL) and
+78 (OpenBLAS) cells out of ~1259, up to 1.5x. The question was whether those are regressions.
+
+**How it was checked.** Three binaries from this harness, measuring the same cells with `--reps 5
+--prime-ms 500`, pinned to the page's CPU sets, at the page's revisions (`bfe4041` fork, `0539947`
+upstream):
+
+- **real** -- the page's build: row 1 = the fork's code, row 2 = upstream's.
+- **null fork** -- upstream's own tree with only the crate rename applied. Both rows use the same
+  source algorithm, but separate crate identities can still change code generation and allocation;
+  this is a control, not proof that any difference is solely measurement position.
+- **swapped** -- the same two trees with the rename reversed, so row 1 = upstream's code and row 2 =
+  the fork's. A bias that follows the *position* inverts here; a difference that follows the *code*
+  does not.
+
+| cell (C order unless noted) | real | null fork | swapped |
+|---|---|---|---|
+| `gemm/256x256x256` f64 1T | 1.398 | 1.397 | 1.354 |
+| `gemm/256x256x256` f64 1T f | 0.999 | 1.001 | 0.998 |
+| `solve/n256` c64 4T | 1.345 | 1.001 | **0.708** |
+| `solve/n256` c64 4T f | 1.011 | 1.458 | **0.768** |
+| `solve/n256` c64 8T | 1.373 | 0.999 | **0.732** |
+| `solve/n256` c64 8T f | 1.446 | 0.992 | 0.973 |
+| `lu/n256` c64 4T | 1.188 | 1.010 | **0.813** |
+| `lu/n256` c64 4T f | 1.345 | 1.001 | **0.746** |
+| `lu/n512` f64 1T (page 1.38x) | 0.998 | 0.985 | 1.007 |
+| `qr_factor/64x1024` f64 1T (page 1.37x) | 0.970 | 0.995 | 1.013 |
+| `qr_factor/4096x256` f64 1T (page 1.32x) | 0.982 | 0.985 | 0.993 |
+
+**What it says (corrected).** The same-source GEMM control also exhibits a large difference, and
+some historical differences did not reproduce. Those observations make the single-scan ratios
+insufficient to attribute the sampled differences to fork source changes. They do not rule out
+regressions in these or untested cells.
+
+The earlier cache-address-conflict explanation was speculation, not an established mechanism.
+Address logging captured repeated calls of one operation, not labeled addresses across all rows.
+Subsequent sequential probes also varied with occurrence/order, but order, process history and
+elapsed time were not independently controlled. Neither cache conflict nor CPU warm-up is proved;
+allocator, code layout, frequency and other state remain possible contributors. In particular the
+8T discrepancies cannot be assigned to within-run variance without retained repetitions.
+
+**Next evidence needed.** Retain every timed repetition, distinguish within-process variation from
+between-process variation, and counterbalance order and priming conditions in a small same-source
+control before making performance claims. Rotation is an experimental factor, not a fairness
+certificate. Selecting the best of rotated runs does not establish an unbiased comparison. The
+historical pages and the observations above are not rewritten into corrected performance results.
+
+## 2026-10-15 — a rectangular LU cell exists now, in both orders
+
+**What was wrong.** `fbench` gated `lu` and `full_piv_lu` on `square(case, family)`, so every
+rectangular cell in `linalg-tall` and `linalg-wide` was recorded as `skipped` with "lu needs a
+square matrix; `1024x64` is not". That is not true of either implementation the campaign compares:
+`dgetrf` takes any shape and so does faer's `lu_in_place`, both with `min(m, n)` pivots and a
+trapezoidal `L` or `U`. The gate was the harness's, and it hid the whole rectangular class from the
+family that is the first thing a least-squares or a determinant-shaped workload reaches for.
+
+**What it does now.** Both families take any declared shape. The faer arms time the composite and
+check `A ~ L U` through its own `reconstruct`, which handles both trapezoids; the vendor arm times
+`getrf` and checks the same identity, rebuilding `L` (unit-lower `m x min(m, n)`) and `U` (upper
+`min(m,n) x n`) from the factors and applying the `ipiv` swaps to the input to form `P A`. The
+vendor's old square check solved with `getrs` and compared one right-hand side; the new one is the
+factorization's own contract at every shape and is strictly stronger at the square ones.
+
+**What it records.** The verify grid passes for both families over `linalg-small`, `linalg-medium`,
+`linalg-large`, `linalg-tall` and `linalg-wide` at one and eight threads, both dtypes, both orders
+(`full_piv_lu`'s vendor row is `skipped`, as it always was, because LAPACK has no full-pivoting
+driver in this harness). A probe (reps 3, `f64`, one thread, C order) puts the new cells where the
+recorded square ones were: `lu/1024x64` 0.283 ms and `lu/4096x256` 10.43 against the vendor's
+0.421 and 12.68, and at eight threads 0.293 and 6.05 against 0.386 and 3.21 -- ahead at one thread
+on every new shape, behind on the two large ones at eight, which is the same parallel-scaling story
+the `Thread policy` row carries. The pages will show these cells as measured rather than skipped
+when the pin move re-records them.
+
+**What did not change.** `cholesky`, `eigh`, `solve` and `triangular_solve` stay square-gated: the
+matrix they factor or solve with is square by definition, and the declaration's blind spots now say
+so and say why `lu` is not. No shape was added to any population -- the rectangular shapes were
+already declared, so this makes existing cells measurable rather than widening the grid.
+
+## 2026-10-15 — `qr_factor`'s check never saw what its timed call left
+
+**What was wrong.** `Op`'s own contract says the three closures exist so that the timing loop
+"clocks only `run` ... and still verify the exact state the timed call left behind", and
+`verify` drives `prepare -> run -> check`. Every composite family satisfies it by construction --
+its `check` re-runs the same composite on the same restored input, which is the same computation.
+`qr_factor` did not: its timed call is the low-level `qr_in_place` on a row-major view, and its
+check re-ran the *composite* (`mref(a0, ...).qr()`), which copies into a column-major matrix first.
+So the one family whose timed call is a low-level call on the caller's layout was the one family
+whose check could not see the layout it produced.
+
+**What it does now.** The check rebuilds `R` from the factor buffer and `Q` from the compact basis
+and coefficients the timed call left, exactly as `Qr::compute_thin_Q` does, and checks
+`A ~ Q R` and `Q^H Q ~ I` against the reference math as before. No tolerance, case or criterion
+changed; the op's scratch requirement gains the sequence apply's temporary
+(`StackReq::all_of`).
+
+**Why it matters, demonstrated.** Perturbing the fork's row-major copy-back so that the first
+element of each tile keeps the destination's seeded value makes this check report
+`MISMATCH faer-fork qr_factor f64 c 1024x64 qr_factor residual 9.99e-1 exceeds
+1.51e-5` (and the same at `4096x256`). The previous check passed that build, because the composite
+it re-ran never reads the row-major buffer. The perturbation was scratch-only and is not committed.
+The clean build reports `all comparisons within tolerance` for `qr_factor` over
+`linalg-small`, `linalg-medium`, `linalg-large`, `linalg-tall` and `linalg-wide`, both dtypes,
+both orders.
+
+## 2026-10-15 — the eight-thread gap is an exploratory scan, not a pool diagnosis
+
+**What was measured, and how.** A scan, not a recorded page and not a paired comparison: one
+`fbench run --n 512 --dtype f64 --reps 3 --prime-ms 500` per thread count, pinned to the row's CPU
+set, at `10ee1c9` with the compact-`Q` harness above. `f64`, `n = 512`, F order, ms at 1 / 2 / 4 / 8
+threads — `cholesky` faer 1.238 / 0.921 / 0.705 / 0.709 against the vendor's 2.003 / 1.369 / 0.848 /
+0.582; `eigh` 29.249 / 20.784 / 16.933 / 15.191 against 36.445 / 21.604 / 12.935 / 9.006;
+`svd_values` 39.465 / 31.638 / 28.640 / 30.369 against 28.712 / 20.076 / 15.620 / 13.647.
+
+**Observation, not an inference.** Those point estimates appeared to flatten with the faer
+budget and improve further for this vendor. They do not establish stable relative performance,
+a physical bottleneck, or which kernels should change; the measurement limitations above apply.
+
+**What was probed, not ruled out.** `Par::rayon(n)` is a decomposition hint, not ownership or
+observation of an N-worker pool. CPU affinity constrains the process but does not itself specify
+pool size. A further unreplicated scan with `RAYON_NUM_THREADS=8` gave `cholesky` 0.709 -> 0.723,
+`eigh` 15.191 -> 15.691, `svd_values` 30.369 -> 29.833, and C order 0.978 -> 1.362. That is not
+consistent improvement, but calling all these changes "within noise" without distributions was
+unjustified. The experiment did not establish the effective pool size or rule out pool effects.
+V2 now owns and checks that budget; it still does not trace simultaneously active workers.
+
+**Decision remains deferred.** Earlier floor scans and their decisions are archived in the
+fork's `2026-10-14-evd-svd-floor-sweep.md`, `2026-10-14-bidiag-parallel-hint.md` and
+`2026-10-14-compact-factor-region-floor.md`. They are historical evidence, not universal clearance
+or a reason to resume optimization before the new baseline. The work-model questions remain open.
+
+## 2026-10-15 — the `qr` row timed the full `Q` and checked the compact one
+
+**What was wrong.** The `qr` family is declared as "the composite returning explicit Q and R", and
+the two arms did not build the same Q. The `faer-fork`/`faer-upstream` arm called
+`Qr::compute_Q()`, which forms the full `m x m` completion; the `lapack-*` arm called
+`orgqr(m, r, r)` with `r = min(m, n)`, which is the compact `m x r` factor, and the run's own check
+called `compute_thin_Q()`. On a square or wide shape the Q dimensions coincide; on a tall shape
+the faer arm formed an additional unitary completion. These are wall times of different workloads,
+not normalized operation-count ratios: the page's C-order `qr/4096x256` reads 490.6519 / 162.0838 / 118.9852 against the
+vendor's 57.7822 / 19.5388 / 13.6884 — 8.49x / 8.30x / 8.69x at one, four and eight threads — while
+the compact comparison beside it (`qr_factor`, the same page) is 1.71x at one thread and behind only
+at four and eight.
+
+**What it does now.** The timed call is `compute_thin_Q()`, the same `m x min(m, n)` factor the check
+consumes and the vendor route builds, and the declaration says so. Nothing about the acceptance
+criterion changed and no case was dropped.
+
+**What moved.** A probe at fork `10ee1c9` (`run --reps 3 --prime-ms 500`, one thread, `f64`, C order):
+`qr/4096x256` 30.24 ms, against the page's 490.6519 for the full-`Q` call and its vendor's 57.7822.
+The wide cell `qr/64x1024` is 0.3164 against the page's 0.4998, but that difference is *not* this
+change: with `m < n` the compact factor is `m x m`, so `compute_Q` and `compute_thin_Q` build the
+same matrix there and the op is unchanged. The verify grid for `qr` over `linalg-tall` still ends
+`all comparisons within tolerance`.
+
+**What this costs.** The two recorded pages were taken with the old harness, so their `qr` rows now
+describe a different op from the one the harness runs; `qr_factor`, which was always the compact
+call, is unaffected. The pages are also stale for a second reason: the `faer-fork` revision has moved
+and its `lu`, `full_piv_lu` and `qr` C-order cells change with it (the fork's
+`2026-10-15-row-major-adaptation-lu-colpiv.md`). Re-recording is the pin move's job rather than a
+separate one, and the index's currency is computed from the pins, so `gen_index.py --check` stays
+green until that happens. Do not quote a `qr` row from the 2026-10-14 pages beside a new
+`faer-fork` number.
+
+**Checked and not an inconsistency after all.** `validate_run.py` compares a manifest's recorded
+`suite_sha256` against the declaration and prints "measured under a different declaration", while
+`gen_index.py` still gives both pages `coverage: full`. Those are two different questions, not two
+answers to one: `coverage_of` says so in its own docstring -- it relates a run to the declaration
+"by content rather than by hash", because "a hash would have called an edited sentence a moved
+declaration" -- and the manifest hash is the coarser gate for whether declaration-derived checks
+can be run at all. Since neither this entry nor the rectangular-LU change adds a shape to a
+population, the content grid is untouched and `full` stays right for the recorded pages.
+
+> Editorial correction: duplicate copies of the two entries above were consolidated.
+> The raw historical pages/CSVs are unchanged; the remaining entries retain the
+> recorded point estimates without the withdrawn pool diagnosis or mislabelled ratios.
+
 ## 2026-10-14 — the campaign's first page is recorded
 
 With the cost and `orgqr` fixes in place the MKL arm's whole declaration built,

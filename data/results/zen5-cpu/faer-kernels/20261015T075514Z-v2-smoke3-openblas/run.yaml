@@ -1,0 +1,154 @@
+schema_version: 1
+target_profile: zen5-cpu
+suite_id: faer-kernels
+suite_file: benchmarks/suites/faer-kernels.yaml
+suite_sha256: ebe6cadfc84bbbe467f641cffd64fd56f87ab6fa992681295e2d8a97afb0bb2d
+timestamp: '2026-10-15T07:55:38.900059Z'
+command: scripts/record_run.py zen5-cpu faer-kernels --checkout extern/t4a-faer --upstream
+  extern/upstream-faer --vendor openblas --regimes gemm-small --families gemm --threads
+  1 --dtypes f64 --reps 2 --aa 3 --prime-ms 1 --label v2-smoke3-openblas --no-publish
+library:
+  url: https://github.com/tensor4all/faer
+  commit: bfe4041cd9918815e3b3f766ac0332b792badb7d
+  dirty: false
+  features:
+  - std
+  - rayon
+  measured_path: /home/shinaoka/projects/tensor4all/faer-benchmark/extern/t4a-faer
+  version: 0.24.4
+upstream:
+  url: https://codeberg.org/sarah-quinones/faer
+  commit: 0539947ffb757a739d7e703a7d2fa0c792a909c1
+  version: 0.24.4
+  ref: faer-v0.24.4
+  dirty: false
+  measured_path: /home/shinaoka/projects/tensor4all/faer-benchmark/extern/upstream-faer
+vendor:
+  name: openblas
+  linkage: static
+  version: 0.3.32
+  config: OpenBLAS 0.3.32 DYNAMIC_ARCH NO_AFFINITY Cooperlake MAX_THREADS=24
+  corename: Cooperlake
+  parallel: pthread
+  procs: 24
+  build_env: OPENBLAS_DYNAMIC_ARCH=1 FC=/opt/intel/oneapi/compiler/2026.1/bin/ifx
+    LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/2026.1/lib:/opt/intel/oneapi/2026.1/lib
+    rpath=/opt/intel/oneapi/compiler/2026.1/lib:/opt/intel/oneapi/2026.1/lib
+harness:
+  commit: 198730904711fe841e87c8f027f8c953419d7dad
+  dirty: false
+toolkit:
+  commit: 916dace82589f9066f824c5cbfaa311140df2fed
+  dirty: false
+  measured_path: /home/shinaoka/projects/tensor4all/campaign-toolkit
+verification_files:
+- verify-gemm-small-1t.csv
+binary:
+  path: /home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-openblas/release/fbench
+  sha256: d59f5a802112d8fe331fa7d3b683b5c2093abba3c409d4733c4f0024d3eeb651
+host:
+  hostname: shinaoka-EVO-X1Pro
+  cpu: AMD Ryzen AI 9 HX 470
+  os: Linux 7.0.0-38-generic
+  arch: x86_64
+  logical_cpus: 24
+  l3: 24 MiB (2 instances)
+  l3_domains: '0-3: 16 MiB shared; 4-11: 8 MiB shared'
+  notes: 'AMD Ryzen AI 9 HX 470 (Zen5 mobile APU), 12 physical / 24 logical cores.
+    Heterogeneous L3: CPUs 0-3 share 16 MiB, CPUs 4-11 share 8 MiB, so a thread set
+    must be stated together with the domain it sits in. SMT siblings of CPUs 4-11
+    are 16-23; the idle gate checks them too, because a busy sibling contends with
+    the physical core being measured.'
+threads:
+  counts:
+  - 1
+  cpu_sets:
+    '1': '4'
+  env:
+    OPENBLAS_NUM_THREADS: null
+    MKL_NUM_THREADS: null
+    MKL_DOMAIN_NUM_THREADS: null
+    MKL_INTERFACE_LAYER: null
+    MKL_THREADING_LAYER: null
+    MKL_DYNAMIC: null
+    MKL_ENABLE_INSTRUCTIONS: null
+    MKL_CBWR: null
+    OMP_NUM_THREADS: null
+    OMP_THREAD_LIMIT: null
+    OMP_PROC_BIND: null
+    OMP_PLACES: null
+    KMP_AFFINITY: null
+    GOMP_CPU_AFFINITY: null
+    RAYON_NUM_THREADS: null
+  note: the vendor's budget is set by the harness from the row's thread count and
+    read back before each measurement; these variables were removed from the measured
+    process's environment so it cannot inherit a different one
+timing_policy:
+  version: 2
+  minimum_untimed_priming_ms: 1
+  statistic: median
+  row_rotation_step: 1
+  repetitions: 2
+  notes: descriptive process medians under a rotating engine-order schedule; raw samples
+    and the verification census are retained
+guards:
+  idle_window_seconds: 3
+  max_busy_percent: 5.0
+  attempts: 1
+  sibling_aware: true
+  logs:
+  - run0-gemm-small-1t.guard
+  - run1-gemm-small-1t.guard
+  - run2-gemm-small-1t.guard
+  - verify-gemm-small-1t.guard
+providers:
+- name: faer-fork
+  version: null
+  commit: null
+  path: null
+  note: the provider in the measured revision; see library and upstream above
+- name: faer-upstream
+  version: null
+  commit: null
+  path: null
+  note: the provider in the measured revision; see library and upstream above
+- name: openblas
+  version: 0.3.32
+  commit: null
+  path: null
+  note: linked static, kernel dispatched to Cooperlake, config OpenBLAS 0.3.32 DYNAMIC_ARCH
+    NO_AFFINITY Cooperlake MAX_THREADS=24
+invalidated_by:
+- faer/src/**
+- faer-traits/src/**
+- faer-macros/src/**
+- Cargo.toml
+- Cargo.lock
+result_files:
+- run0-gemm-small-1t.csv
+- run1-gemm-small-1t.csv
+- run2-gemm-small-1t.csv
+run_spec:
+  populations:
+  - regime: gemm-small
+    families:
+    - gemm
+    n:
+    - 4x4x4
+    - 8x8x8
+    - 16x16x16
+    - 32x32x32
+    - 64x64x64
+    batch:
+    - 1
+  dtypes:
+  - f64
+  order:
+  - c
+  - f
+  engines:
+  - faer-fork
+  - faer-upstream
+  - lapack-openblas
+  aa: 3
+  covers_declared_suite: false

@@ -167,6 +167,15 @@ pub fn acc<T: Scalar>(dst: &mut T, value: T) {
     <T as Scalar>::add_assign(dst, value);
 }
 
+/// One case seed formula for all providers. Callers must also agree on the salt.
+pub fn seed(m: usize, n: usize, salt: usize) -> u64 {
+    (m as u64)
+        .wrapping_mul(0x9E37_79B9)
+        .wrapping_add((n as u64).wrapping_mul(0x85EB_CA6B))
+        .wrapping_add((salt as u64).wrapping_mul(0xC2B2_AE35))
+        .wrapping_add(0x5EED)
+}
+
 /// Deterministic pseudo-random values in `[-1, 1]` (complex: both parts),
 /// seeded from the case so `verify` and `run` see the same matrices.
 pub fn fill_seeded<T: Scalar>(len: usize, seed: u64) -> Vec<T> {
@@ -238,7 +247,7 @@ pub fn gram_residual<T: Scalar>(q: &[T], m: usize, n: usize, order: Order) -> f6
                 );
             }
             let target = if i == j { T::one() } else { T::zero() };
-            worst = worst.max(acc.sub(target).abs());
+            worst = residual_max(worst, acc.sub(target).abs());
         }
     }
     worst
@@ -255,18 +264,30 @@ pub fn gram_adj_residual<T: Scalar>(q: &[T], m: usize, n: usize, order: Order) -
                 acc.add_assign(q[idx(i, p, m, n, order)].mul(q[idx(j, p, m, n, order)].conj()));
             }
             let target = if i == j { T::one() } else { T::zero() };
-            worst = worst.max(acc.sub(target).abs());
+            worst = residual_max(worst, acc.sub(target).abs());
         }
     }
     worst
 }
 
+fn residual_max(a: f64, b: f64) -> f64 {
+    // f64::max ignores NaN, which would turn a corrupt result into a zero residual.
+    if a.is_finite() && b.is_finite() {
+        a.max(b)
+    } else {
+        f64::INFINITY
+    }
+}
+
 /// `max |a_i - b_i|` over two buffers in the same layout.
 pub fn max_diff<T: Scalar>(a: &[T], b: &[T]) -> f64 {
+    if a.len() != b.len() {
+        return f64::INFINITY;
+    }
     a.iter()
         .zip(b.iter())
         .map(|(x, y)| x.sub(*y).abs())
-        .fold(0.0_f64, f64::max)
+        .fold(0.0_f64, residual_max)
 }
 
 /// The Frobenius norm of a buffer.
@@ -305,14 +326,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn residuals_reject_missing_and_nonfinite_values() {
+        assert!(!max_diff(&[f64::NAN], &[1.0]).is_finite());
+        assert!(!max_diff(&[1.0, 2.0], &[1.0]).is_finite());
+        assert!(!gram_residual(&[f64::NAN], 1, 1, Order::C).is_finite());
+        assert!(!gram_adj_residual(&[f64::NAN], 1, 1, Order::F).is_finite());
+    }
+
+    #[test]
     fn reference_matmul_is_layout_independent() {
         let a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]; // 2x3
         let b = [7.0, 8.0, 9.0, 10.0, 11.0, 12.0]; // 3x2
         let mut c = [0.0; 4];
         mul(2, 3, 2, Order::C, &a, &b, &mut c);
         assert_eq!(c, [58.0, 64.0, 139.0, 154.0]);
+        let a_f = [1.0, 4.0, 2.0, 5.0, 3.0, 6.0];
+        let b_f = [7.0, 9.0, 11.0, 8.0, 10.0, 12.0];
         let mut d = [0.0; 4];
-        mul(2, 3, 2, Order::F, &a, &b, &mut d);
+        mul(2, 3, 2, Order::F, &a_f, &b_f, &mut d);
         assert_eq!(d, [58.0, 139.0, 64.0, 154.0]);
     }
 }

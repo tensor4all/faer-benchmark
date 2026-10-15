@@ -1,0 +1,423 @@
+{
+  "driver_argv": [
+    "data/probes/20261015-v2-representative/run.py",
+    "data/results/zen5-cpu/faer-kernels/20261015T072618Z-v2-smoke2-mkl",
+    "data/results/zen5-cpu/faer-kernels/20261015T072644Z-v2-smoke2-openblas"
+  ],
+  "driver_sha256": "4f77b2873b9fbe7e443f5c6fa08b251ed0be1c60985081285d1ca7390011d795",
+  "analysis_sha256": "5176e6fca045940aad7dc3331fc757ef8850e42c75c5c366412f621c5a5033b7",
+  "settings": {
+    "prime_ms": 3000,
+    "reps": 30,
+    "aa": 3
+  },
+  "cpu_sets": {
+    "1": "4",
+    "4": "4-7",
+    "8": "4-11"
+  },
+  "groups": {
+    "1": [
+      [
+        "gemm",
+        "gemm",
+        "4,256"
+      ],
+      [
+        "qr-factor",
+        "qr_factor",
+        "64x8,8x64"
+      ]
+    ],
+    "4": [
+      [
+        "gemm",
+        "gemm",
+        "16x4096x240"
+      ],
+      [
+        "lu-solve",
+        "lu,solve",
+        "256"
+      ],
+      [
+        "svd",
+        "svd_thin",
+        "64x1024"
+      ]
+    ],
+    "8": [
+      [
+        "qr",
+        "qr_factor,qr",
+        "4096x256"
+      ],
+      [
+        "decompose",
+        "cholesky,eigh,svd_values",
+        "512"
+      ],
+      [
+        "householder",
+        "householder_apply",
+        "4096x256"
+      ]
+    ]
+  },
+  "commands": [
+    {
+      "vendor": "mkl",
+      "threads": 1,
+      "start": "2026-10-15T07:27:37.436326+00:00",
+      "argv": [
+        "timeout",
+        "--kill-after=10s",
+        "180s",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/benchmarks/scripts/pinned.sh",
+        "4",
+        "--",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "verify",
+        "--threads",
+        "1",
+        "--n",
+        "4,256",
+        "--family",
+        "gemm",
+        "--dtype",
+        "f64",
+        "--batch",
+        "1",
+        "--regime",
+        "gemm",
+        "--csv",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261015-v2-representative/mkl/1t/verify-gemm-1t.csv"
+      ],
+      "returncode": 0,
+      "end": "2026-10-15T07:27:43.763815+00:00"
+    },
+    {
+      "vendor": "mkl",
+      "threads": 1,
+      "start": "2026-10-15T07:27:43.764443+00:00",
+      "argv": [
+        "timeout",
+        "--kill-after=10s",
+        "180s",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/benchmarks/scripts/pinned.sh",
+        "4",
+        "--",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "verify",
+        "--threads",
+        "1",
+        "--n",
+        "64x8,8x64",
+        "--family",
+        "qr_factor",
+        "--dtype",
+        "f64",
+        "--batch",
+        "1",
+        "--regime",
+        "qr-factor",
+        "--csv",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261015-v2-representative/mkl/1t/verify-qr-factor-1t.csv"
+      ],
+      "returncode": 0,
+      "end": "2026-10-15T07:27:49.855490+00:00"
+    },
+    {
+      "vendor": "mkl",
+      "threads": 1,
+      "start": "2026-10-15T07:27:49.856111+00:00",
+      "argv": [
+        "timeout",
+        "--kill-after=10s",
+        "180s",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/benchmarks/scripts/pinned.sh",
+        "4",
+        "--",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "run",
+        "--threads",
+        "1",
+        "--n",
+        "4,256",
+        "--family",
+        "gemm",
+        "--dtype",
+        "f64",
+        "--batch",
+        "1",
+        "--regime",
+        "gemm",
+        "--csv",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261015-v2-representative/mkl/1t/run0-gemm-1t.csv",
+        "--statistic",
+        "median",
+        "--prime-ms",
+        "3000",
+        "--reps",
+        "30",
+        "--rotate-rows",
+        "0"
+      ],
+      "returncode": 0,
+      "end": "2026-10-15T07:28:32.237312+00:00"
+    },
+    {
+      "vendor": "mkl",
+      "threads": 1,
+      "start": "2026-10-15T07:28:32.238110+00:00",
+      "argv": [
+        "timeout",
+        "--kill-after=10s",
+        "180s",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/benchmarks/scripts/pinned.sh",
+        "4",
+        "--",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "run",
+        "--threads",
+        "1",
+        "--n",
+        "64x8,8x64",
+        "--family",
+        "qr_factor",
+        "--dtype",
+        "f64",
+        "--batch",
+        "1",
+        "--regime",
+        "qr-factor",
+        "--csv",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261015-v2-representative/mkl/1t/run0-qr-factor-1t.csv",
+        "--statistic",
+        "median",
+        "--prime-ms",
+        "3000",
+        "--reps",
+        "30",
+        "--rotate-rows",
+        "0"
+      ],
+      "returncode": 0,
+      "end": "2026-10-15T07:29:14.324929+00:00"
+    },
+    {
+      "vendor": "mkl",
+      "threads": 1,
+      "start": "2026-10-15T07:29:14.325711+00:00",
+      "argv": [
+        "timeout",
+        "--kill-after=10s",
+        "180s",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/benchmarks/scripts/pinned.sh",
+        "4",
+        "--",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "run",
+        "--threads",
+        "1",
+        "--n",
+        "4,256",
+        "--family",
+        "gemm",
+        "--dtype",
+        "f64",
+        "--batch",
+        "1",
+        "--regime",
+        "gemm",
+        "--csv",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261015-v2-representative/mkl/1t/run1-gemm-1t.csv",
+        "--statistic",
+        "median",
+        "--prime-ms",
+        "3000",
+        "--reps",
+        "30",
+        "--rotate-rows",
+        "1"
+      ],
+      "returncode": 0,
+      "end": "2026-10-15T07:29:56.697110+00:00"
+    },
+    {
+      "vendor": "mkl",
+      "threads": 1,
+      "start": "2026-10-15T07:29:56.697725+00:00",
+      "argv": [
+        "timeout",
+        "--kill-after=10s",
+        "180s",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/benchmarks/scripts/pinned.sh",
+        "4",
+        "--",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "run",
+        "--threads",
+        "1",
+        "--n",
+        "64x8,8x64",
+        "--family",
+        "qr_factor",
+        "--dtype",
+        "f64",
+        "--batch",
+        "1",
+        "--regime",
+        "qr-factor",
+        "--csv",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261015-v2-representative/mkl/1t/run1-qr-factor-1t.csv",
+        "--statistic",
+        "median",
+        "--prime-ms",
+        "3000",
+        "--reps",
+        "30",
+        "--rotate-rows",
+        "1"
+      ],
+      "returncode": 0,
+      "end": "2026-10-15T07:30:38.795367+00:00"
+    },
+    {
+      "vendor": "mkl",
+      "threads": 1,
+      "start": "2026-10-15T07:30:38.796096+00:00",
+      "argv": [
+        "timeout",
+        "--kill-after=10s",
+        "180s",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/benchmarks/scripts/pinned.sh",
+        "4",
+        "--",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "run",
+        "--threads",
+        "1",
+        "--n",
+        "4,256",
+        "--family",
+        "gemm",
+        "--dtype",
+        "f64",
+        "--batch",
+        "1",
+        "--regime",
+        "gemm",
+        "--csv",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261015-v2-representative/mkl/1t/run2-gemm-1t.csv",
+        "--statistic",
+        "median",
+        "--prime-ms",
+        "3000",
+        "--reps",
+        "30",
+        "--rotate-rows",
+        "2"
+      ],
+      "returncode": 0,
+      "end": "2026-10-15T07:31:21.160922+00:00"
+    },
+    {
+      "vendor": "mkl",
+      "threads": 1,
+      "start": "2026-10-15T07:31:21.161597+00:00",
+      "argv": [
+        "timeout",
+        "--kill-after=10s",
+        "180s",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/benchmarks/scripts/pinned.sh",
+        "4",
+        "--",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "run",
+        "--threads",
+        "1",
+        "--n",
+        "64x8,8x64",
+        "--family",
+        "qr_factor",
+        "--dtype",
+        "f64",
+        "--batch",
+        "1",
+        "--regime",
+        "qr-factor",
+        "--csv",
+        "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261015-v2-representative/mkl/1t/run2-qr-factor-1t.csv",
+        "--statistic",
+        "median",
+        "--prime-ms",
+        "3000",
+        "--reps",
+        "30",
+        "--rotate-rows",
+        "2"
+      ],
+      "returncode": 75,
+      "end": "2026-10-15T07:32:03.248219+00:00"
+    }
+  ],
+  "provenance": {
+    "mkl": {
+      "library": {
+        "url": "https://github.com/tensor4all/faer",
+        "commit": "bfe4041cd9918815e3b3f766ac0332b792badb7d",
+        "dirty": false,
+        "features": [
+          "std",
+          "rayon"
+        ],
+        "measured_path": "/home/shinaoka/projects/tensor4all/faer-benchmark/extern/t4a-faer",
+        "version": "0.24.4"
+      },
+      "upstream": {
+        "url": "https://codeberg.org/sarah-quinones/faer",
+        "commit": "0539947ffb757a739d7e703a7d2fa0c792a909c1",
+        "version": "0.24.4",
+        "ref": "faer-v0.24.4",
+        "dirty": false,
+        "measured_path": "/home/shinaoka/projects/tensor4all/faer-benchmark/extern/upstream-faer"
+      },
+      "harness": {
+        "commit": "780e91d20745683e2700f16978622529bb36dd9c",
+        "dirty": false
+      },
+      "toolkit": {
+        "commit": "916dace82589f9066f824c5cbfaa311140df2fed",
+        "dirty": false,
+        "measured_path": "/home/shinaoka/projects/tensor4all/campaign-toolkit"
+      },
+      "binary": {
+        "path": "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/bfe4041cd991-mkl/release/fbench",
+        "sha256": "cce1442034a105ef6ad8c59d9c85964c7cdad9b50c515a89c28f6894d3c34751"
+      },
+      "vendor": {
+        "name": "mkl",
+        "linkage": "shared",
+        "version": "2026.1",
+        "config": null,
+        "corename": null,
+        "parallel": null,
+        "procs": null,
+        "build_env": "MKLROOT=/opt/intel/oneapi/mkl/2026.1 MKL_THREADING_LIB=/opt/intel/oneapi/compiler/2026.1/lib/libiomp5.so"
+      },
+      "host": {
+        "hostname": "shinaoka-EVO-X1Pro",
+        "cpu": "AMD Ryzen AI 9 HX 470",
+        "os": "Linux 7.0.0-38-generic",
+        "arch": "x86_64",
+        "logical_cpus": 24,
+        "l3": "24 MiB (2 instances)",
+        "l3_domains": "0-3: 16 MiB shared; 4-11: 8 MiB shared",
+        "notes": "AMD Ryzen AI 9 HX 470 (Zen5 mobile APU), 12 physical / 24 logical cores. Heterogeneous L3: CPUs 0-3 share 16 MiB, CPUs 4-11 share 8 MiB, so a thread set must be stated together with the domain it sits in. SMT siblings of CPUs 4-11 are 16-23; the idle gate checks them too, because a busy sibling contends with the physical core being measured."
+      }
+    }
+  },
+  "warning_rule": "(max(process medians)-min(process medians))/median > 0.05",
+  "note": "Diagnostic controls only; no provider-ratio equality criterion, C/F are separate fixtures."
+}

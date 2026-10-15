@@ -39,7 +39,7 @@ measured:
     dirty: FAER_FORK_DIRTY
     dir: FAER_FORK_DIR
     version: FAER_FORK_VERSION
-    features: BUILD_FEATURES
+    features: FAER_FORK_FEATURES
     env: BUILD_ENV
     bin_dir: BIN_DIR
   # The timing protocol belongs to the harness, and the harness lives here.
@@ -91,10 +91,9 @@ engines:
 # so they are the axis a run -- and a page -- is split on.
 vendor_providers: [openblas, mkl]
 
-# `<fork12>-<upstream12>[-<vendor>][-dirty]`: the two revisions that name a *comparison*.
-# The harness revision is recorded in the manifest and repeated in the page header; it is
-# not in the name because the harness does not change what is being compared.
-page_name: "{library12}-{upstream12}{vendor}{dirty}"
+# Preserve v1 historical pages when the measured workload/timing contract changes.
+# {timing} is empty for v1 and -timing-v2 for the revised contract.
+page_name: "{library12}-{upstream12}{vendor}{dirty}{timing}"
 
 default_invalidated_by:
   - faer/src/**
@@ -141,6 +140,10 @@ csv_columns:
   - per_item_us
   - status
   - note
+
+# Explicit v2 opt-in; protocol budgets are fixed only after representative pilots.
+timing:
+  version: 2
 
 # The strings the generated index and report headers print.
 report:

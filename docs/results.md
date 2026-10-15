@@ -5,8 +5,9 @@
 comparison supplies the rest.
 
 ```text
-data/results/<profile>/<suite>/<timestamp>/     raw: run.yaml, verify-*.txt, run*.csv, *.guard, report.md
-result/<profile>/<suite>/<fork12>-<upstream12>[-vendor][-dirty].md   one page per measured run
+data/results/<profile>/<suite>/<timestamp>-<label>/   raw: run.yaml, verify-*.csv, run*.csv, *.guard,
+                                                     build-info.json, binary-info.txt, report.md
+result/<profile>/<suite>/<fork12>-<upstream12>[-vendor][-dirty][-timing-v<N>].md   one page per run
 result/INDEX.md                                 generated table of contents over those pages
 ```
 

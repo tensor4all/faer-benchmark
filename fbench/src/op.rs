@@ -51,3 +51,77 @@ pub fn op_from<S: 'static>(
         check: Box::new(move || check(&mut c.borrow_mut())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        backend,
+        shared::{Case, Dtype, Order},
+        vendor,
+    };
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    #[test]
+    fn checks_reject_a_missing_execution() {
+        backend::fork::set_threads(1);
+        backend::upstream::set_threads(1);
+        if vendor::NAME != "none" {
+            vendor::set_threads(1).unwrap();
+        }
+        for row in crate::engine_rows() {
+            for family in [
+                "gemm",
+                "qr_factor",
+                "qr",
+                "lu",
+                "full_piv_lu",
+                "cholesky",
+                "solve",
+                "triangular_solve",
+                "svd_values",
+                "svd_thin",
+                "eigh",
+                "householder_apply",
+            ] {
+                if !row.starts_with("faer-")
+                    && matches!(
+                        family,
+                        "full_piv_lu" | "triangular_solve" | "householder_apply"
+                    )
+                {
+                    continue;
+                }
+                for dtype in [Dtype::F64, Dtype::C64] {
+                    for order in [Order::C, Order::F] {
+                        let case = Case {
+                            m: 8,
+                            n: 8,
+                            k: if family == "gemm" { Some(8) } else { None },
+                            batch: 2,
+                        };
+                        let ops = crate::ops_for(&row, dtype, family, case, order).unwrap();
+                        assert_eq!(ops.len(), if family == "householder_apply" { 2 } else { 1 });
+                        for mut op in ops {
+                            op.prepare().unwrap();
+                            op.run().unwrap();
+                            op.check().unwrap();
+                            op.run = Box::new(|| Ok(()));
+                            op.prepare().unwrap();
+                            op.run().unwrap();
+                            // Missing retained output may fail with Err or bounds panic;
+                            // recomputing a fresh correct answer must never pass.
+                            let result = catch_unwind(AssertUnwindSafe(|| op.check()));
+                            assert!(
+                                !matches!(result, Ok(Ok(()))),
+                                "{row} {family} {} {} {} checked a replacement result",
+                                dtype.label(),
+                                order.label(),
+                                op.note
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

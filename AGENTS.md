@@ -48,7 +48,16 @@ measurement. Every timing goes through this repository's protocol script
 of its own); it pins the cores and checks that those cores **and their SMT siblings** were idle
 before and after, and a run spoiled by other load is discarded, not published.
 
-Priming is **time-based** (at least 0.5 s of wall time per arm) and identical on every arm. A fixed
+The observing side is pinned too, because unrelated work on the measured cores is what the idle
+guard then has to reject. The rule is not machine-specific: a cell's measured threads sit in one
+L3 domain, and everything else - the agent, the recorder, the guard checker - runs on the CPUs
+outside that domain. The recorder derives both sets from the machine's own topology, refuses to
+start when its affinity overlaps the measured set (SMT siblings included) or when a declared CPU
+set spans more than one L3 domain, and names the derived free CPUs in the refusal. The affinity
+lives in the process, so the agent's own pin must be re-established after a restart; the profile
+for the current host records the concrete CPU sets and their cache sizes.
+
+Priming is **time-based** and identical on every arm. A fixed
 call count is not a substitute: after an idle gate this host reads low for the first second or two
 of sustained AVX-512 work, which is large enough to be mistaken for a kernel defect.
 

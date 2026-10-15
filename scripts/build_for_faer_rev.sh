@@ -5,9 +5,9 @@
 #                         --vendor <openblas|mkl> --out <var-file> [--bin fbench]...
 #
 # Writes shell assignments to <var-file>:
-#   FAER_FORK_REV, FAER_FORK_DIRTY, FAER_FORK_DIR, FAER_FORK_VERSION,
+#   FAER_FORK_REV, FAER_FORK_DIRTY, FAER_FORK_DIR, FAER_FORK_VERSION, FAER_FORK_FEATURES,
 #   FAER_UPSTREAM_REV, FAER_UPSTREAM_DIRTY, FAER_UPSTREAM_DIR,
-#   FAER_UPSTREAM_VERSION, FAER_UPSTREAM_REF,
+#   FAER_UPSTREAM_VERSION, FAER_UPSTREAM_REF, FAER_UPSTREAM_FEATURES,
 #   BIN_DIR, BUILD_FEATURES, BUILD_ENV, BUILD_VENDOR
 #
 # The measured library is the fork checkout named by `--checkout`; the baseline is
@@ -99,6 +99,10 @@ suffix=""
 # The package version of each crate, read from its own manifest rather than assumed from a pin.
 version_of() {
     python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb")).get("package", {}).get("version", ""))' "$1"
+}
+# Library feature requests are not the harness's vendor-link feature selector.
+features_of() {
+    python3 -c 'import sys, tomllib; print(",".join(tomllib.load(open(sys.argv[1], "rb"))["dependencies"][sys.argv[2]].get("features", [])))' "$PROJECT_DIR/fbench/Cargo.toml" "$1"
 }
 fork_version="$(version_of "$FORK_DIR/faer/Cargo.toml")"
 up_version="$(version_of "$UPSTREAM_DIR/faer/Cargo.toml")"
@@ -227,10 +231,12 @@ bin_dir="$target/$subdir"
     printf 'FAER_FORK_DIRTY=%q\n' "$fork_dirty"
     printf 'FAER_FORK_DIR=%q\n' "$FORK_DIR"
     printf 'FAER_FORK_VERSION=%q\n' "$fork_version"
+    printf 'FAER_FORK_FEATURES=%q\n' "$(features_of faer_fork)"
     printf 'FAER_UPSTREAM_REV=%q\n' "$up_rev"
     printf 'FAER_UPSTREAM_DIRTY=%q\n' "$up_dirty"
     printf 'FAER_UPSTREAM_DIR=%q\n' "$UPSTREAM_DIR"
     printf 'FAER_UPSTREAM_VERSION=%q\n' "$up_version"
+    printf 'FAER_UPSTREAM_FEATURES=%q\n' "$(features_of faer_upstream)"
     printf 'FAER_UPSTREAM_REF=%q\n' "$up_ref"
     printf 'BIN_DIR=%q\n' "$bin_dir"
     printf 'BUILD_FEATURES=%q\n' "$FEATURES"
