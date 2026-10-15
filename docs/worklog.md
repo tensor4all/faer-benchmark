@@ -103,6 +103,14 @@ the recorded baseline fork. Missing coverage is reported as missing, repeated
 candidate attempts are both kept, and adoption still needs the numerical grid and a
 finished-diff review.
 
+The baseline run is invoked exactly as written in
+[protocol-v2-baseline.md](protocol-v2-baseline.md) section 5: MKL arm with three rows
+and `--aa 3`, OpenBLAS arm with two rows and `--aa 2` (a complete rotation cycle for
+two rows), both at `--prime-ms 250 --reps 5` with `PINNED_RETRIES=8`. The harness
+gained a `--rows` filter so an arm does not pay for a row it does not need, and the
+recorder passes the declared engines through to it; the census and the page columns
+follow that declaration.
+
 Cost floor at the proposed 3 s priming: 3,948 primed rows per set per vendor (out
 of 5,148 base engine-cells; 3,756 successful base cells + 192 Householder variants,
 1,392 skips, 5,340 emitted rows) -> 9.87 h per vendor and ~19.7 h for both of

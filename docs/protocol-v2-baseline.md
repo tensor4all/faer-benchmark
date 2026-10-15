@@ -11,11 +11,11 @@ different contract are not comparable.
 | --- | --- |
 | `--prime-ms` | **250** (calibrated: 250/10 and 250/30 are within 0.978-1.006 of 3000/30 over 18 rows, far below the 0.5-35% between-start range) |
 | `--reps` | **5** |
-| `--aa` | **3** complete process sets, row rotation step 1 (each engine occupies each row position once) |
+| `--aa` | **3** for the 3-row MKL arm, **2** for the 2-row OpenBLAS arm - a complete rotation cycle either way, so every row occupies every position once (the recorder requires `aa % len(engines) == 0`) |
 | `--statistic` | `median` |
 | Coverage | the declared suite, fully: all populations, `f64`+`c64`, order `c`+`f`, batch 1, threads 1/4/8 |
 | Small-shape grids | `gemm-small` and `linalg-small` are declared as **8, 64** only: their 4T/8T cells were measured to be thread-region dominated (gemm 32^3 pays a constant +8 to +11 us at 4T/8T; 4^3 never enters a parallel path; MKL +0.3-0.8 us), so they are not worth the machine time at every budget |
-| Rows per arm | MKL: `faer-fork`, `faer-upstream`, `lapack-mkl`. OpenBLAS: `faer-fork`, `lapack-openblas`. The duplicated faer rows differ by 2% median (26% worst, the known rotation bump) between arms, so the fork/upstream pair is kept in one arm and the vendor pair in both |
+| Rows per arm | MKL: `faer-fork`, `faer-upstream`, `lapack-mkl` (`--engines`/`--rows`). OpenBLAS: `faer-fork`, `lapack-openblas`. The duplicated faer rows differ by 2% median (26% worst, the known rotation bump) between arms, so the fork/upstream pair is kept in one arm and the vendor pair in both |
 
 ## 2. Frozen machine preconditions (enforced, not remembered)
 
@@ -98,7 +98,26 @@ Rules that make this honest rather than convenient:
   change: the candidate comparison above, the numerical verification grid, and an
   independent review of the finished diff.
 
-## 5. What is explicitly out of scope
+## 5. How the two arms are invoked
+
+```sh
+PINNED_RETRIES=8 python3 scripts/record_run.py zen5-cpu faer-kernels \
+  --checkout extern/t4a-faer --upstream extern/upstream-faer --vendor mkl \
+  --engines faer-fork,faer-upstream,lapack-mkl --threads 1,4,8 --dtypes f64,c64 \
+  --reps 5 --aa 3 --prime-ms 250
+PINNED_RETRIES=8 python3 scripts/record_run.py zen5-cpu faer-kernels \
+  --checkout extern/t4a-faer --upstream extern/upstream-faer --vendor openblas \
+  --engines faer-fork,lapack-openblas --threads 1,4,8 --dtypes f64,c64 \
+  --reps 5 --aa 2 --prime-ms 250
+```
+
+`--engines` declares the rows this arm measures and is passed to the harness as
+`--rows`; the recorder's verification census and the page's columns follow that
+declaration, so a run that measures a subset cannot claim coverage of a row it did
+not measure. The two arms are separate runs (the vendor symbols collide) and each
+publishes its own `-timing-v2` page.
+
+## 6. What is explicitly out of scope
 
 Establishing the mechanism of the remaining between-start variation; publishing
 candidate numbers as if they displaced the baseline; treating the vendor rows as
