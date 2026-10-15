@@ -128,7 +128,7 @@ accepted even though between-process SD is undefined. Both now fail under
 pre-fix behavior and pass after correction; v2 also requires >=2 process sets and
 complete engine rotations. The report now also carries the v2 rotation-averaged
 engine ratios with a marker for cells whose schedule is not position-balanced and
-a per-cell between-start warning; toolkit `401dff6` is committed and pinned.
+a per-cell between-start warning; toolkit `7127fa7` is committed and pinned; a post-implementation review of that report change found the first version measured engine-to-engine spread instead of each engine's own between-start spread and omitted the position warning, both fixed and marked `!`/`p` in the page.
 
 The broad delegated implementation and first broad GPT post-review both stopped
 at their execution limits and are **not** counted as completed work/review. The
