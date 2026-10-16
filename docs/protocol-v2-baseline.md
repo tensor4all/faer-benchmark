@@ -175,6 +175,32 @@ This is the same rule for every later optimization: declare the targets, prove c
 the target, check the guards, record it. The expensive full-suite discipline stays where it belongs -
 on the pages that are quoted as the campaign's numbers.
 
+### The two rules that keep acceptance affordable
+
+**Measure once.** The candidate is measured at the revision that will be merged - the branch head with
+a clean tree - and the merge must not change the code that was measured. `scripts/candidate_compare.py
+--merged-commit <rev> --checkout <fork checkout>` compares the tree hashes of the campaign's measured
+paths between the two revisions and refuses the comparison when they differ, so the same code is never
+measured before and after the merge. The acceptance record quotes the measured commit *and* those tree
+hashes, which is what keeps the evidence valid across a merge, a rebase or a rename. A merge that does
+change a measured path invalidates only the cells that depend on that path; they are re-measured with
+the target/guard set, never as a whole suite.
+
+**Two to three hours, not a day.** The acceptance grid is:
+
+| budget | coverage |
+| --- | --- |
+| 4T and 8T | every declared family, shape, dtype and order - the full daily suite plus `faer-kernels-large` |
+| 1T | only the target families, i.e. the cells the change is written for; the rest keeps the 1T numbers already recorded in the baseline |
+
+Settings stay as frozen in section 1 (prime 250 ms, five calls, three complete process sets, boost off,
+observer off the measured L3 domains, whole-L3-domain idle guard, `PINNED_RETRIES=8`). The expected cost,
+to be confirmed by the first acceptance run and recorded next to it: about 8,300 rows at 4T/8T for both
+arms, so roughly 35 min of priming, 30-70 min of measured calls, 10-20 min of verification and 18 min of
+guard windows - **about 1.5-2.5 h**, plus 15-30 min for the 1T target cells. A run that needs more than
+three hours is a protocol defect to fix, not a reason to drop the target cells. Pages produced this way
+say `1T: target families` (coverage partial) instead of implying a full 1T grid.
+
 ## 6. How the two arms are invoked
 
 ```sh
