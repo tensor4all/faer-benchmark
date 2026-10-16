@@ -25,6 +25,11 @@ which own the same job one layer up.
 
 ## Status
 
+> **Provisional dataset:** this development host records provisional pages (`host.role: development`);
+> a dedicated measurement host will re-record the suite periodically and replace them - see
+> [`docs/provisional-and-clean-datasets.md`](docs/provisional-and-clean-datasets.md). Acceptance runs are
+> separate, local and never published.
+
 > **Provenance note (2026-10-16):** the runs recorded on 2026-10-15/16 linked the crates.io release
 > `t4a-faer 0.24.5` for the fork row, not the pinned checkout — see
 > [`docs/reviews/20261016-linked-crate-provenance.md`](docs/reviews/20261016-linked-crate-provenance.md).
