@@ -25,6 +25,11 @@ which own the same job one layer up.
 
 ## Status
 
+> **Provenance note (2026-10-16):** the runs recorded on 2026-10-15/16 linked the crates.io release
+> `t4a-faer 0.24.5` for the fork row, not the pinned checkout — see
+> [`docs/reviews/20261016-linked-crate-provenance.md`](docs/reviews/20261016-linked-crate-provenance.md).
+> The build now refuses such a mismatch instead of warning.
+
 `fbench` exists and records runs: the timing-v2 baseline is in
 [`result/INDEX.md`](result/INDEX.md) (daily suite, both vendor arms), the harness
 owns the workloads and the numerical checks, and the timing protocol lives in

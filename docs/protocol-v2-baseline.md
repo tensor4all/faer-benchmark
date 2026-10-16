@@ -5,6 +5,14 @@ are run under. It is frozen as of this commit; changing it needs an explicit
 decision and a new version suffix on the page, because numbers recorded under a
 different contract are not comparable.
 
+## 0. Provenance correction (2026-10-16)
+
+The runs recorded on 2026-10-15/16 linked the crates.io release `t4a-faer 0.24.5` for the `faer-fork`
+row instead of the pinned checkout (0.24.4), because `Cargo.lock` pinned 0.24.5 and the path patch
+was silently ignored. See [reviews/20261016-linked-crate-provenance.md](reviews/20261016-linked-crate-provenance.md).
+The build now refuses to run unless the resolved graph takes both measured crates from the named
+checkouts; those pages are not evidence about `bfe4041` and were not re-recorded.
+
 ## 1. Frozen measurement settings
 
 | Setting | Value |
