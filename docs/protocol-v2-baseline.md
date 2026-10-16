@@ -186,20 +186,31 @@ hashes, which is what keeps the evidence valid across a merge, a rebase or a ren
 change a measured path invalidates only the cells that depend on that path; they are re-measured with
 the target/guard set, never as a whole suite.
 
-**Two to three hours, not a day.** The acceptance grid is:
+**An hour, not a day.** The acceptance grid is derived from the change, not from the whole
+declaration:
 
-| budget | coverage |
+| part of the grid | coverage |
 | --- | --- |
-| 4T and 8T | every declared family, shape, dtype and order - the full daily suite plus `faer-kernels-large` |
-| 1T | only the target families, i.e. the cells the change is written for; the rest keeps the 1T numbers already recorded in the baseline |
+| affected families | every *declared* shape, dtype and order of the families the change can reach, at 4T and 8T |
+| target cells | the same families at 1T on the cells the change is written for |
+| collateral control | two or three cells of families the change does **not** touch (e.g. `gemm`, `cholesky`), at 4T and 8T, in the same runs |
+| everything else | reused from the recorded baseline; re-measuring families the change cannot reach buys nothing and is what made acceptance take a day |
 
-Settings stay as frozen in section 1 (prime 250 ms, five calls, three complete process sets, boost off,
-observer off the measured L3 domains, whole-L3-domain idle guard, `PINNED_RETRIES=8`). The expected cost,
-to be confirmed by the first acceptance run and recorded next to it: about 8,300 rows at 4T/8T for both
-arms, so roughly 35 min of priming, 30-70 min of measured calls, 10-20 min of verification and 18 min of
-guard windows - **about 1.5-2.5 h**, plus 15-30 min for the 1T target cells. A run that needs more than
-three hours is a protocol defect to fix, not a reason to drop the target cells. Pages produced this way
-say `1T: target families` (coverage partial) instead of implying a full 1T grid.
+The affected families are declared **before** the run by reading the changed paths: a change to the
+no-pivot QR factor reaches `qr_factor` and `qr`; a change to partial-pivot LU reaches `lu`,
+`full_piv_lu` and `solve`; a change to a shared helper such as `mat/matref.rs` reaches every family that
+copies or owns a matrix, and the declaration must say so. The declaration is recorded with the run and
+is not widened after the numbers are seen. Settings stay as frozen in section 1 (prime 250 ms, five
+calls, three complete process sets, boost off, observer off the measured L3 domains, whole-L3-domain
+idle guard, `PINNED_RETRIES=8`).
+
+Expected cost, to be confirmed by the first run and recorded next to it: the row-major QR/LU work
+touches five families over the ten declared square/tall/wide shapes, which is about 600 rows per budget
+per arm - roughly 10 min of priming, 12-20 min of measured calls, 10-15 min of verification and 15 min
+of guard windows, so **about an hour for both arms**; a change that reaches a shared helper covers more
+families and scales with them. A run that needs more than three hours is a protocol defect to fix, not a
+reason to drop the target cells. Pages produced this way state which families were measured at which
+budget (coverage partial) instead of implying the whole declaration.
 
 ## 6. How the two arms are invoked
 
