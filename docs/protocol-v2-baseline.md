@@ -5,7 +5,14 @@ are run under. It is frozen as of this commit; changing it needs an explicit
 decision and a new version suffix on the page, because numbers recorded under a
 different contract are not comparable.
 
-## 0. Provenance correction (2026-10-16)
+## 0. Provisional pages and the future clean dataset
+
+This host is a **development** host: acceptance runs here decide merges, and the pages it records are
+provisional until a dedicated measurement host re-records the suite periodically. The split, what each
+job covers and the handover checklist are in
+[provisional-and-clean-datasets.md](provisional-and-clean-datasets.md).
+
+## 0b. Provenance correction (2026-10-16)
 
 The runs recorded on 2026-10-15/16 linked the crates.io release `t4a-faer 0.24.5` for the `faer-fork`
 row instead of the pinned checkout (0.24.4), because `Cargo.lock` pinned 0.24.5 and the path patch
