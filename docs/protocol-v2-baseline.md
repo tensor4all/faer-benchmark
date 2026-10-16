@@ -5,6 +5,14 @@ are run under. It is frozen as of this commit; changing it needs an explicit
 decision and a new version suffix on the page, because numbers recorded under a
 different contract are not comparable.
 
+## 0. Provenance correction (2026-10-16)
+
+The runs recorded on 2026-10-15/16 linked the crates.io release `t4a-faer 0.24.5` for the `faer-fork`
+row instead of the pinned checkout (0.24.4), because `Cargo.lock` pinned 0.24.5 and the path patch
+was silently ignored. See [reviews/20261016-linked-crate-provenance.md](reviews/20261016-linked-crate-provenance.md).
+The build now refuses to run unless the resolved graph takes both measured crates from the named
+checkouts; those pages are not evidence about `bfe4041` and were not re-recorded.
+
 ## 1. Frozen measurement settings
 
 | Setting | Value |
@@ -126,6 +134,42 @@ little work" side-effect check belongs.
   `--regimes linalg-big,gemm-huge --threads 4,8 --dtypes f64` (2048/4096 are not
   worth 1T or c64 in the loop) and `--regimes linalg-boundary` only when a change
   is suspected of fitting a block boundary.
+
+## 5b. Adoption protocol for an optimization change
+
+A full-suite A/A with a control gate on every cell is the right tool for *publishing* a comparison and
+the wrong tool for deciding whether to keep an optimization: it costs hours and it refuses on cells
+that have nothing to do with the change. Adoption therefore uses three criteria, all of which must
+hold, and the evidence for each is recorded in the campaign.
+
+1. **Correctness, no counter-evidence.** The measured change must pass its own tests and the harness's
+   numerical grid on the populations it touches: `cargo test -p <fork> --lib` in the fork checkout,
+   the regression tests the change added, and `fbench verify` over the affected populations and thread
+   budgets with the fixed build (see the patch-resolution guard in `scripts/build_for_faer_rev.sh`).
+   A single mismatch or skip that was not declared before the run fails this criterion.
+2. **The target improves, measured.** Before the run, the *target cells* are declared - the shapes,
+   dtypes, orders and thread budgets the change was written for. They are measured for the candidate
+   and for the pinned baseline with the frozen settings (prime 250 ms, 5 calls, three complete process
+   sets, boost off, observer off the measured L3 domains), and compared as the rotation-averaged
+   ratio per cell. "Improves" means the ratio leaves the between-start spread the baseline recorded
+   (the same band the pages print) and the direction is consistent across the cells of the target set.
+   The target set is never widened after the numbers are seen.
+3. **No regression outside the target, checked on a declared guard set.** A guard set - the same
+   families in the other memory order, neighbouring sizes, other thread budgets, and the unchanged
+   `faer-upstream` row as the machine-state control - is measured in the same runs. The change is
+   adopted only if no guard cell is slower beyond the recorded spread, and the control row reproduces
+   the baseline. If one control cell falls outside its recorded range but the median control ratio is
+   within 2%, the pair is repeated once, interleaved, and the median of the two pairs is used; a
+   second failure refuses the comparison and the change waits for a quieter host or a smaller change.
+
+Adoption itself is a documentation act on top of those measurements: the candidate revision is
+recorded as the adopted one in `PATCHSET.md` and the campaign worklog, with the target and guard
+results linked from the run directories that carry them. Re-recording the whole suite is not part of
+adoption; the next full baseline re-record picks the adopted revision up.
+
+This is the same rule for every later optimization: declare the targets, prove correctness, measure
+the target, check the guards, record it. The expensive full-suite discipline stays where it belongs -
+on the pages that are quoted as the campaign's numbers.
 
 ## 6. How the two arms are invoked
 
