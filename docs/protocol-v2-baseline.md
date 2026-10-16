@@ -147,8 +147,12 @@ hold, and the evidence for each is recorded in the campaign.
    the regression tests the change added, and `fbench verify` over the affected populations and thread
    budgets with the fixed build (see the patch-resolution guard in `scripts/build_for_faer_rev.sh`).
    A single mismatch or skip that was not declared before the run fails this criterion.
-2. **The target improves, measured.** Before the run, the *target cells* are declared - the shapes,
-   dtypes, orders and thread budgets the change was written for. They are measured for the candidate
+2. **The target improves, measured.** Before the run, the *target cells* are declared - and they are
+   derived from the recorded benchmark, not chosen ad hoc: they are the cells where the campaign's own
+   pages show the fork losing to upstream (or to the vendor) on the families the change touches, in the
+   memory order it addresses. For the row-major QR/LU work those are the C-order cells of
+   `linalg-wide` (`qr_factor/64x1024`), `linalg-mid` (`lu/n256`, c64 4T/8T), `linalg-large`
+   (`lu/n512` 1T) and `linalg-tall` (`4096x256`), all of which the daily declaration already covers. They are measured for the candidate
    and for the pinned baseline with the frozen settings (prime 250 ms, 5 calls, three complete process
    sets, boost off, observer off the measured L3 domains), and compared as the rotation-averaged
    ratio per cell. "Improves" means the ratio leaves the between-start spread the baseline recorded
