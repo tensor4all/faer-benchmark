@@ -1,0 +1,82 @@
+# Rules and runbook
+
+Everything a change author, an agent or the future measurement host needs, in the order it is used.
+The normative text is `docs/protocol-v2-baseline.md`; this page is the index and the copy-paste version.
+
+## Two jobs
+
+| job | where | grid | published |
+| --- | --- | --- | --- |
+| **Acceptance** - may this change be merged into `t4a-faer`? | the development machine | the change's blast radius: affected families at every declared shape at 4T/8T, target cells at 1T, two or three untouched families as a collateral control | no - evidence in the PR, the worklog and the fork's `PATCHSET.md` |
+| **Public dataset** - the pages under `result/` | a dedicated clean measurement host, re-recorded periodically | the whole declared suite | yes |
+
+The fork side of the same rules is `t4a-faer/docs/adoption-protocol.md`.
+
+## The contract every run uses
+
+`--prime-ms 250 --reps 5 --aa 3 --statistic median`, CPU boost off (the recorder refuses otherwise),
+the observing side pinned off the measured L3 domains (refused otherwise), an idle guard that watches
+every CPU sharing the measured cache (3 s window, 5% busy, 8 admission retries), one campaign lock,
+build then verify then time, and a published page only from a validated run.
+
+## Acceptance (about an hour)
+
+```sh
+cd /home/shinaoka/projects/tensor4all/faer-benchmark
+# 1. declare the blast radius of the changed paths, then measure the affected families at 4T/8T,
+#    the target cells at 1T and a couple of untouched families as a control. Example for row-major QR/LU:
+export PINNED_RETRIES=8
+python3 scripts/record_run.py zen5-cpu faer-kernels \
+    --checkout ../faer --upstream extern/upstream-faer --vendor mkl \
+    --engines faer-fork,faer-upstream,lapack-mkl \
+    --regimes linalg-small,linalg-mid,linalg-tall,linalg-wide \
+    --families qr_factor,qr,lu,full_piv_lu,solve \
+    --dtypes f64,c64 --reps 5 --aa 3 --prime-ms 250 \
+    --label acceptance-<revision> --no-publish
+# 2. the pinned baseline is measured once and kept (baseline-ref-* runs under data/results/), never re-run
+#    per candidate: the same command with --checkout extern/t4a-faer
+# 3. compare, and let the tool refuse a merge that changed the measured code:
+python3 scripts/candidate_compare.py \
+    --baseline data/results/zen5-cpu/faer-kernels/<baseline-ref run> \
+    --candidate data/probes/acceptance/<candidate run> \
+    --checkout ../faer --merged-commit <merge commit> --json /tmp/acceptance.json
+```
+
+A comparison is accepted only when the identity check passes (only the library commit differs), the
+`faer-upstream` control row reproduces the baseline, no measured guard cell regresses beyond the
+recorded spread, and the target cells improve beyond it.
+
+Gates that must also pass: `cargo test -p t4a-faer --lib` in the checkout, the change's own regression
+test, and the harness's `fbench verify` over the affected populations and budgets (the recorder runs it
+before timing; a mismatch or an undeclared skip fails acceptance).
+
+## Public dataset (the future clean host)
+
+```sh
+# both suites, both arms; run serially, commit after each so publication cannot dirty the next run
+for suite in faer-kernels faer-kernels-large; do
+  for arm in "mkl|faer-fork,faer-upstream,lapack-mkl|3" "openblas|faer-fork,lapack-openblas|2"; do
+    IFS='|' read -r vendor engines aa <<< "$arm"
+    PINNED_RETRIES=8 python3 scripts/record_run.py zen5-cpu "$suite" \
+      --checkout extern/t4a-faer --upstream ./extern/upstream-faer --vendor "$vendor" \
+      --engines "$engines" --dtypes f64,c64 --reps 5 --aa "$aa" --prime-ms 250
+    git add -A && git commit -m "data: $suite $vendor"
+  done
+done
+```
+
+The host's profile states `role: measurement`; a development host records `role: development` and its
+pages say they are provisional. A host whose measured set covers every L3 domain records a warning
+instead of refusing, because that is a fact about the machine.
+
+## The rules that keep this affordable
+
+- **Measure once**: the merge must leave the measured paths' tree hashes unchanged (`--merged-commit`).
+  A merge that changes one invalidates only the cells that depend on it.
+- **No widening after the fact**: the blast radius is declared before the run and recorded with it.
+- **No whole-suite re-record on a development host** to refresh a page; the clean host replaces them.
+- **Fail closed**: a rejected guard attempt is preserved and re-run on the same schedule, never selected
+  by its numbers; a run whose validation fails is not published.
+- **No hand-editing** `result/INDEX.md`, and historical pages stay as they were recorded - a new contract
+  gets a new `-timing-vN` suffix.
+- If acceptance needs more than three hours, fix the protocol, not the target set.

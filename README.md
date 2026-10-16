@@ -20,6 +20,7 @@ which own the same job one layer up.
 | Result layout | [`docs/results.md`](docs/results.md) |
 | Timing policy | [`docs/timing-policy.md`](docs/timing-policy.md) |
 | Reference revisions | [`pins/t4a-faer.rev`](pins/t4a-faer.rev) (the fork) and [`pins/upstream-faer.rev`](pins/upstream-faer.rev) (the baseline) — what `status` is measured against |
+| Rules and runbook | [`docs/rules.md`](docs/rules.md) - acceptance in an hour, the frozen contract, and the commands |
 | Design record | [`docs/worklog.md`](docs/worklog.md) — decisions, fixed failures, open items |
 | Provenance | [`docs/provenance.md`](docs/provenance.md) — what was copied from which sibling and under what terms |
 
