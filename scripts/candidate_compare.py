@@ -12,11 +12,23 @@ were not measured in both runs.
 import argparse
 import json
 import pathlib
+import subprocess
 import sys
+
+import yaml
 
 from campaign_toolkit import candidate, descriptor
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+# The paths whose content decides what a measurement means: changing one of them invalidates the
+# cells that depend on it, and a merge that leaves them alone keeps the measurement valid.
+MEASURED_PATHS = ('faer/src', 'faer/Cargo.toml', 'faer-traits/src', 'faer-traits/Cargo.toml',
+                  'Cargo.lock')
+
+
+def git(path, *args):
+    return subprocess.run(['git', '-C', str(path), *args], check=True, capture_output=True,
+                          text=True).stdout.strip()
 
 
 def main(argv=None):
@@ -28,8 +40,23 @@ def main(argv=None):
     ap.add_argument('--fork-engine', default='faer-fork')
     ap.add_argument('--cells', default=None, help='comma separated substrings of the declared subset')
     ap.add_argument('--json', type=pathlib.Path, default=None)
+    ap.add_argument('--checkout', type=pathlib.Path, default=ROOT / 'extern/t4a-faer',
+                    help='the checkout that carries both the measured and the merged revision')
+    ap.add_argument('--merged-commit', default=None,
+                    help='the revision the candidate was merged into; the comparison is refused when '
+                         'the merge changed any measured path, so the measurement cannot silently '
+                         'describe different code than the branch that was measured')
     args = ap.parse_args(argv)
 
+    measured = yaml.safe_load((args.candidate / 'run.yaml').read_text())['library']['commit']
+    merged = args.merged_commit or measured
+    changed = candidate.same_measured_code(args.checkout, measured, merged, MEASURED_PATHS, git=git)
+    if changed:
+        print(f'refused: the merged revision {merged[:12]} does not carry the measured code:',
+              '; '.join(changed))
+        return 1
+    print(f'measured revision {measured[:12]} and merged revision {merged[:12]} carry identical '
+          f'measured paths')
     differences = candidate.identity_differences(args.baseline, args.candidate)
     if differences:
         for line in differences:
