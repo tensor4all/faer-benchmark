@@ -80,3 +80,20 @@ instead of refusing, because that is a fact about the machine.
 - **No hand-editing** `result/INDEX.md`, and historical pages stay as they were recorded - a new contract
   gets a new `-timing-vN` suffix.
 - If acceptance needs more than three hours, fix the protocol, not the target set.
+
+## Fresh-session dry run (evidence, 2026-10-17)
+
+Run from a fresh shell with a minimal environment (`env -i HOME=... PATH=...`), using the commands
+above as written:
+
+| check | command | observed |
+| --- | --- | --- |
+| observer inside the measured L3 domain | `taskset -c 7 python3 scripts/record_run.py ... --regimes gemm-small --threads 1 ...` | refused: `ERROR: this recording process may run on CPUs [7], inside the measured L3 domain(s) [4-11, 16-23]; pin the observing side off them, for example taskset -c 0-3, 12-15 ...` |
+| observer off the domain | same command under `taskset -c 0-3` | accepted; the CPU sets came from sysfs (`measured {4, 16}`, `free {0-3, 12-15}`) |
+| boost gate | `require_boost_disabled({'cpufreq_boost': '1'})` | refused with the exact `echo 0 \| sudo tee ...` instruction; the live host records `cpufreq_boost=0` |
+| acceptance command | `scripts/candidate_compare.py --help` | exposes `--checkout` and `--merged-commit`, as the adoption rule uses |
+
+The first row is a real gap the dry run found: the observer check compared the measured CPUs and
+their SMT siblings only, so CPU 7 (same L3 domain as the measured CPU 4) looked safe. It now refuses
+any overlap with a measured L3 domain (toolkit PR #11). The reproduction is kept in
+`data/probes/dryrun-refusals/`, and it is not evidence about any library revision.
