@@ -3,7 +3,7 @@
   "integrated": false,
   "baseline": "7364be5ce22d950343c10d82b99e9fc79d537cd2",
   "branch": "fix/native-gemm-empty-extents",
-  "production_file_and_tests_sha256": "f58f2f617cba98aef0cb4445047b74e62e9f28b5c69b4f76f34ef518ff4fbac3",
+  "production_file_and_tests_sha256": "961b9ace1acf8bd1179f7395d736b38980a32843e4bd823706bbd92e51b3bf46",
   "default_features": [
     "std",
     "rayon",
@@ -46,5 +46,7 @@
     "cargo test -p t4a-faer --lib",
     "cargo check -p t4a-faer --no-default-features --features std,linalg"
   ],
-  "notes": "Focused before targeted formatting, full library/no-Rayon after formatting. No other Rust source changes. PREs complete; POST pending."
+  "notes": "Focused/full library rerun after test-only finite-output guard;4 and214 pass/2 ignore. No-Rayon production unchanged. Independent POST pending.",
+  "candidate_commit": "af8273f5a76f0965d6aedd769ac20b663a0c5d50",
+  "production_unchanged_from_post_snapshot_2e221c7": true
 }

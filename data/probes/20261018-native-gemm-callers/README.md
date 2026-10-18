@@ -77,6 +77,10 @@ separately isolated positive-depth pass while K=0 was still failing.
 
 Host AVX2/FMA/AVX512F and default std/native scalar dispatch are recorded; a
 forced-generic numerical run or separate f32/c32 fixture is NOT claimed. These
-are correctness tests with Par::Seq, not performance measurements. The final
-independent POST review is pending. No source combination, performance adoption,
+are correctness tests with Par::Seq, not performance measurements. Self-review
+then added an explicit finite-output assertion before norm_max. Both focused and
+full checks passed again (`focused-finite-fixed.log`, `library-finite-fixed.log`);
+production matches the POST snapshot exactly, so the no-Rayon check still applies.
+The source checksum and local commit are updated in `fixed-identity.json`.
+The final independent POST review is pending. No source combination, performance adoption,
 final candidate freeze, large-tier execution or upstream submission has occurred.

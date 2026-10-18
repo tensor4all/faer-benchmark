@@ -1,5 +1,5 @@
 diff --git a/faer/src/linalg/matmul/internal/mod.rs b/faer/src/linalg/matmul/internal/mod.rs
-index ef84d6b..7f33b60 100644
+index ef84d6b..7a88a58 100644
 --- a/faer/src/linalg/matmul/internal/mod.rs
 +++ b/faer/src/linalg/matmul/internal/mod.rs
 @@ -88,0 +89,20 @@ pub fn spicy_matmul<I: Index, T: ComplexField>(
@@ -29,7 +29,7 @@ index ef84d6b..7f33b60 100644
 +			if nrows == 0 || ncols == 0 {
 +				return;
 +			}
-@@ -379,0 +405,194 @@ pub fn spicy_matmul<I: Index, T: ComplexField>(
+@@ -379,0 +405,195 @@ pub fn spicy_matmul<I: Index, T: ComplexField>(
 +
 +#[cfg(test)]
 +mod tests {
@@ -171,6 +171,7 @@ index ef84d6b..7f33b60 100644
 +								Par::Seq,
 +								MemStack::new(&mut mem),
 +							);
++							std::assert!(c.as_ref().is_all_finite());
 +							let error =
 +								(c.as_ref() - expected.as_ref()).norm_max();
 +							std::assert!(
