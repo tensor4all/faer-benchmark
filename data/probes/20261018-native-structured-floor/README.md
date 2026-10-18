@@ -58,3 +58,15 @@ fingerprint fields, flags[], incrementaldirsempty. Targetrootrustc_info.json
 unavailable, not invented; version queries are now-context not historical proof.
 No specific compiler/globaloptimization/cache mechanism or provider attribution
 is established. Previous sameA/old7fQC is retained, not a candidate pass.
+
+## Same-source build-only control completed
+
+b771/af8273 wholeGitdelta onlydocs/PATCHSET, source+traits+lock+manifesttrees
+identical; bothfreshbuilderinvocations fixeddf383e8/tool9daa/standardflags.
+Aexistingtarget, Cpreviouslyabsenttarget. Four matching dense bodies/sizes equal;
+FULL ELFsha256 both2decf425848a5b0706f9c20de65084822a23d659071b38b6bf7c9dea9d347e4a.
+Raw same-source-builds/, same-source-dense/ and same-source-outcome.json retained;
+report B denotes sourceC. This single observed doc-ref/cache/buildpath distinction
+did not reproduce7cd's differences; no universalcompiler/cacheclaim, causal
+mechanism, runtime/kernel execution or performance approval.7cdHOLD unchanged.
+HostedCI df383e8/39153055104 allstepssuccess/skipped; fullreceipt retained.

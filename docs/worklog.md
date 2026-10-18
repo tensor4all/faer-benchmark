@@ -1264,3 +1264,13 @@ containing harnesscommit/toolkit/builder/profile/flags, serial full-checkouts,
 Aexistingtarget/Cabsenttarget: build/cache/path contexts not separately isolated.
 Compare all4 bodies once with unchangedanalyzer. No kernel/verify/timing, no
 performance/control-contract change; cannot override7cdHOLD or count as LU pair.
+
+Same-sourcecompilecontrol completed: sourceA/b771 andC/af8273 Rust/traits/root+
+cratemanifests/lockexact, wholeGitdelta docs/PATCHSET only; fixeddf383e8/tool9daa,
+normalbuilderflags, serialwarm/coldtargets. ALL4densebodies/sizes match and ELF
+SHA256both2decf425...identical. No kernel/verify/timing/performanceapproval or
+override7cdHOLD; singlebuildcontrolnotuniversalreproducibility/causalproof. Raw
+same-source-{builds,dense,outcome.json} retained. HostedCI39153055104 allsteps
+success/skipped. Distinct direct2-entry expression simplification plan written,
+PRErunning; no newcandidatecode untilreview. Denseowningfilewouldremain ENTIRELY
+baseline, no helper/pragma/flags/alignmentposition trialloops. All gatesunchanged.
