@@ -88,3 +88,39 @@ and verbatim JSON are saved. It reviewed2e221c7; final production is identical,
 with only the finite-output test assertion added afterward. No backend audit,
 independent test execution or performance acceptance is claimed. No source combination, performance adoption,
 final candidate freeze, large-tier execution or upstream submission has occurred.
+
+## Existing-ELF qualification of the standalone correctness repair
+
+Compared saved main7364 ELF (copy build A, harness499da6e) against saved b7715c5
+ELF (prior fresh baseline builds; production fix2e221c7). Existing immutable
+filter: ALL4 dense sizes/normalized bodies match, zero diff lines. Full ELF
+hashes differ. See main-vs-correctness-static-command.json, stdout/stderr and
+main-vs-correctness-dense/comparison.json. This is disassembly only: no source
+change, build, kernel, verification, timing or repeated measurement. Different
+build contexts are explicit; this is not a controlled causal build experiment.
+
+This removes only the static pre-filter obstacle for this correctness source.
+It does not establish references/callers/whole-program equivalence or performance
+acceptance and does not integrate the fix, change main/pin, or waive any canonical
+control. Previously completed source PRE/POST and correctness tests retain their
+original scope. Native-floor f013/7cd HOLD remains unchanged.
+
+## Handoff correction: shared LDLT implementation is not LLT reachability
+
+Last read-only source audit before pausing: the five production spicy_matmul
+call expressions are three in dense ldlt/factor.rs (around456,568,583) and two
+in sparse/linalg/cholesky.rs (around3228,3384). In dense factor.rs the three
+expressions are under the non-LLT else branches. Dense llt/factor.rs:78 calls
+the shared cholesky_block_left_looking routine with is_llt=true; its update
+branches instead use triangular::matmul and dense matmul. Thus the earlier
+lead saying internal spicy_matmul is used by dense LLT/LDLT was too broad:
+sharing the source routine does not establish executing the repaired branch.
+
+Do not launch the old native-floor stage1 and call it direct coverage of this
+correctness fix. First finish declared backend/solver reachability and choose
+existing guards accordingly. No new LDLT/sparse benchmark is added to the goal.
+Numerical correctness tests and ALL4 static PASS remain valid within their
+original scopes; performance acceptance/integration remain unclaimed. Existing
+canonical record_run always invokes the builder; old driver changes checkouts
+between separate runs, so it is not a drop-in immutable/no-build phase driver.
+No new controller, build, verify or timing was started in this follow-up.

@@ -102,26 +102,31 @@ retainedalong16Cto_ownedtargets; analyzerdescriptiveonly, noformalAA3/adoption.
 3624recordformalgridstaysdraft; originalformalcontrols/guards/coverage/statistics
 remainrequired, no final-onlylarge squareduringdevelopment.
 
-## Completedpublicdiagnostic: HOLD / NOTADOPTED
+## Completed public diagnostic: HOLD / NOT ADOPTED
 
-Frozenf798recordonce completed8starts/512rows/2560rawsamples, zero rejected
-attempts; allactualsource/image/topology/power/pool1checks passed. Exactworker1,
-measuredCPU4, watchedruntimeL3/SMT4-11,16-23, observer0-3,12-15. No concurrent
-build/checkout/sourceedits. Compiledharness499da6e, recordingf798, tool9daa,
-A7364/B60de, upstreamref0539947; standalonepublicprobehasNOvendorengine.
-Allresults/rawstarts/samples inpublic-outcome.json andruntime-public/, retention
-+artifacthashinventory inpublic-retention/decisionJSON. No resulttable duplicated.
+Frozen recorder f798 ran once: eight starts, 512 rows, 2,560 raw samples, zero
+rejected attempts. Actual source/image/topology/power/pool checks passed. Backend
+workers: one; measurement CPU: 4; full L3/SMT watch: 4-11,16-23; observer CPUs:
+0-3,12-15. No concurrent builds, checkouts or source edits. Compiled harness:
+499da6e; recording harness: f798; toolkit: 9daa; baseline A: 7364; candidate B:
+60de; upstream reference: 0539947. This standalone probe has NO vendor engine.
+Full identities are in public-config.json; results, starts and samples are in
+public-outcome.json and runtime-public/. Retention and artifact hashes are in
+public-retention.json and public-decision.json; no timing table is duplicated.
 
-Oneof48unchangedcontrols flagged:c64/C64x1024/cloned movesFASTERoutsidebaseline
-range±5%; doNOTerasebecausefaster. Improvementtargetsarevisiblebutnotadoption or
-formalcontrolapproval. No identicalpublicretry/quietsubset/outlierdrop. Formal
-compositerecordingnotexecuted, 3624inventoryremainsdraft. No finalcandidatefreeze,
-main/pin/release/criteria/f013gatechange.
+One of 48 unchanged controls is flagged: c64/C/64x1024/cloned moves FASTER outside
+the baseline range plus/minus 5%. Do not erase it because it is faster. Target
+improvements are visible, but are not adoption or formal control approval. No
+identical public retry, quiet subset or outlier removal. Formal composite timing
+has not run; the 3,624-record inventory remains a draft. No final candidate freeze,
+main/pin/release/criteria change, or change to the f013 gate.
 
-ExistingELFonlyanalysis(no kernel/build/timing): all8selectedmeasure/clonednames
-frombothnm lists preservingaliases; bothclonedmeasurebodiesandall4clonedwrappers
-same sizes/normalizedinstructions. Bothto_ownedmeasurebodieschanged. Preliminary
-6functionreporthadcollapsedsharedaddressaliases; retainedaspreliminary, superseded
-bypublic-code/aliases-complete/comparison.json. EqualnormalizedbodydoesNOTprove
-referencedconstants/caller/allocator/addresses/history/wholeprogram/cause, anddoes
-NOTremoveobservedcontrolflag. Nevertweaksource/flags/placementtofitassembly.
+Existing-ELF analysis only (no kernel/build/timing): all eight selected measure
+and cloned names from both nm lists, preserving aliases. Both cloned measure
+bodies and all four cloned wrappers have equal sizes/normalized instructions;
+both to_owned measure bodies changed. The preliminary six-function report had
+collapsed shared-address aliases; it is retained as preliminary and superseded
+by public-code/aliases-complete/comparison.json. Equal normalized bodies do NOT
+prove equal referenced constants, callers, allocator state, addresses, history,
+whole programs or causality, and do NOT remove the observed control flag. Never
+tweak source, flags or placement to fit assembly.
