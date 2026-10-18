@@ -1361,3 +1361,16 @@ actualtimingyetatfreeze, noadoption/mainpin/contract/f013gatechange. Root499CIru
 showsremainingfactorfilebyteequalUPafterremoving18rowmajoradaptationlines;
 ownedhighlevelpathbypassesit/default256andthinupdatesSeqevennominal4/8T.
 Sourceboundsnotruntimecounts/causeproof; no newfix ormeasurementfromthataudit.
+
+### Publiccopydiagnostic recorded once, HOLD for unchanged-control shift
+
+SourceA7364/B60de/compiled499da6e/recordingf79812e/tool9daa/upstreamreference053,
+no vendorinstandaloneprobe. 8acceptedstarts/512rows/all2560samples, zero rejects;
+allruntimeguards/pool1/Seqpassed. data/probes/20261018-native-copy-tile/ hasall
+CSV/stdout/stderr/argv/terminal/final/before-after/identity/completion/hashes and
+all64cells+48controls+16targets, no quietsubset. Unchangedc64/C64x1024/cloned
+controlflag movesfaster; candidateNOTADOPTED, formal3624gridremainsdraft.
+ExistingELFonlyalias-completesymbolanalysis findsbothclonedmeasurebodies/four
+clonedwrapperssame sizes/normalizedinstructions, no cause/references/caller/
+allocatorproof; preliminarycollapsedaliasmapretained+explicitlysuperseded. No
+retiming/build/source/placementfitting/controlwaiver. Fullfinalcampaignunbegun.

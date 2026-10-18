@@ -101,3 +101,27 @@ once; anyfailurepartialnocomplete retained, noouterretry. All48unchangedcontrols
 retainedalong16Cto_ownedtargets; analyzerdescriptiveonly, noformalAA3/adoption.
 3624recordformalgridstaysdraft; originalformalcontrols/guards/coverage/statistics
 remainrequired, no final-onlylarge squareduringdevelopment.
+
+## Completedpublicdiagnostic: HOLD / NOTADOPTED
+
+Frozenf798recordonce completed8starts/512rows/2560rawsamples, zero rejected
+attempts; allactualsource/image/topology/power/pool1checks passed. Exactworker1,
+measuredCPU4, watchedruntimeL3/SMT4-11,16-23, observer0-3,12-15. No concurrent
+build/checkout/sourceedits. Compiledharness499da6e, recordingf798, tool9daa,
+A7364/B60de, upstreamref0539947; standalonepublicprobehasNOvendorengine.
+Allresults/rawstarts/samples inpublic-outcome.json andruntime-public/, retention
++artifacthashinventory inpublic-retention/decisionJSON. No resulttable duplicated.
+
+Oneof48unchangedcontrols flagged:c64/C64x1024/cloned movesFASTERoutsidebaseline
+range±5%; doNOTerasebecausefaster. Improvementtargetsarevisiblebutnotadoption or
+formalcontrolapproval. No identicalpublicretry/quietsubset/outlierdrop. Formal
+compositerecordingnotexecuted, 3624inventoryremainsdraft. No finalcandidatefreeze,
+main/pin/release/criteria/f013gatechange.
+
+ExistingELFonlyanalysis(no kernel/build/timing): all8selectedmeasure/clonednames
+frombothnm lists preservingaliases; bothclonedmeasurebodiesandall4clonedwrappers
+same sizes/normalizedinstructions. Bothto_ownedmeasurebodieschanged. Preliminary
+6functionreporthadcollapsedsharedaddressaliases; retainedaspreliminary, superseded
+bypublic-code/aliases-complete/comparison.json. EqualnormalizedbodydoesNOTprove
+referencedconstants/caller/allocator/addresses/history/wholeprogram/cause, anddoes
+NOTremoveobservedcontrolflag. Nevertweaksource/flags/placementtofitassembly.
