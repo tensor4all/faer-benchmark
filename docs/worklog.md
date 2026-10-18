@@ -2,6 +2,63 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the 92 slower cells, their cause, and the two corrections they forced
+
+The fork `2240b07` against upstream `0539947` on the MKL arm is 399 faster / 92 slower /
+865 inside the band. Reading the 92 by their evidence class, not by their magnitude:
+
+- **23 `householder_apply`**: every one carries `!` (between-start range over 5%), so the
+  run's own spread is as large as the difference. No `householder_apply` regression is
+  established by this page.
+- **30 of the 92** are below 20 us and marked dispatch-dominated: `cholesky` 11 of its
+  12, `full_piv_lu` 5 of its 13, and parts of `lu`/`solve` at `n32`. For `cholesky` this
+  is decisive: the fork's `cholesky` source is byte-identical to upstream
+  (`git diff 0539947 7364be5 -- faer/src/linalg/cholesky` is empty), so its 12 cells
+  cannot be a cholesky regression.
+- **The clean remainder** is `lu`/`solve` at `c64 n256` (1.26-1.51, both orders, 4T/8T)
+  and the small `f64` `lu`/`solve` cells at 1T in C order (1.10-1.17).
+
+**Cause, in the fork's own code.** `28bc13b` floored the blocked LU recursion's panel
+solve and trailing product with `A11.nrows() * A11.ncols() > par_threshold` (128*128).
+Two things follow. Upstream `0539947` reads `par_threshold` in
+`lu/partial_pivoting/factor.rs` at exactly one place, gating the **swap stage**, and
+passes the caller's `par` to both products unconditionally -- so the floor is the fork's
+own, and it redefined a public knob. And the floor counts **elements** while its
+crossover was swept on `f64`, so a `c64` element carries four times the arithmetic and
+the floor sat four times too high: at `n256` the `128x128` trailing update stayed
+sequential where `f64` threads the same area. That is the sign flip the page shows --
+`c64 n256` at 1.26-1.51 slower, `f64` 64/96/128 at 0.49-0.66 faster, same code.
+
+The second mechanism is the adopted GEMM floor (`2000dd9`), which replaced upstream's
+`M*N*K >= 4096 * size_of::<T>()` (f64: 32,768) with work in flops
+(`M*N*K * {2|8} >= 2 * 48*48*256`, f64: 589,824, eighteen times higher). Between those
+sizes the fork is sequential where upstream threaded, which is where the small-shape
+4T/8T cells come from; it is also why the same shapes win at 1T and in `gemm`. This is a
+trade, not a defect. The third is the row-major QR/LU copy path (`044f947`, `d132011`),
+which is why 62 of the 92 are C order and why the clean 1T cells are all C order.
+
+**Decision on the §4 blocker.** Not either offered option: the contract stays, the unit
+of the floor changes to flops, which is the principle `2000dd9` already adopted.
+`f64` decisions are identical, only the complex crossover moves, and the comparison
+saturates so `par_threshold = usize::MAX` still yields a sequential LU -- which is what
+made the trailing-only plan a contract change and this one not. Committed as `9dc0f0c`
+on `fix/lu-work-floor-units`; gate `210 passed / 2 ignored`, the same count as main.
+**Not measured, not adopted**; the pair that would adopt it still has to pass the
+unchanged-upstream control gate that refused 1/396 and 12/396 on the `a537746` pairs.
+Record: `docs/reviews/20261018-lu-work-floor-units-decision.md`.
+
+**ELF comparisons demoted.** Three performance conclusions had been resting on identical
+machine code of saved ELFs (§3's copy aliases, §5's four dense functions, and part of
+the ABBA probe). They are static observations, not performance evidence: the copy
+diagnostic's own unchanged control had identical ELFs and then left its band by 17%, the
+compared binaries come from different build contexts, and four normalized functions do
+not constrain a program's schedule. Record: `docs/reviews/20261018-elf-comparison-demotion.md`.
+
+**Open.** The control-gate instability is now the top blocker, not any candidate: two
+complete pairs on identical source moved an unchanged upstream cell with median control
+ratios of 0.99975 and 0.99899. A fix is a measurement question, and the existing
+same-source (rename-only, then swapped) control is the design that can answer it.
+
 ## 2026-10-18 — isolated upstream still shifts; no adoption/contract waiver
 
 Diagnostic recording harness311c2fb45b50e14eb09a15fd929eb81bce343341, compiled harness

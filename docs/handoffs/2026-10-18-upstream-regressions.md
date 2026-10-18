@@ -2,6 +2,11 @@
 
 この記録は既存Issue tensor4all/faer#18への引継ぎ用。**目標未達・作業一時停止。完了、採用、最終候補凍結を意味しない。** 私が起動した計測・ビルド・独立レビューは終了しており、バックグラウンド計測はない。
 
+> **2026-10-19 追記（この記録の一部は訂正済み）**
+> - §3・§5 のELF命令列比較は**静的観察に降格**。同じ記録の中に「ELF一致なのに unchanged control が17%動いた」反例があり、性能の根拠にならない。詳細: `docs/reviews/20261018-elf-comparison-demotion.md`
+> - §4 は判断済み。契約は変えず、`par_threshold` フロアの**単位**を flops に修正した（upstream では `par_threshold` はswap段のみを制御し、末尾GEMM/TRSMは常にcaller par、という事実確認に基づく）。ブランチ `fix/lu-work-floor-units`、commit `9dc0f0c`、テスト210 passed/2 ignored。**未計測・未採用。** 詳細: `docs/reviews/20261018-lu-work-floor-units-decision.md`
+> - 以下 §1〜§7 の本文は当時のまま。上記2点だけが更新されている。
+
 ## 1. 目標と現在地
 
 upstream `0539947ffb757a739d7e703a7d2fa0c792a909c1` に対する、ノイズ帯を超えて再現する技術的に解消可能な性能退行を、正しさ・一般性を維持して解消する。最初の92セルは固定スコープではなく出発点。共有関数の波及、新たに見つかる退行も対象。
