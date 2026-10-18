@@ -2,6 +2,44 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — complete PREs, isolated shared-floor implementation
+
+Both bounded gpt-6.1-sol PRE reports are complete and archived as Markdown plus
+verbatim JSON under `docs/reviews/20261018-{native-gemm-budget,candidate-completeness}-pre-review.*`.
+Native plan has no mandatory finding. Comparator PRE correctly identified that
+selector existence must include legitimately skipped recorded cells, not timed
+series alone; source filter/counterexample confirm it, corrected plan and worker
+request require explicit mixed-support lu,gemm regression plus nonexistent-token
+refusal. Statistics and adoption criteria do not change. Implementation is split
+by disjoint ownership: main Rust worktree, worker comparator/toolkit/CLI tests.
+
+Isolated native candidate7f713a1 (base b7715c5, separately reviewed correctness
+repair) reuses one private dtype-MAC floor at all3 native entrances, exact
+post-shift dimensions; internal legacy32³ gate remains fallback-only. No LU gate,
+copy/HH candidate, new threshold/API/unsafe/scratch/dependency. Initial focused2
+pass; after extreme-cutoff algebra extension final library217pass/2existingignore;
+no-Rayon std,linalg check passes with13 existing warnings on unchanged declarations.
+Kache33,981/33,981 valid. Logs/exact patch/source hashes in
+`data/probes/20261018-native-gemm-budget/`. Bounded POST running on immutable
+snapshot. No timing, adoption or integration; tests are not performance evidence.
+
+Exact staged inventories exported offline from the original full-MKL census,
+checked against independent requested axes, with variants/skips retained: stage1
+648 records/start (fork228/upstream228/MKL108 timed,84 vendor skips); conditional
+broad stage2 all14 families2688 records/start, including unsupported records.
+Raw CSV grids and metadata hashes are frozen before timing; exact invocation and
+fresh build/source/thread/topology checks still required. Stage1 only filters;
+formal adoption requires complete validated manifests and unchanged controls/
+guards. Square2048/3072/4096 stay final-only. Expanded goal remains incomplete.
+
+Historical fact corrections, not new measurements: faer5229e0b and campaign8319a10
+recover original phase stdout. Correct baseline/candidate table mixing,4% not11%
+512²/1T SVD gain, DBDSQR intermediate/INFO2 fallback, QR calls vs regions and
+missing panel count, rectangle MAC/FLOP arithmetic; retract unproven wake-up,
+timer-precision and discarded-vector-work causal claims. See
+`data/probes/20261018-historical-phase-audit/`; missing historical binary/graph/
+pool evidence remains disclosed, not reconstructed by assertion.
+
 ## 2026-10-18 — native correctness boundary closed locally, performance work resumes
 
 Branch `fix/native-gemm-empty-extents`, code af8273f/docs b7715c5, separately fixes
