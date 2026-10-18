@@ -2,6 +2,47 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — canonical native stage1 complete, control-refused, no adoption
+
+A=b7715c53ba75946d68a97d5655f481b198332447 / B=7f713a1401f18546d1ef0c134df982be80626b2e,
+upstream0539947ffb757a739d7e703a7d2fa0c792a909c1, compiled harness651807301c4fd0d485a66038346388dffe289073,
+toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5, MKL2026.1. Eight serial existing
+recorder runs completed15:28–16:13 UTC; exact648 full identities/statuses/start/
+side×3, all3888 timing-CSV rows including skips retained. All verification,
+manifest, observed1/4/8 budgets, clean source and binary checks passed. No source
+edit/build/checkout overlapped recording. Binary hashes in outcome/README.
+
+Official comparator: Cholesky6/60 controls fail, GEMM1/48 fail, triangular4/48
+fail; HH72/72 reproduce. INCONCLUSIVE / NOT ADOPTED, no conditional stage2, no
+main merge/final campaign. Cholesky targets descriptively .529–.999, not acceptance.
+Accepted A c64C256/8T first5.143332ms versus .822805/.849886 retained; geomean
+skew explicitly disclosed. Dense GEMM four geomean>1.05 cells, three medians above
+baseline process-max+5%; all data/guards remain. No explanation waives them.
+
+Three rejected attempts retain stdout/CSV/full guard: A-HH verification peer18
+10.3% busy, B-tri verification peer21 11.9%, B-HH timing peer16 10.3%. Measured
+CPUs4 /4-7 /4-11, watched4-11,16-23, observer0-3,12-15; boost0/performance/EPP/
+max2GHz. Normal declared bounded retries only. Initial untimed missing-platform-
+crate preflight and locked-cache recovery retained separately, lock unchanged.
+
+`data/probes/20261018-native-gemm-budget/{runtime-stage1,summarize_stage1.py}`
+checks full counter equality/starts/raw5 samples/worker/source/binary identity and
+retains full228-cell controls and descriptive fork rows. Four SIMD Cholesky leaves
+match normalized instructions/sizes but move+16 modulo64; reference targets not
+audited, engine attribution/whole-program equivalence/alignment cause not proven.
+
+Reviewed code and refusal documentation archived on OWN fork feature
+`perf/native-gemm-work-floor` at5ab54a67d05fcb28c9afa907435844e420e98d6c, remote SHA
+verified. Reviewed source hashes still match7f713a1. This makes raw-run source
+ancestors reachable; no PR/release/upstream report or library pin change.
+
+Work continues, not a global stop: independent PRE running for bounded upstream-
+only96-cell ABBABAAB diagnostic, same immutable binaries, no flags/environment/
+worker policy changes. Only ask whether shifts persist without other providers'
+operations; no replacement gate, adoption, outlier removal or new LU pair. Full
+canonical refused data stay immutable. Other root causes and final full suites
+remain outstanding.
+
 ## 2026-10-18 — comparator POST complete and reachable dependency delivered
 
 Bounded gpt-6.1-sol POST COMPLETE on toolkit9daa5bc / harnessfca1fd7: all requested

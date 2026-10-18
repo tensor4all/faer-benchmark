@@ -1,4 +1,4 @@
-# Native GEMM shared-floor experiment — no timing yet
+# Native GEMM shared-floor experiment — stage1 INCONCLUSIVE / NOT ADOPTED
 
 Candidate7f713a1401f18546d1ef0c134df982be80626b2e on isolated
 `perf/native-gemm-work-floor`; baseline b7715c5 is the separately reviewed
@@ -71,9 +71,53 @@ This experiment cannot restore LU's ancestor-reduced budget or explain1T binary
 shifts. Even a successful stage2 does not finish the all-regression goal: remaining
 causes and original improvement guards remain, then final freeze and BOTH full
 suites/vendor arms. Square2048/3072/4096 remain strictly FINAL-ONLY; thin4096×256
-here is distinct. No final freeze, timing or adoption has happened.
+here is distinct. Stage1 recording is now complete (below); no stage2, final freeze or adoption.
 
-## Preflight attempt retained; zero timed cells
+## Completed canonical stage1
+
+Four groups per side completed with fresh immutable A=b7715c53ba75946d68a97d5655f481b198332447
+and B=7f713a1401f18546d1ef0c134df982be80626b2e; upstream0539947ffb757a739d7e703a7d2fa0c792a909c1,
+harness651807301c4fd0d485a66038346388dffe289073, toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5,
+MKL2026.1. Exact648 full identities/statuses/start/side ×3 (3888 timing-CSV rows,
+including unsupported records). No intersections; all samples, skips and HH
+variants retained. `summarize_stage1.py` asserts census, starts, raw5 samples,
+worker budgets, source identities and unchanged binary hashes. Full result:
+`runtime-stage1/outcome.json`, all four official CLI logs and HH's successful
+DESCRIPTIVE comparison JSON. All8 validated run manifests/raw CSVs are under
+`data/results/zen5-cpu/faer-kernels/*native-floor-stage1-*`, no published pages.
+
+|group|upstream controls|failed|fork cells|candidate median above A-max+5% (descriptive)|
+|---|---:|---:|---:|---:|
+|Cholesky|60|6|60|0|
+|GEMM|48|1|48|3|
+|triangular solve|48|4|48|0|
+|HH|72|0|72|0|
+
+**INCONCLUSIVE / NOT ADOPTED. No stage2.** Three CLI refusals cannot be overridden
+by target gains or HH's passing subset. Cholesky24 target ratios .529–.999 are
+descriptive only. Accepted A c64C256/8T starts5.143332/.822805/.849886ms are all
+retained; a large first start affects the geometric ratio. GEMM geomean>1.05:
+c64F96/4T1.076, f64C128/4T1.073, f64C96/4T1.139, c64C128/8T1.089. The f64C96
+median lies inside A's broad range; the other three exceed A-max+5%. These data
+do not prove a compiler/worker/alignment cause; no guard is waived.
+
+A binary SHA2562decf425848a5b0706f9c20de65084822a23d659071b38b6bf7c9dea9d347e4a;
+B=f8e8e3337463fe7219395de47c8161bba8c95fb604e743ca89266f587bcfce2a. Source hashes
+still match reviewed7f713a1. Runtime Cargo graphs retained for each side. All
+source checks remained clean; no source edits/builds/checkouts overlapped a run.
+Three post-rejected attempts fully retained: A-HH verification peer18 busy10.3%
+(40rows), B-tri verification peer21 busy11.9% (24rows), B-HH timing peer16 busy10.3%
+(20rows). Normal declared retry, no outer timing repeat/outlier filtering. Measured
+CPUs4 /4-7 /4-11; watched4-11,16-23; observer0-3,12-15, boost0/performance/max2GHz.
+
+`static-cholesky-leaves.json` bounded inspection reuses existing analyzer functions
+without overwriting old artifacts. Four matching leaves have equal sizes and
+normalized instructions; entries shift -211312 bytes (+16 mod64). Both engines'
+leaves included, not individually attributed; RIP/external references not audited.
+Not equivalence or alignment causality, and NOT a replacement control gate.
+Next upstream-only isolation is a separately reviewed DIAGNOSTIC, not adoption.
+
+## Preflight attempt retained; zero timed cells in that attempt
 
 First stage1 launcher stopped before any build/recorder/CSV at offline Cargo
 metadata: uncached `redox_users 0.4.6` under the MKL feature. All partial output,

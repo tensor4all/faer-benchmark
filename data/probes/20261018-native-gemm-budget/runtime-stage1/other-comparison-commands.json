@@ -1,0 +1,32 @@
+{
+  "gemm": {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/candidate_compare.py",
+      "--baseline",
+      "data/results/zen5-cpu/faer-kernels/20261018T153504Z-native-floor-stage1-A-gemm",
+      "--candidate",
+      "data/results/zen5-cpu/faer-kernels/20261018T155755Z-native-floor-stage1-B-gemm",
+      "--checkout",
+      "extern/t4a-faer",
+      "--json",
+      "data/probes/20261018-native-gemm-budget/runtime-stage1/gemm-comparison.json"
+    ],
+    "returncode": 1
+  },
+  "triangular_solve": {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/candidate_compare.py",
+      "--baseline",
+      "data/results/zen5-cpu/faer-kernels/20261018T153955Z-native-floor-stage1-A-triangular_solve",
+      "--candidate",
+      "data/results/zen5-cpu/faer-kernels/20261018T160246Z-native-floor-stage1-B-triangular_solve",
+      "--checkout",
+      "extern/t4a-faer",
+      "--json",
+      "data/probes/20261018-native-gemm-budget/runtime-stage1/triangular_solve-comparison.json"
+    ],
+    "returncode": 1
+  }
+}
