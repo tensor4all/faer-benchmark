@@ -44,3 +44,17 @@ campaign or timing has occurred for this candidate at this commit.
 
 Provenance: own MIT-fork code/analysis reuses prior own experiment; no foreign
 implementation/tests/vendor code imported. Raw artifact whitespace preserved.
+
+## Fresh-build result: HOLD, NO TIMING
+
+Both builder invocations completed under2920cfb with cleanfullcheckouts, actual
+sourcepath Cargo graphs, sameMKL2026.1/profile/reportedflags/features/compiler
+fingerprints. All4matchingdense sizes ANDnormalizedbodies differ; complete
+static-dense/ and builds/ retained. A remains2decf425..., B1dd5fbf3...; source
+restoration alone did NOT retain compiledbody. No stage1/stage2/fbench verify
+or timing for7cd; no alignment/link/optimization flag changes/retries.
+Build-provenance-audit.json: matchingfbenchcompiler/profile/config/dependency
+fingerprint fields, flags[], incrementaldirsempty. Targetrootrustc_info.json
+unavailable, not invented; version queries are now-context not historical proof.
+No specific compiler/globaloptimization/cache mechanism or provider attribution
+is established. Previous sameA/old7fQC is retained, not a candidate pass.

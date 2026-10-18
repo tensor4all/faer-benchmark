@@ -1246,3 +1246,21 @@ is notreference/caller/wholeprogram proof/adoption; prior7f refusals and96cell
 diagnostic shifts remain. All controls/guards/rotations/skips/full rejected
 retention unchanged; stage2 conditional, square2048/3072/4096final-only. No
 finalfreeze, fullcampaign, main/pin change or goal completion.
+
+### Structured-only floor static HOLD; distinct same-source compile diagnostic
+
+2920cfb freshA/b771 andB/7cd builder invocations succeeded; actualpaths/budgets/
+MKL2026.1 and profile/compiler/config/dependencyfingerprint/flags match. All4dense
+functions differ in sizes+normalizedinstructions (1248/1226/1317/1249diff lines),
+A2decf425..., B1dd5fbf3...; no timing/fbenchverify/stage1/stage2, no flag/alignment
+fiddling/retry. Static/dependency audit is partialcompilerprovenance, not cause/
+reference/caller/whole-program equivalence. Code sourcecorrectness review remains
+valid, performancecandidateHELD/NOTADOPTED, no main/pin change. Data in native-
+structured-floor/{builds,static-dense,build-provenance-audit.json}. Raw retained.
+
+Next predeclared same-source-plan.json is compile-only A=b771/C=af8273; measured
+Rust/traits/manifest/lock trees equal and whole diff docs/PATCHSET only. Same
+containing harnesscommit/toolkit/builder/profile/flags, serial full-checkouts,
+Aexistingtarget/Cabsenttarget: build/cache/path contexts not separately isolated.
+Compare all4 bodies once with unchangedanalyzer. No kernel/verify/timing, no
+performance/control-contract change; cannot override7cdHOLD or count as LU pair.
