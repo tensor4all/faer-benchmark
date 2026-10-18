@@ -2,6 +2,45 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the LU floor's unit fixed and adopted; both merge candidates merged
+
+**Measured, adopted, merged.** `0c71ca2` counts the blocked partial-pivoting LU recursion's work
+floor in flops instead of elements (a `c64` element is four real MACs, so the floor sat four times
+too high for it), rebased onto `b7715c5` and merged into `main` as `2870062`. The pair is
+`20261018T225051Z-lu-unit-floor-baseline` (`b7715c5`) against
+`20261018T231847Z-lu-unit-floor-candidate` (`2870062`), MKL arm, 396 cells, 4,428 rows each, three
+rotated process sets, one lock, nothing else built while timing ran.
+
+The unchanged `faer-upstream` row reproduced: median ratio **0.999717**, two cells outside their own
+between-start range and reported as the tail the gate no longer refuses on. `faer-fork` against the
+baseline: 30 faster, 6 slower beyond 5%, the rest inside the recorded spread. The target cells are
+the `c64 n256` LU/solve group, fork/upstream before -> after: `lu` C 4T **1.260 -> 0.935**, C 8T
+**1.260 -> 0.885**, F 8T **1.370 -> 0.952**, `solve` C 4T **1.350 -> 0.935**, C 8T **1.370 -> 0.893**.
+The regression the 2026-10-18 page flagged is gone and the fork is 6-11% ahead there. The floor's
+own wins are retained: `f64` `lu` at 64/96/128 stays at 0.49-0.75 of upstream. Of the six "slower"
+cells, four have essentially identical medians (`lu/1024x64` 8T 0.4846 -> 0.4841 with a ratio of
+1.396: a rotation artefact, not a time), and the remaining two are `cholesky`/`gemm` cells this
+change cannot reach, at +5-9% on 16-231 us rows.
+
+`git diff 0c71ca2 2870062 -- faer/src faer-traits/src faer-macros/src Cargo.toml Cargo.lock` is
+empty and the merge was a fast-forward, so the merged tree is the measured tree and nothing was
+measured twice. `cargo test -p t4a-faer --lib` at the branch: 210 passed / 2 ignored, the same count
+as the main it was based on. Pin moved to `2870062`; `main` and `origin/main` are both there.
+
+**The correctness fix merged first, without a pair.** `2e221c7` + `af8273f` (empty native extents,
+K0/Replace) merged `main` -> `b7715c5` and pushed. It needs no benchmark because its changed code,
+`sparse_matmul`'s strict/unit shrink and zero-depth replacement, is reached by dense LDLT and the two
+sparse Cholesky update sites, and no declared benchmark row executes those - the `cholesky` family
+takes the `is_llt` branch, which is a different call. That is a reachability statement, not a
+performance claim. Tests at the branch: 214 passed / 2 ignored.
+
+**Two runs were spoiled before these, by the agent itself.** The harness process (`node`, ~24% of a
+core) was landing on CPU 4 with the whole machine in its affinity, so the idle guard rejected
+`linalg-small` runs twice; the agent is now pinned to the observer CPUs `0-3,12-15`, which is the
+pin `AGENTS.md` says is lost on restart. Both spoiled run directories are retained under
+`data/results/.../20261018T215638Z-*` and `20261018T222317Z-*` with their rejected-attempt archives,
+and carry no `run.yaml`: they are not evidence and not a baseline.
+
 ## 2026-10-19 — the observer pin is recorded; the adopted pairs re-checked
 
 **Provenance instead of an invisible precondition.** An admitted run's manifest said nothing about

@@ -21,4 +21,10 @@
 # `t4a-faer 0.24.5` and are not evidence about any revision; see
 # `docs/reviews/20261016-linked-crate-provenance.md`. Every recording from `5578ccc`
 # on linked the checkout (the build script refuses a graph that does not).
-2240b076a03011b2f128988fecf2967c4b1dda1c
+# `2870062` from 2026-10-19, the merge of `0c71ca2` (the blocked partial-pivoting
+# LU's recursion floor counts work in flops, not elements) on top of `b7715c5`
+# (the empty-extent / K0 correctness fix, merged for correctness with no declared
+# benchmark path). The floor change was measured as `2870062` against `b7715c5` on
+# the `lu`/`solve`/`full_piv_lu`/`cholesky`/`gemm` grid at 1/4/8T, both orders and
+# dtypes; the merge is a fast-forward, so the merged tree is the measured tree.
+2870062a7ee60c440a88bd08fd421cb94421cd56

@@ -51,9 +51,10 @@ three collateral cells of families the change cannot reach.
 - Record in `PATCHSET.md` and the campaign worklog: the measured commit, the tree hashes, the target
   and guard results, the run directories that carry them, and the date. An entry without its run
   directory is not a record.
-- Move `pins/t4a-faer.rev` only with the next recorded baseline, not with the merge. A page quotes
-  the revision it measured; re-recording the declared suite at the new `main` is the publication
-  step that follows a merge, and it is a separate, deliberately started run.
+- Move `pins/t4a-faer.rev` to the measured revision when the candidate is adopted: the pin names the
+  revision the campaign materialises and the pages quote, so it follows the adoption, not `main`.
+  It moved to `2870062` when `0c71ca2` was merged. Re-recording the declared suite at that revision
+  is the publication step that follows a merge, and it is a separate, deliberately started run.
 - Rejected and HOLD branches stay where they are with their records. A merge does not delete the
   branches that lost, and a HOLD candidate is not revived by a neighbouring merge.
 
