@@ -1,0 +1,55 @@
+{
+  "source_run": "data/results/zen5-cpu/faer-kernels/20261018T070736Z-upstream-lu-baseline",
+  "source_changed": false,
+  "performance_measurement": false,
+  "reference_validates": true,
+  "cases": [
+    {
+      "case": "empty-results",
+      "returncode": 1,
+      "stdout": "refused: the candidate run is not valid evidence:\n  result_files is empty: a run has to name the files that hold what it measured, or the report and the validator are reading different evidence\n  v2 timing evidence: missing complete-set process repeat\n",
+      "stderr": "",
+      "candidate_validation_errors": [
+        "result_files is empty: a run has to name the files that hold what it measured, or the report and the validator are reading different evidence",
+        "v2 timing evidence: missing complete-set process repeat"
+      ],
+      "expected_refusal": true
+    },
+    {
+      "case": "missing-controls",
+      "returncode": 1,
+      "stdout": "refused: the candidate run is not valid evidence:\n  v2 timing evidence: run0-gemm-mid-1t.csv: missing, unexpected or status-changed timed cells\n",
+      "stderr": "",
+      "candidate_validation_errors": [
+        "v2 timing evidence: run0-gemm-mid-1t.csv: missing, unexpected or status-changed timed cells"
+      ],
+      "expected_refusal": true
+    },
+    {
+      "case": "missing-third-start",
+      "returncode": 1,
+      "stdout": "refused: the candidate run is not valid evidence:\n  v2 timing evidence: missing complete-set process repeat\n",
+      "stderr": "",
+      "candidate_validation_errors": [
+        "v2 timing evidence: missing complete-set process repeat"
+      ],
+      "expected_refusal": true
+    },
+    {
+      "case": "unmatched-selector",
+      "returncode": 1,
+      "stdout": "measured revision 2240b076a030 and merged revision 2240b076a030 carry identical measured paths\nrefused: the baseline run recorded no faer-upstream cell matching '__no_declared_cell__'\n",
+      "stderr": "",
+      "candidate_validation_errors": [],
+      "expected_refusal": true
+    },
+    {
+      "case": "valid-unselected-dtype-subset",
+      "returncode": 1,
+      "stdout": "measured revision 2240b076a030 and merged revision 2240b076a030 carry identical measured paths\nrefused: faer-upstream: the runs did not record the same selected cells (including skips)\n",
+      "stderr": "",
+      "candidate_validation_errors": [],
+      "expected_refusal": true
+    }
+  ]
+}

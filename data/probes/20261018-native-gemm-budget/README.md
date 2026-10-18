@@ -19,8 +19,10 @@ remains only on fallback, with original dimensions; native uses effective ones.
   declarations; not proof of forced-generic numerical execution.
 - `kache.log`:33,981 entries all valid, zero corruption/missing/orphans/checksum
   failure/index drift.
-- PRE complete, no mandatory finding; bounded gpt-6.1-sol POST running on immutable
-  `/tmp/native-gemm-budget-post-bundle.md`. This is not performance/merge approval.
+- PRE and bounded gpt-6.1-sol POST COMPLETE, no findings. POST covers immutable
+  code7f713a1 and all focus areas; source hashes still match. Full report in
+  `docs/reviews/20261018-native-gemm-budget-post-review.{md,json}`. No independent
+  execution, native worker-utilization, performance or merge approval.
 - Module-owned public f64/c64 oracle covers Seq/owned8, C/F, lower/upper/strict/unit
   representative masks,1/32/64/128, Add/Replace, conjugation and parent canaries.
   Mapped128×96×64 tests check real diagonal present/absent above the floor. Existing

@@ -24,7 +24,7 @@ refused for actual moved controls. No old failure is converted into adoption.
 A comparator exit0 is already descriptive rather than automatic approval of a
 slower fork; that statistical/adoption contract will not be changed here.
 
-## Proposed minimum repair (not yet implemented)
+## Implemented repair (POST/delivery pending)
 
 Reuse existing `validate_run.validate` at the CLI. Pair nonempty equal selected
 full identities and exact declared starts instead of intersections; every
@@ -34,9 +34,37 @@ explicit f64 subset remains supported. Preserve raw medians, range±5%, geometri
 ratios, all skipped cases, and manifest-only result selection (no archive glob).
 
 Plan: `docs/reviews/20261018-candidate-completeness-plan.md`. Independent bounded
-PRE on the same gpt-6.1-sol is pending. Final implementation needs focused and
-full Python/CLI checks plus completed POST. No threshold relaxation, library
+PRE on gpt-6.1-sol is COMPLETE. Its mandatory correction was verified: selectors
+match recorded identities including legitimate skips. Paired recorded sets also
+retain skipped-cell completeness; timed support sets stay independent per engine.
+The ordinary worker exhausted its budget with failed tests/incomplete CLI coverage;
+its checkpoint is archived as INCOMPLETE, not an approval. Main finished the
+implementation and tests; completed POST is still required. No threshold relaxation, library
 source change, new API/framework, third LU pair or large-tier run follows.
+
+## Observed after results
+
+`after.json`: all5 previously exit-zero negatives now exit1. The first3 fail the
+existing whole-run validator; unmatched selector and valid-but-undeclared-subset
+fail explicit pairing. No threshold/statistical/adoption rule changed.
+`positive-full.json` and `positive-f64.json` retain396/198 complete control+fork
+cells respectively, with identical-data ratios1. Original manifest hash matches
+`provenance.json`, and original tracked source-run files are clean. No timing.
+
+Final tests: toolkit63pass; harness unittest9pass, including6 real CLI tests with
+a synthetic fully-valid v2 census and temporary Git measured tree (no validator/
+comparison mocks or local faer checkout dependency). Explicit lu,gemm accepts a
+control lu skip while fork times both; bad token plus gemm refuses. Missing evidence
+on either side is not excused by an f64 subset. YAML, missing file, CSV-parser and
+output-I/O failures refuse; slower fork cells still yield descriptive exit0.
+Ruff/py_compile/diff checks pass. Test logs retained adjacent. The real5-case after
+capture preceded the additive CSV-error guard; that final guard is covered in
+final CLI tests, not a changed pairing/statistical decision.
+
+Offline rechecking the original TWO LU pairs still refuses396-cell controls
+with exactly1 and12 failed cells (`old-pair-*-still-refused.log`). This is NOT a
+third timing pair or reversal of their non-adoption. Toolkit source9daa5bc remains
+local pending POST, push/remote verification and then requirements pin update.
 
 Reproduce from any cwd:
 

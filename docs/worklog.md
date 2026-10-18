@@ -2,6 +2,35 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — native POST complete, comparator tests recovered and passing
+
+Native candidate7f713a1 bounded gpt-6.1-sol POST is COMPLETE for all requested
+areas, no findings/deletions. Source hashes still match; no corrective code or
+repeated Cargo tests. Full report archived under `docs/reviews/20261018-native-gemm-budget-post-review.*`.
+No performance, worker-utilization, adoption or integration approval; timing still
+not begun and final-only square tiers still untouched.
+
+Comparator ordinary worker hit28-turn budget with failing/unfinished tests and
+no CLI fixture. Its INCOMPLETE checkpoint is explicit, not review evidence. Main
+finished pairing and tests: shared recorded identities include legitimate skips,
+nonempty equal timed sets/complete start IDs independent per engine, aliases and
+duplicate repeats refuse rather than overwrite. CLI reuses whole-run validator
+on BOTH sides, with YAML/CSV/file/output error refusals; explicit subsets remain
+legal and fork slowdown stays descriptive. No second schema framework or stats
+change. Toolkit code is local9daa5bc; POST/delivery/pin update remain pending.
+
+Toolkit63 tests pass, harness unittest9 pass including6 fully-valid synthetic-v2
+CLI tests/temp Git without validator mocks or local faer checkout requirement.
+Ruff/compile/diff checks pass. Real5 negatives now refuse; real positives396/198
+full/f64 cells pass; original tracked source data/hash unchanged. Offline original
+LU pair rechecks still fail exactly1/12 controls over396 cells—no new timings or
+third pair. Evidence `data/probes/20261018-candidate-coverage-audit/`; record notes
+the additive CSV exception guard was tested after the real5-case after capture.
+
+No goal completion: comparator POST then reachable-source pin, fresh native A/B
+builds/recording prerequisites, staged guard/target decisions and remaining root
+causes, final freeze and both entire suites/vendor arms are still required.
+
 ## 2026-10-18 — complete PREs, isolated shared-floor implementation
 
 Both bounded gpt-6.1-sol PRE reports are complete and archived as Markdown plus
