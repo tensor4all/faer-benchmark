@@ -2,6 +2,33 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — focused Householder merge held, investigation continues
+
+The fixed-binary stage1 diagnostic forad9f2ef completed all144 timed full
+fork/upstream identities and three starts/binary/cell, with all exact-grid,
+verification/source/power/thread checks. Full results and the reproducible
+analysis live in `data/probes/20261018-householder-partial-merge/` (9044b41).
+Tall targets improved, but f64 F64² block/8T deteriorated by12.24% rotation-
+geometric, beyond the baseline range expanded by5%. NOT ADOPTED; downstream
+QR/SVD/eigh stage2 NOT run. Algorithmically unchanged small paths do not imply
+unchanged code generation or worker state. All72 upstream descriptive range
+checks are in band; they cannot waive the fork guard failure or make a diagnostic
+an adoption comparison.
+
+The repaired wrapper retained a real post-rejected A4T attempt completely:
+stdout,60-row CSV and CPU guard log (CPU8/cache peer8% busy). Three pre-execution
+idle admissions were also delayed (CPU4,18,19), with details retained. The
+predeclared bounded wrapper continued, not a selective manual rerun. Measured
+CPUs4/4–7/4–11, watched L3/SMT4–11,16–23, observer0–3,12–15; recorded after dynamic
+topology checks. No build, tracked source edit or other owned measurement overlapped recording.
+
+The broader goal is still active: decline/diagnose this source, do not stop all
+investigation because one candidate failed. Shared native GEMM has three call
+sites (dense, triangular and indexed/diagonal internal); the prior flop floor
+only covered the dense one. Caller audit and focused correctness investigation
+continue before another implementation. No source combination, candidate freeze
+or final all-suite rerun has happened. Large2048/3072/4096 stay final-only.
+
 ## 2026-10-18 — upstream cleanup, still in progress
 
 The new objective is all technically removable, reproducible upstream regressions,

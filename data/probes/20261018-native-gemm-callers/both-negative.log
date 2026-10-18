@@ -1,0 +1,34 @@
+   Compiling t4a-faer v0.24.4 (/tmp/faer-native-gemm-audit/faer)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 04s
+     Running unittests src/lib.rs (/home/shinaoka/projects/tensor4all/faer/target/debug/deps/faer-b7777a9bb2d343b5)
+
+running 2 tests
+
+thread 'linalg::matmul::internal::tests::empty_strict_triangle_preserves_parent_guards' (1691612) panicked at faer/src/linalg/matmul/internal/mod.rs:404:13:
+assertion `left == right` failed
+  left: [
+[8.0, 7.0],
+[7.0, 7.0],
+]
+ right: [
+[7.0, 7.0],
+[7.0, 7.0],
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'linalg::matmul::internal::tests::strict_triangle_preserves_nonempty_parent_guards' (1691613) panicked at faer/src/linalg/matmul/internal/mod.rs:421:13:
+assertion `left == right` failed
+  left: 20.0
+ right: 7.0
+test linalg::matmul::internal::tests::empty_strict_triangle_preserves_parent_guards ... FAILED
+test linalg::matmul::internal::tests::strict_triangle_preserves_nonempty_parent_guards ... FAILED
+
+failures:
+
+failures:
+    linalg::matmul::internal::tests::empty_strict_triangle_preserves_parent_guards
+    linalg::matmul::internal::tests::strict_triangle_preserves_nonempty_parent_guards
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 212 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `-p t4a-faer --lib`
