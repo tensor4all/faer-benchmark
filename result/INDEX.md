@@ -5,7 +5,7 @@ this file is what the generator produces.
 
 - Reference fork revision (`pins/t4a-faer.rev`): `5578ccc3df0d980374b2fda6327710d0dcb52c8c`
 - Reference upstream revision (`pins/upstream-faer.rev`): `faer-v0.24.4`
-- Newest recorded run: `2026-10-18T00:51:02.244289Z`
+- Newest recorded run: `2026-10-18T01:29:10.514340Z`
 - Every page below is one `(suite, hardware profile, fork revision, upstream revision,
   vendor arm)` and carries its commits, its hardware and the vendor library it linked.
 
@@ -36,6 +36,8 @@ partial or declaration-changed page never displaces a full-coverage one.
 |---|---|---|---|---|---|---|---|---|
 | `faer-kernels-large` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 7 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md) |
 | `faer-kernels-large` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 7 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-mkl-timing-v2.md) |
+| `faer-kernels` | `zen5-cpu` | `mkl` | `0627828d965b/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | current | [result/zen5-cpu/faer-kernels/0627828d965b-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/0627828d965b-0539947ffb75-mkl-timing-v2.md) |
+| `faer-kernels` | `zen5-cpu` | `mkl` | `0627828d965b/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | current | [result/zen5-cpu/faer-kernels/0627828d965b-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/0627828d965b-0539947ffb75-mkl-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `mkl` | `52b113acd2e2/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | current | [result/zen5-cpu/faer-kernels/52b113acd2e2-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/52b113acd2e2-0539947ffb75-mkl-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `mkl` | `52b113acd2e2/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | current | [result/zen5-cpu/faer-kernels/52b113acd2e2-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/52b113acd2e2-0539947ffb75-mkl-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `mkl` | `5578ccc3df0d/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | current | [result/zen5-cpu/faer-kernels/5578ccc3df0d-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/5578ccc3df0d-0539947ffb75-mkl-timing-v2.md) |
