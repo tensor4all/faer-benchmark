@@ -2,6 +2,34 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — comparator POST complete and reachable dependency delivered
+
+Bounded gpt-6.1-sol POST COMPLETE on toolkit9daa5bc / harnessfca1fd7: all requested
+areas, no findings/deletions. Full MD/verbatim JSON archived. Reviewer traced
+full4 files, timing validator and scoped existing run validator; no test execution,
+raw-log/SHA verification or performance approval. Given LICENSE paths absent, no
+independent license-text audit. Worker checkpoint remains explicitly incomplete.
+
+Toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5 pushed to existing
+`fix/rejected-attempt-retention`; remote SHA verified, requirements pin updated.
+No release/main merge. Already-passing63 toolkit tests/9 harness tests not rerun
+without an affecting code change. Remaining toolkit CI-local declarations,
+all-module compile and full-package Ruff pass. Harness declarations, all39
+recorded manifests and generated-index check pass; historical declaration-drift
+notes still skip declaration-derived checks for old runs, not evidence of correct
+Cargo linkage or new performance acceptance. Coherent production diff self-reviewed;
+no source correction after independent POST.
+
+Native direct-recorder argv now frozen as4 groups/side/stage, projection matches
+existing full648/2688-record grids including retained unsupported cases/variants.
+Host topology derived from sysfs; all11 agent threads pinned outside measured L3,
+boost0/performance/EPP-performance/max2GHz observed. Native source objects fetched
+locally with full SHAs (short-SHA fetch failed, then corrected), no checkout or
+build/timing yet. Prepare fresh A=b7715c5/B=7f713a1 with existing full checkout;
+no source or harness/tool identity changes between pair parts, no final-only tiers.
+No goal completion or candidate adoption; stage1/conditional stage2 and remaining
+regressions/final all-suite campaign still required.
+
 ## 2026-10-18 — native POST complete, comparator tests recovered and passing
 
 Native candidate7f713a1 bounded gpt-6.1-sol POST is COMPLETE for all requested

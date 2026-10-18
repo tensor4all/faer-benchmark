@@ -24,7 +24,7 @@ refused for actual moved controls. No old failure is converted into adoption.
 A comparator exit0 is already descriptive rather than automatic approval of a
 slower fork; that statistical/adoption contract will not be changed here.
 
-## Implemented repair (POST/delivery pending)
+## Implemented and reviewed repair
 
 Reuse existing `validate_run.validate` at the CLI. Pair nonempty equal selected
 full identities and exact declared starts instead of intersections; every
@@ -39,7 +39,11 @@ match recorded identities including legitimate skips. Paired recorded sets also
 retain skipped-cell completeness; timed support sets stay independent per engine.
 The ordinary worker exhausted its budget with failed tests/incomplete CLI coverage;
 its checkpoint is archived as INCOMPLETE, not an approval. Main finished the
-implementation and tests; completed POST is still required. No threshold relaxation, library
+implementation and tests. Bounded gpt-6.1-sol POST is now COMPLETE across all
+requested areas, no findings/deletions. Full report archived in
+`docs/reviews/20261018-candidate-completeness-post-review.{md,json}`. No independent
+test execution or performance/adoption approval; supplied LICENSE paths were
+absent, so reviewer did not independently verify license text. No threshold relaxation, library
 source change, new API/framework, third LU pair or large-tier run follows.
 
 ## Observed after results
@@ -63,8 +67,10 @@ final CLI tests, not a changed pairing/statistical decision.
 
 Offline rechecking the original TWO LU pairs still refuses396-cell controls
 with exactly1 and12 failed cells (`old-pair-*-still-refused.log`). This is NOT a
-third timing pair or reversal of their non-adoption. Toolkit source9daa5bc remains
-local pending POST, push/remote verification and then requirements pin update.
+third timing pair or reversal of their non-adoption. Toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5 is pushed on the existing
+`fix/rejected-attempt-retention` feature branch; remote SHA verified. Harness
+requirements now pin that reachable commit. No release/main merge. Remaining
+local CI content gates are recorded in the worklog; new recordings remain separate.
 
 Reproduce from any cwd:
 
