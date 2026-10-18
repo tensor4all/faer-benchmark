@@ -1223,3 +1223,26 @@ absence of the trees that would date it.
   identity calls for, and it needs a field the run schema does not have.
 - The `1024` shapes, `f32`/`c32`, BLIS, sparse, iterative and GPU arms are later
   declarations, not machinery built now.
+
+### Structured-only native floor, dense source preserved (pre-build freeze)
+
+Distinctcandidate7cd372f/baseb7715c5; library archive520fafe pushed/verified, not
+main/adopted. Dense-module suffix exactbaseline, retained3files exactreviewed7f.
+Focused2/library217pass2ignored/noRayon13existingwarnings; kache33975valid. Broad
+PRE/POST incomplete retained; actual-delta PRE/POST COMPLETE gpt-6.1-sol, no
+findings, explicitly inherits prior unchanged3-file POST, not newfulllegacy
+audit/execution/performance approval. Source-only report in reviews/native-
+structured-floor and data/probes/20261018-native-structured-floor/.
+
+Frozen fresh full-checkout builder argv/two refs, unchanged648/2688fullcensuses,
+staticfilter and existing recorder loop committed before build/pair. Staticfilter
+QC sameA passes, old7f holds2of4normalizedbodies; only disassembly, not timing.
+Actualembeddedpre-filter/hashrefusal checked6normal/optimizedPython cases on
+dummybytes, no kernel/build/recording. Ruff/compile/bashsyntax/diff checks pass;
+rawlogs/diffs retained (derivedcandidate.diff zero-context, not whitespace-edited).
+Newcandidatebuild/staticcomparison/timing pending. Only4densebodiessize+normalized
+equality permits unchangedstage1, failureHOLD/no flag/alignmentfiddling. Equality
+is notreference/caller/wholeprogram proof/adoption; prior7f refusals and96cell
+diagnostic shifts remain. All controls/guards/rotations/skips/full rejected
+retention unchanged; stage2 conditional, square2048/3072/4096final-only. No
+finalfreeze, fullcampaign, main/pin change or goal completion.

@@ -1,0 +1,36 @@
+kache · doctor
+  v1.0.0 · rustc 1.99.0 (b940084d7 2026-09-28)
+
+Setup
+  Binary            ✓   /home/shinaoka/.local/bin/kache
+  RUSTC_WRAPPER     ✓   kache via ~/.cargo/config.toml
+  Cargo config      ✓   kache in ~/.cargo/config.toml
+  cargo doc         ✓   shim
+  Host config       ✓   none at /etc/kache/config.toml
+  Install path      ✓   /home/shinaoka/.local/bin/kache (standalone, user-managed): the first kache on PATH, which keeps working until that file is replaced or removed
+  C/C++ shims       ✓   cc on PATH is a kache shim (/home/shinaoka/.local/lib/kache/shims)
+  Other checkouts   ✓   no miss in the latest build traces to another checkout
+  Compiler probe    ✓   cc -### resolves (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0)
+
+Storage
+  Cache dir      ✓   /home/shinaoka/.cache/kache
+  Cache FS       ✓   ext2/3/4 (local)
+  Store DB       ✓   /home/shinaoka/.cache/kache/index.db
+  Store totals   ✓   33975 unique entries, 75.1 GiB stored across 1 configured stores
+  Link layout    ✓   hardlink build-tree → <store>/staging works (FICLONE unsupported (expected on ext4)) (build: /home/shinaoka/projects/tensor4all, staging: /home/shinaoka/.cache/kache/store/staging)
+
+Services
+  Daemon version   ✓   v1.0.0 (epoch 1791207169)
+  Daemon service   ✓   not installed; healthy on-demand daemon is reachable
+
+
+  All checks passed.
+
+
+Verifying 33975 cache entries...
+
+Cache verification complete
+  Entries: 33975 total, 33975 valid, 0 corrupted
+  Blobs: 63515 total, 0 orphaned, 0 missing, 0 scrubbed, 0 checksum failures
+  Blob index drift: 0
+  Store size: 75.1 GiB
