@@ -5,7 +5,7 @@ this file is what the generator produces.
 
 - Reference fork revision (`pins/t4a-faer.rev`): `2240b076a03011b2f128988fecf2967c4b1dda1c`
 - Reference upstream revision (`pins/upstream-faer.rev`): `faer-v0.24.4`
-- Newest recorded run: `2026-10-18T04:42:34.572396Z`
+- Newest recorded run: `2026-10-18T05:53:09.287999Z`
 - Every page below is one `(suite, hardware profile, fork revision, upstream revision,
   vendor arm)` and carries its commits, its hardware and the vendor library it linked.
 
@@ -20,7 +20,7 @@ rather than being implied by the other arm's page.
 | `faer-kernels-large` | `zen5-cpu` (optional) | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 9 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-mkl-timing-v2.md) |
 | `faer-kernels-large` | `zen5-cpu` (optional) | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 9 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `mkl` | `2240b076a030/0539947ffb75` | 0.24.4 | 2026-10-18 | full | current | [result/zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-mkl-timing-v2.md) |
-| `faer-kernels` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-15 | partial | 9 behind | [result/zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels/bfe4041cd991-0539947ffb75-openblas-timing-v2.md) |
+| `faer-kernels` | `zen5-cpu` | `openblas` | `2240b076a030/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | current | [result/zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-openblas-timing-v2.md) |
 
 `missing` is a normal cell, not an error: the campaign is not run on every
 profile for every commit. It becomes an error only for a profile a suite lists
@@ -36,6 +36,8 @@ partial or declaration-changed page never displaces a full-coverage one.
 |---|---|---|---|---|---|---|---|---|
 | `faer-kernels-large` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 9 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md) |
 | `faer-kernels-large` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 9 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-mkl-timing-v2.md) |
+| `faer-kernels` | `zen5-cpu` | `openblas` | `2240b076a030/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | current | [result/zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-openblas-timing-v2.md) |
+| `faer-kernels` | `zen5-cpu` | `openblas` | `2240b076a030/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | current | [result/zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-openblas-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `mkl` | `2240b076a030/0539947ffb75` | 0.24.4 | 2026-10-18 | full | current | [result/zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-mkl-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `mkl` | `2240b076a030/0539947ffb75` | 0.24.4 | 2026-10-18 | full | current | [result/zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/2240b076a030-0539947ffb75-mkl-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `mkl` | `0627828d965b/0539947ffb75` | 0.24.4 | 2026-10-18 | partial | 1 behind | [result/zen5-cpu/faer-kernels/0627828d965b-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/0627828d965b-0539947ffb75-mkl-timing-v2.md) |
