@@ -1,0 +1,97 @@
+regime,family,dtype,order,m,n,k,batch,row,threads,total_ms,per_item_us,status,note,samples_ms,rayon_threads,vendor_threads
+linalg-wide,lu,f64,c,64,1024,,1,faer-upstream,4,0.368724,368.724000,ok,,"[0.343567, 0.345651, 0.387879, 0.37916300000000003, 0.368724]",4,4
+linalg-wide,lu,f64,c,64,1024,,1,lapack-mkl,4,0.291421,291.421000,ok,,"[0.298123, 0.294085, 0.291401, 0.28851499999999997, 0.291421]",4,4
+linalg-wide,lu,f64,c,64,1024,,1,faer-fork,4,0.227271,227.271000,ok,,"[0.23171, 0.225238, 0.227271, 0.228303, 0.225017]",4,4
+linalg-wide,lu,f64,f,64,1024,,1,faer-upstream,4,0.166359,166.359000,ok,,"[0.166359, 0.17446399999999998, 0.162892, 0.160137, 0.168983]",4,4
+linalg-wide,lu,f64,f,64,1024,,1,lapack-mkl,4,0.230758,230.758000,ok,,"[0.23146899999999998, 0.228875, 0.230758, 0.229516, 0.234485]",4,4
+linalg-wide,lu,f64,f,64,1024,,1,faer-fork,4,0.137224,137.224000,ok,,"[0.132546, 0.138658, 0.138487, 0.137224, 0.135241]",4,4
+linalg-wide,lu,f64,c,256,4096,,1,faer-upstream,4,9.165544,9165.544000,ok,,"[9.209987, 9.190621, 9.165543999999999, 9.107577000000001, 9.129396999999999]",4,4
+linalg-wide,lu,f64,c,256,4096,,1,lapack-mkl,4,9.926226,9926.226000,ok,,"[9.980526, 9.880521, 9.926226, 9.80981, 9.941633999999999]",4,4
+linalg-wide,lu,f64,c,256,4096,,1,faer-fork,4,7.261302,7261.302000,ok,,"[7.505234000000001, 7.523007, 7.232939, 7.261302, 7.218943]",4,4
+linalg-wide,lu,f64,f,256,4096,,1,faer-upstream,4,4.674463,4674.463000,ok,,"[4.626834, 4.71605, 4.697436, 4.674463, 4.614452]",4,4
+linalg-wide,lu,f64,f,256,4096,,1,lapack-mkl,4,5.278684,5278.684000,ok,,"[5.261992, 5.277732, 5.278683999999999, 5.291016, 5.291788]",4,4
+linalg-wide,lu,f64,f,256,4096,,1,faer-fork,4,4.396286,4396.286000,ok,,"[4.563337, 4.391598, 4.39302, 4.396286, 4.4089100000000006]",4,4
+linalg-wide,full_piv_lu,f64,c,64,1024,,1,faer-upstream,4,1.244028,1244.028000,ok,,"[1.245211, 1.244288, 1.2435669999999999, 1.243376, 1.2440280000000001]",4,4
+linalg-wide,full_piv_lu,f64,c,64,1024,,1,lapack-mkl,4,,,skipped,full_piv_lu has no LAPACK route in this harness; the vendor row is skipped,,4,4
+linalg-wide,full_piv_lu,f64,c,64,1024,,1,faer-fork,4,1.148701,1148.701000,ok,,"[1.148701, 1.154682, 1.150113, 1.141728, 1.147629]",4,4
+linalg-wide,full_piv_lu,f64,f,64,1024,,1,faer-upstream,4,1.054536,1054.536000,ok,,"[1.054536, 1.0563, 1.045119, 1.052843, 1.060908]",4,4
+linalg-wide,full_piv_lu,f64,f,64,1024,,1,lapack-mkl,4,,,skipped,full_piv_lu has no LAPACK route in this harness; the vendor row is skipped,,4,4
+linalg-wide,full_piv_lu,f64,f,64,1024,,1,faer-fork,4,1.061559,1061.559000,ok,,"[1.058865, 1.060087, 1.063323, 1.064244, 1.061559]",4,4
+linalg-wide,full_piv_lu,f64,c,256,4096,,1,faer-upstream,4,39.205048,39205.048000,ok,,"[39.205048, 39.081579, 39.702571, 39.34077, 39.106966]",4,4
+linalg-wide,full_piv_lu,f64,c,256,4096,,1,lapack-mkl,4,,,skipped,full_piv_lu has no LAPACK route in this harness; the vendor row is skipped,,4,4
+linalg-wide,full_piv_lu,f64,c,256,4096,,1,faer-fork,4,37.465400,37465.400000,ok,,"[37.527546, 38.450949, 37.450954, 37.300735, 37.4654]",4,4
+linalg-wide,full_piv_lu,f64,f,256,4096,,1,faer-upstream,4,34.595416,34595.416000,ok,,"[34.712574000000004, 34.420091, 34.595416, 34.651229, 34.561333]",4,4
+linalg-wide,full_piv_lu,f64,f,256,4096,,1,lapack-mkl,4,,,skipped,full_piv_lu has no LAPACK route in this harness; the vendor row is skipped,,4,4
+linalg-wide,full_piv_lu,f64,f,256,4096,,1,faer-fork,4,34.875375,34875.375000,ok,,"[34.595887, 34.875375, 34.911753, 34.767246, 35.366637]",4,4
+linalg-wide,cholesky,f64,c,64,1024,,1,faer-upstream,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,f64,c,64,1024,,1,lapack-mkl,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,f64,c,64,1024,,1,faer-fork,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,f64,f,64,1024,,1,faer-upstream,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,f64,f,64,1024,,1,lapack-mkl,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,f64,f,64,1024,,1,faer-fork,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,f64,c,256,4096,,1,faer-upstream,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,f64,c,256,4096,,1,lapack-mkl,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,f64,c,256,4096,,1,faer-fork,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,f64,f,256,4096,,1,faer-upstream,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,f64,f,256,4096,,1,lapack-mkl,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,f64,f,256,4096,,1,faer-fork,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,f64,c,64,1024,,1,faer-upstream,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,f64,c,64,1024,,1,lapack-mkl,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,f64,c,64,1024,,1,faer-fork,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,f64,f,64,1024,,1,faer-upstream,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,f64,f,64,1024,,1,lapack-mkl,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,f64,f,64,1024,,1,faer-fork,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,f64,c,256,4096,,1,faer-upstream,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,f64,c,256,4096,,1,lapack-mkl,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,f64,c,256,4096,,1,faer-fork,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,f64,f,256,4096,,1,faer-upstream,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,f64,f,256,4096,,1,lapack-mkl,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,f64,f,256,4096,,1,faer-fork,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,lu,c64,c,64,1024,,1,faer-upstream,4,0.492894,492.894000,ok,,"[0.5078320000000001, 0.486071, 0.52298, 0.49018900000000004, 0.492894]",4,4
+linalg-wide,lu,c64,c,64,1024,,1,lapack-mkl,4,0.638635,638.635000,ok,,"[0.6386350000000001, 0.6443450000000001, 0.638725, 0.635329, 0.6358699999999999]",4,4
+linalg-wide,lu,c64,c,64,1024,,1,faer-fork,4,0.436601,436.601000,ok,,"[0.428375, 0.441038, 0.431871, 0.437151, 0.436601]",4,4
+linalg-wide,lu,c64,f,64,1024,,1,faer-upstream,4,0.321306,321.306000,ok,,"[0.326656, 0.321306, 0.327918, 0.320264, 0.317208]",4,4
+linalg-wide,lu,c64,f,64,1024,,1,lapack-mkl,4,0.588913,588.913000,ok,,"[0.583974, 0.590926, 0.593582, 0.588522, 0.588913]",4,4
+linalg-wide,lu,c64,f,64,1024,,1,faer-fork,4,0.320084,320.084000,ok,,"[0.315816, 0.320084, 0.320916, 0.318802, 0.321286]",4,4
+linalg-wide,lu,c64,c,256,4096,,1,faer-upstream,4,17.939404,17939.404000,ok,,"[18.105331999999997, 17.774137, 17.939404, 18.030873999999997, 17.928483]",4,4
+linalg-wide,lu,c64,c,256,4096,,1,lapack-mkl,4,29.352691,29352.691000,ok,,"[29.441125, 29.24475, 29.29833, 29.387885999999998, 29.352691]",4,4
+linalg-wide,lu,c64,c,256,4096,,1,faer-fork,4,17.349651,17349.651000,ok,,"[17.666168, 17.393421999999997, 17.252591000000002, 17.349651, 17.242001]",4,4
+linalg-wide,lu,c64,f,256,4096,,1,faer-upstream,4,13.796889,13796.889000,ok,,"[13.741416, 13.796889, 13.772955, 14.702039, 13.813028999999998]",4,4
+linalg-wide,lu,c64,f,256,4096,,1,lapack-mkl,4,20.516206,20516.206000,ok,,"[20.536593999999997, 20.504683999999997, 20.516206, 20.713833, 20.445014]",4,4
+linalg-wide,lu,c64,f,256,4096,,1,faer-fork,4,13.405042,13405.042000,ok,,"[13.408869000000001, 13.364366, 13.405042, 13.562034, 13.371019]",4,4
+linalg-wide,full_piv_lu,c64,c,64,1024,,1,faer-upstream,4,2.495530,2495.530000,ok,,"[2.529373, 2.477506, 2.4903500000000003, 2.49553, 2.496662]",4,4
+linalg-wide,full_piv_lu,c64,c,64,1024,,1,lapack-mkl,4,,,skipped,full_piv_lu has no LAPACK route in this harness; the vendor row is skipped,,4,4
+linalg-wide,full_piv_lu,c64,c,64,1024,,1,faer-fork,4,2.385567,2385.567000,ok,,"[2.373945, 2.367162, 2.385567, 2.387029, 2.39331]",4,4
+linalg-wide,full_piv_lu,c64,f,64,1024,,1,faer-upstream,4,2.233113,2233.113000,ok,,"[2.2683590000000002, 2.2202290000000002, 2.231881, 2.2613860000000003, 2.233113]",4,4
+linalg-wide,full_piv_lu,c64,f,64,1024,,1,lapack-mkl,4,,,skipped,full_piv_lu has no LAPACK route in this harness; the vendor row is skipped,,4,4
+linalg-wide,full_piv_lu,c64,f,64,1024,,1,faer-fork,4,2.246999,2246.999000,ok,,"[2.2469989999999997, 2.2369809999999997, 2.2275530000000003, 2.249534, 2.254794]",4,4
+linalg-wide,full_piv_lu,c64,c,256,4096,,1,faer-upstream,4,97.149297,97149.297000,ok,,"[97.83890600000001, 96.544153, 97.14929699999999, 97.57213200000001, 96.847428]",4,4
+linalg-wide,full_piv_lu,c64,c,256,4096,,1,lapack-mkl,4,,,skipped,full_piv_lu has no LAPACK route in this harness; the vendor row is skipped,,4,4
+linalg-wide,full_piv_lu,c64,c,256,4096,,1,faer-fork,4,96.888162,96888.162000,ok,,"[96.586693, 97.553247, 96.888162, 96.43312, 97.28248500000001]",4,4
+linalg-wide,full_piv_lu,c64,f,256,4096,,1,faer-upstream,4,93.234514,93234.514000,ok,,"[93.234514, 92.463584, 93.370647, 93.23702899999999, 93.124762]",4,4
+linalg-wide,full_piv_lu,c64,f,256,4096,,1,lapack-mkl,4,,,skipped,full_piv_lu has no LAPACK route in this harness; the vendor row is skipped,,4,4
+linalg-wide,full_piv_lu,c64,f,256,4096,,1,faer-fork,4,93.250105,93250.105000,ok,,"[93.614772, 93.22041, 93.250105, 92.700706, 93.932731]",4,4
+linalg-wide,cholesky,c64,c,64,1024,,1,faer-upstream,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,c64,c,64,1024,,1,lapack-mkl,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,c64,c,64,1024,,1,faer-fork,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,c64,f,64,1024,,1,faer-upstream,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,c64,f,64,1024,,1,lapack-mkl,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,c64,f,64,1024,,1,faer-fork,4,,,skipped,cholesky needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,cholesky,c64,c,256,4096,,1,faer-upstream,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,c64,c,256,4096,,1,lapack-mkl,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,c64,c,256,4096,,1,faer-fork,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,c64,f,256,4096,,1,faer-upstream,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,c64,f,256,4096,,1,lapack-mkl,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,cholesky,c64,f,256,4096,,1,faer-fork,4,,,skipped,cholesky needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,c64,c,64,1024,,1,faer-upstream,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,c64,c,64,1024,,1,lapack-mkl,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,c64,c,64,1024,,1,faer-fork,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,c64,f,64,1024,,1,faer-upstream,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,c64,f,64,1024,,1,lapack-mkl,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,c64,f,64,1024,,1,faer-fork,4,,,skipped,solve needs a square matrix; 64x1024 is not,,4,4
+linalg-wide,solve,c64,c,256,4096,,1,faer-upstream,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,c64,c,256,4096,,1,lapack-mkl,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,c64,c,256,4096,,1,faer-fork,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,c64,f,256,4096,,1,faer-upstream,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,c64,f,256,4096,,1,lapack-mkl,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
+linalg-wide,solve,c64,f,256,4096,,1,faer-fork,4,,,skipped,solve needs a square matrix; 256x4096 is not,,4,4
