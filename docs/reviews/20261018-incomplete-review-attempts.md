@@ -19,5 +19,9 @@ and limitations are recorded in `20261018-native-gemm-empty-pre-review.md`.
 Failed retained agents were closed. Subsequent bounded POST attempts use immutable
 source bundles from cwd `/tmp`, not a broad repository/instruction discovery.
 Native POST: `/root/native_empty_bounds_post`; copy POST:
-`/root/owned_copy_post_bounded`. Until their completed reports arrive they remain
-pending, not passed. Model remains openai/gpt-6.1-sol; no silent substitution.
+`/root/owned_copy_post_bounded`. Both bounded POSTs have now returned COMPLETE
+reports with no mandatory correctness fixes, archived in
+`20261018-native-gemm-empty-post-review.{md,json}` and
+`20261018-owned-copy-post-review.{md,json}`. The original four failures remain
+INCOMPLETE and are not retroactively counted. Correctness reports are not
+performance/adoption approval. Model remains openai/gpt-6.1-sol; no substitution.

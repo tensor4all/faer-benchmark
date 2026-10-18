@@ -2,6 +2,36 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — native correctness boundary closed locally, performance work resumes
+
+Branch `fix/native-gemm-empty-extents`, code af8273f/docs b7715c5, separately fixes
+native strict/unit post-shift extents and K=0/Replace stored-region initialization.
+No new unsafe/API/threshold/scratch. Original negative tests, source identities,
+all follow-up logs and final patch are under
+`data/probes/20261018-native-gemm-callers/`. Focused4 pass, library214 pass/2 ignore;
+std/linalg no-Rayon compilation passes (13 warnings in untouched files). A final
+finite-output assertion strengthens the scalar oracle; focused/full checks were
+rerun, production unchanged. All five current callers are inclusive lower or
+rectangular/Add; this correctness repair does not explain the measured gaps.
+
+Two bounded PREs and a bounded POST on gpt-6.1-sol are COMPLETE, no mandatory
+correctness fix. Reports live in `docs/reviews/20261018-native-gemm-empty-*.md`
+(POST also saved verbatim as JSON). POST reviewed2e221c7; final production matches,
+with only a test-only assertion added. No independent execution, backend audit,
+f32/c32/u32/right-conjugation/parallel/forced-generic coverage is claimed.
+The six optional redundant old guards stay unchanged to avoid unrelated churn.
+The bounded numeric-copy POST also completed with no mandatory correctness fix:
+`docs/reviews/20261018-owned-copy-post-review.{md,json}`. Custom zero/Clone/drop
+costs remain a limit, not a generic speedup or user-approved tradeoff.
+
+Neither review is performance/merge approval. Both source branches remain local
+and unintegrated. HH remains declined with incomplete POST; prior four incomplete
+attempts are explicitly recorded, not retroactively counted. Stale original
+single-family task entries were retired in favor of the expanded all-regression
+task list, not marked complete. LU failed pairs stay refused; no third pair,
+threshold waiver, source combination, final freeze or large-tier run. Resume the
+three-native-entry budget/caller investigation under the unchanged protocol.
+
 ## 2026-10-18 — focused Householder merge held, investigation continues
 
 The fixed-binary stage1 diagnostic forad9f2ef completed all144 timed full
