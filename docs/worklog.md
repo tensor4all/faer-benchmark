@@ -2,6 +2,47 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — upstream cleanup, still in progress
+
+The new objective is all technically removable, reproducible upstream regressions,
+not vendor-only gaps. Only focused checks during development; 2048/3072/4096 are
+**final-only**, after the combined candidate is frozen. No full-suite rerun yet.
+
+The minimal LU-budget candidate remains branch-only. Both complete pairs failed
+unchanged-upstream controls (1/396 then12/396); all four runs are retained under
+`data/probes/20261018-upstream-lu-pair-repeat/`. No third identical pair, relaxed
+band or discarded slow start, and no adoption from these inconclusive pairs.
+
+A new upstream-only fixed-binary diagnostic uses32–128 at1T/4T, with order
+A B B A B A A B, not another candidate pair. In
+`data/probes/20261018-upstream-binary-abba/`, f64 Cholesky32 C follows the linked
+binary (1T B/A1.078) while c64 follows the opposite direction (0.957). All four
+SIMD leaves have the same normalized instructions and+16-byte entry shifts.
+Numeric RIP operands match; the partial-load/store table, its544 relocation
+entries and helper-code region match. A referenced Equator vtable has shifted
+code pointers; its exact pointer comparison is deliberately retained as unequal.
+This narrows the possibilities but does not prove alignment causality or whole-
+program equivalence. Accepted samples, guard logs, hashes, effective pool census
+and bounded static checks are retained. One4T attempt was rejected after running;
+legacy pinned.sh overwrote its CSV on retry, so those rejected samples are lost.
+The loss is explicit in the probe README; there were no1T guard rejections, but
+this is not complete adoption evidence. Future diagnostic attempts need separate
+output files (or a retained one-attempt pre/post guard), not implicit overwrites.
+
+A fixed-reference host-check proposal received a completed bounded PRE-review:
+`docs/reviews/20261018-fixed-reference-control-pre-review.md`. It is meaningful
+as a diagnostic, not sufficient for target/guard acceptance. The existing gate
+is unchanged. Comparison-helper success also requires a separate audit of exact
+cell coverage/start counts; an empty/intersected selection is not proof.
+
+Separately, the1T owned-copy probe in `data/probes/20261018-owned-copy/` compares
+current canonical `to_owned` with elementwise `cloned`, allocating and destroying
+each result inside the clock. Four balanced starts show small C-order copies
+32/64/96 are materially slower on the zeros+Option-staged path, while simply
+reverting to elementwise copying loses on larger/conflict-prone layouts. This
+supports investigating the staging overhead, NOT a shape96 cutoff or blanket
+revert. No copy implementation change is adopted from a copy-only probe.
+
 ## 2026-10-18 (later) — the declared suite, both arms, at the merged revision
 
 The full declared `faer-kernels` suite was recorded once at `2240b07` (the merge of
@@ -44,18 +85,20 @@ the declared out-of-scope families of this iteration (guards only).
 
 **Versus upstream over the whole suite** (MKL arm, the only arm with an upstream
 row): the fork is faster in 399 cells, slower in 92, and inside the between-start
-band in the other 865. Every slower cell is in a family this iteration did not
-change - `solve` 19, `householder_apply` 23, `lu` 22, `full_piv_lu` 13,
-`triangular_solve` 3, `cholesky` 12 - and there are **none** in `qr_factor`, `qr`,
-`svd_values`, `svd_thin`, `gemm` or `eigh`. The slowest are `solve/n256` c64 F 8T
-1.51x, `householder_apply/n64` f64 F 4T 1.45x (its sequence form), `lu/n256` c64
-1.37x and tall `householder_apply/4096x256` C 8T 1.30x. They pre-date this
-iteration: a direct probe of `householder_apply/n64` f64 F 4T on the baseline and
-merged-revision binaries gives the same fork times (0.0243 / 0.0341 ms block and
-sequence, upstream 0.0239 / 0.0233), and the candidates' upstream control rows
-reproduced the baseline. The OpenBLAS arm has no upstream row (its two declared
-rows are `faer-fork`, `lapack-openblas`), so its 561 / 305 faster/slower count is
-against OpenBLAS, not upstream.
+band in the other 865. Flagged slower cells group as `solve`19,
+`householder_apply`23, `lu`22, `full_piv_lu`13, `triangular_solve`3 and
+`cholesky`12; none are flagged in `qr_factor`, `qr`, `svd_values`, `svd_thin`,
+`gemm` or `eigh`. **Correction:** these counts do not establish when each gap
+arose or prove those families were unaffected. Householder itself changed, and
+shared GEMM/copy/Householder paths reach other families. A single historical
+probe cannot establish pre-existence or unchanged timing for all92 cells.
+Later fixed-binary triage shows some gaps on both sides of the new GEMM floor,
+not that every earlier change is innocent; see
+`data/probes/20261018-upstream-regression-triage/`. The flagged cells remain a
+worklist, not proof that every observed difference is an algorithmic regression.
+The OpenBLAS arm has no upstream row (its two declared rows are `faer-fork`,
+`lapack-openblas`), so its561/305 faster/slower count is against OpenBLAS,
+not upstream.
 
 **Vendor gaps that remain and are measured, not explained**: `gemm` at `128^3` and
 `192^3` (f64 F 8T: fork 0.113/0.154 ms, MKL 0.032/0.074, OpenBLAS 0.027/0.081) is
