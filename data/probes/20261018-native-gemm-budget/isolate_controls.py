@@ -19,6 +19,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+if not __debug__:
+    raise SystemExit('Refusing optimized Python: safety assertions must remain enabled')
+
 import yaml
 from campaign_toolkit import record_run as rr
 
@@ -147,16 +150,15 @@ def run(agent_pid):
             assert hashlib.sha256(Path(record['binary']['path']).read_bytes()).hexdigest() == record['binary']['sha256']
         return {'power': power, 'agent_thread_affinities': affinities}
 
-    def execute(side, family, t, name, verify):
-        path = OUT / f'{name}.csv'
-        command = argv(records[side]['binary']['path'], pins[t], family, t, path, verify)
+    def capture(name, command, environ):
         before = guard()
         (OUT / f'{name}.command.json').write_text(json.dumps({
             'argv': command, 'before': before, 'utc': datetime.datetime.now(datetime.UTC).isoformat()}, indent=2) + '\n')
         print(name, flush=True)
         log_path = OUT / f'{name}.log'
-        with log_path.open('w') as log:
-            result = subprocess.run(command, check=False, env=dict(env, PINNED_CSV=str(path)), stdout=log, stderr=subprocess.STDOUT)
+        stdout_path = OUT / f'{name}.stdout'
+        with log_path.open('w') as log, stdout_path.open('w') as stdout:
+            result = subprocess.run(command, check=False, env=environ, stdout=stdout, stderr=log)
         # Preserve wrapper's command-failure/timeout temporary evidence too.
         for stdout, stderr in re.findall(r'evidence retained at (\S+) and (\S+)', log_path.read_text()):
             for source in (stdout, stderr):
@@ -165,7 +167,13 @@ def run(agent_pid):
         (OUT / f'{name}.after.json').write_text(json.dumps(after) + '\n')
         after['after'] = guard()
         (OUT / f'{name}.after.json').write_text(json.dumps(after, indent=2) + '\n')
-        result.check_returncode()  # No outer retry; incomplete CSV remains in place.
+        result.check_returncode()  # No outer retry; incomplete evidence remains in place.
+        return stdout_path.read_text()
+
+    def execute(side, family, t, name, verify):
+        path = OUT / f'{name}.csv'
+        command = argv(records[side]['binary']['path'], pins[t], family, t, path, verify)
+        capture(name, command, dict(env, PINNED_CSV=str(path)))
         audit(path, family, t, verify)
 
     os.chdir(ROOT)
@@ -180,9 +188,8 @@ def run(agent_pid):
         (OUT / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
         for side, record in records.items():
             for t, cpus in pins.items():
-                info = subprocess.run(['timeout', '30s', 'taskset', '-c', cpus, record['binary']['path'],
-                                       'info', '--threads', str(t)], env=env, capture_output=True, text=True, check=True).stdout
-                (OUT / f'{side}-info-{t}t.txt').write_text(info)
+                info = capture(f'{side}-info-{t}t', ['timeout', '--kill-after=15s', '30s',
+                               'taskset', '-c', cpus, record['binary']['path'], 'info', '--threads', str(t)], env)
                 assert f'threads.rayon_observed={t}\n' in info and f'threads.vendor_reported={t}\n' in info
                 assert 'vendor.name=mkl\n' in info
                 if t == 1:
