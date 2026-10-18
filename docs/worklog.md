@@ -1318,3 +1318,30 @@ FULLformalcontrols/GEMMguards needs explicituserdecision andupdatedoperational
 plan/reviews/checks beforeexecution. Nothingchangedyet, no permissioninferred.
 Originalformalcomparator/targetspread/control/guard/statisticalrules, exactgrids/
 skips/starts/samples, largefinal-only, finalfreeze/main/pin remainunchanged.
+
+### Exact builtin-copy source candidate, no performance yet
+
+Separate60de2ee/base7364 (runtime2240), archive26950b6 ownpush/remoteverifiedafter
+COMPLETEgpt6.1sol PRE andcoherent2-filePOST/no mustfix. Exact4builtinTypeId via
+existingnonstatic helper/no 'static/newunsafe/flags/zero/default/publicbound.
+Seededvalue tileemptybeforefirstsrc, fulloriginalOptionfallback preserved for
+customClone/drop/heap/reference/alternateComplexImpl. Originalwrapper/callers/
+allotherproduction preserved; docsqualifyfallbackvsbuiltin. No Slotframework.
+
+Focused2/library212pass2existingignored/noRayon13existingwarnings/targetednewformat/
+diffchecks pass; kache33983valid. Native4dtypecomponentbitsNaNpayload/+/-0/Inf/
+bothlayouts/reversedsourceANDdst/parentguards/empty/tails/rectangles/Seqowned4/8
+poolcensus (notutilization). RealdispatcherClone-onlyCountedwith BORROWEDatomic
+counters/ownedVec exactnclones/noldDrops/postdestroycounts/heapindependence; no
+dummycustomComplexField fixture. Suppliedchecks not reviewerexecution.
+
+No publiccloned()/conjugatedroute/allocation-timezero removal orForderLU
+schedulingfixclaimed. No d635adoption/controlshiftwaiver. Samefourmatchingdense
+sizes/normalizedbodygate appliesbeforeANYperfverify/timingincludingpublicprobe;
+mismatchHOLD/no retweaks. Native-floorf013gateunchanged/decisionnotassumed.
+Static-only fullcheckoutexistingbuilderMklrelease/tool9daa/argv frozen first.
+ParallelDRAFT3624records/start inventory independently all14families/7targetor
+conservativecopychainfamiliesALLmainshapes +guards, HHvariants/skips retained;
+notoldnarrow2688intersection, notrecordargv/runtimeproof/adoption. No clock
+controller infrastructure builtbeforestaticqualifies. Final/main/pin unchanged.
+FefarchiveCI39156019409green/fullstepsreceipt retained.

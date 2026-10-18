@@ -1,0 +1,50 @@
+{
+  "status": "FROZEN_STATIC_PREFILTER_ONLY_POST_COMPLETE_NO_EXECUTION_YET",
+  "sides": {
+    "A": "7364be5ce22d950343c10d82b99e9fc79d537cd2",
+    "B": "60de2ee06467fc41f7c0fd4a3a5b1856bc40d984"
+  },
+  "upstream": "0539947ffb757a739d7e703a7d2fa0c792a909c1",
+  "toolkit": "9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5",
+  "fresh_builds": {
+    "A": [
+      "bash",
+      "scripts/build_for_faer_rev.sh",
+      "--checkout",
+      "extern/t4a-faer",
+      "--upstream",
+      "extern/upstream-faer",
+      "--vendor",
+      "mkl",
+      "--profile",
+      "release",
+      "--out",
+      "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261018-native-copy-tile/builds/A/pin.env"
+    ],
+    "B": [
+      "bash",
+      "scripts/build_for_faer_rev.sh",
+      "--checkout",
+      "extern/t4a-faer",
+      "--upstream",
+      "extern/upstream-faer",
+      "--vendor",
+      "mkl",
+      "--profile",
+      "release",
+      "--out",
+      "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261018-native-copy-tile/builds/B/pin.env"
+    ]
+  },
+  "filter_argv": [
+    "python3",
+    "data/probes/20261018-native-structured-floor/filter_dense.py",
+    "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/7364be5ce22d-mkl/release/fbench",
+    "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/60de2ee06467-mkl/release/fbench",
+    "/home/shinaoka/projects/tensor4all/faer-benchmark/data/probes/20261018-native-copy-tile/static-dense"
+  ],
+  "builder_sha256": "63de36efa97ff77776d80dbf43dceaeea49a5cfc2ac09fbe3ae2ab2683cf5643",
+  "filter_sha256": "b58f23b0641498292f24ca6290262a1e2c7955eff9891292a5769d69ff7e0c23",
+  "preconditions": "sourcePOSTresolved/pushsource+freezeharnesscommandsbeforefreshA/Bbuilds; fullcheckout notworktree, actualmetadata paths+clean/fullrefs+logs+status capture/serialunderlock. All4matchingdense sizes+normalizedbodyequalbeforeANYperformanceverify/timing(publicprobeincluded), mismatchHOLD/noretweaks. No source/flag/positionselectiveretry",
+  "not_included": "publicprobe/formalrecordcommands not frozen, no clock execution approved by thisdraft; exact14family3624recorddraftinventory separatelyretained; no runtimeproof/acceptance/goalcompletion"
+}

@@ -1,0 +1,184 @@
+{
+  "status": "DRAFT_INVENTORY_NOT_EXECUTION_APPROVAL",
+  "candidate": "60de2ee06467fc41f7c0fd4a3a5b1856bc40d984",
+  "base": "7364be5ce22d950343c10d82b99e9fc79d537cd2",
+  "timing": false,
+  "preconditions": "finishedPOST+freeze+freshFBEA/B4denseequal beforeANYperformanceverify/timing; anymismatchHOLD; publiccopyallcontrols beforecanonical",
+  "spec": {
+    "lu": [
+      "32",
+      "64",
+      "96",
+      "128",
+      "256",
+      "512",
+      "1024x64",
+      "4096x256",
+      "64x1024",
+      "256x4096"
+    ],
+    "full_piv_lu": [
+      "32",
+      "64",
+      "96",
+      "128",
+      "256",
+      "512",
+      "1024x64",
+      "4096x256",
+      "64x1024",
+      "256x4096"
+    ],
+    "solve": [
+      "32",
+      "64",
+      "96",
+      "128",
+      "256",
+      "512",
+      "1024x64",
+      "4096x256",
+      "64x1024",
+      "256x4096"
+    ],
+    "qr_factor": [
+      "32",
+      "64",
+      "96",
+      "128",
+      "256",
+      "512",
+      "1024x64",
+      "4096x256",
+      "64x1024",
+      "256x4096"
+    ],
+    "qr": [
+      "32",
+      "64",
+      "96",
+      "128",
+      "256",
+      "512",
+      "1024x64",
+      "4096x256",
+      "64x1024",
+      "256x4096"
+    ],
+    "svd_values": [
+      "32",
+      "64",
+      "96",
+      "128",
+      "256",
+      "512",
+      "1024x64",
+      "4096x256",
+      "64x1024",
+      "256x4096"
+    ],
+    "svd_thin": [
+      "32",
+      "64",
+      "96",
+      "128",
+      "256",
+      "512",
+      "1024x64",
+      "4096x256",
+      "64x1024",
+      "256x4096"
+    ],
+    "cholesky": [
+      "32",
+      "128",
+      "256"
+    ],
+    "triangular_solve": [
+      "32",
+      "128",
+      "256"
+    ],
+    "eigh": [
+      "32",
+      "128",
+      "256"
+    ],
+    "eig": [
+      "128",
+      "256"
+    ],
+    "upgrade_factor": [
+      "64",
+      "512",
+      "1024x64",
+      "4096x256"
+    ],
+    "householder_apply": [
+      "64",
+      "512",
+      "1024x64",
+      "4096x256"
+    ],
+    "gemm": [
+      "32x32x32",
+      "64x64x64",
+      "96x96x96",
+      "128x128x128",
+      "512x512x512",
+      "4096x64x64",
+      "16x4096x240",
+      "4096x16x240",
+      "64x64x4096"
+    ]
+  },
+  "direct_plus_conservative_shared_caller_families": [
+    "lu",
+    "full_piv_lu",
+    "solve",
+    "qr_factor",
+    "qr",
+    "svd_values",
+    "svd_thin"
+  ],
+  "records_per_start": 3624,
+  "expected_csv_sha256": "72dea9ff1ea42e7ef9ae68a8e2894fbd562bbc254d68a3ad15a6b5dc0647b6ad",
+  "counts": {
+    "faer-fork/ok": 1104,
+    "faer-fork/skipped": 120,
+    "faer-upstream/ok": 1104,
+    "faer-upstream/skipped": 120,
+    "lapack-mkl/ok": 852,
+    "lapack-mkl/skipped": 324
+  },
+  "reference": "data/results/zen5-cpu/faer-kernels/20261018T022054Z-final-full-mkl",
+  "reference_csv_sha256": {
+    "run0-gemm-small-1t.csv": "84aa1876d051b6a0a0dbbc7a0130076c65360ef0aeb686b0fd2cb8528220b9db",
+    "run0-gemm-small-4t.csv": "1f0aab80a85a83a6bb429251bedbbf6691cd25585a0ab6eb114f4839433ec7b9",
+    "run0-gemm-small-8t.csv": "f09f4b0dceaddd0e8ccadbd335ca93e4601c7cd8ba8a0ac2b38d1ed23b8fff89",
+    "run0-gemm-mid-1t.csv": "19fd385d7705aa9954327e76d7a9bef7dcf30261416a0acdc8a7d41ce98b3729",
+    "run0-gemm-mid-4t.csv": "081af05c46f7ade6baf17e14432b13c2b65c08c5a412d18fbd37112497af0ccc",
+    "run0-gemm-mid-8t.csv": "ff903a7f57c5fa11bea38c8c88a61c4286b410a860356db91b498cefbfa9eceb",
+    "run0-gemm-tall-1t.csv": "1cebe5d5f5a7c3a76d5ccfc82771bb926887efb6677e4b6ca8b3c54dce351eec",
+    "run0-gemm-tall-4t.csv": "f566988a704baf82536f4e8d7c7980de3b4c3194ed64f9a28c93c96c45d35773",
+    "run0-gemm-tall-8t.csv": "459ac1a409be2d4a0c36b2d849cbd4746e1bcbe7a5199c7f24f522a2d96a5e01",
+    "run0-gemm-wide-1t.csv": "06bed08bda35b7bb2e1be68bf0f986350a13d2259dadc6073257cac5c69de50d",
+    "run0-gemm-wide-4t.csv": "774440f209b0cfdc130c5c219f1fdb3ba70ddc89531f82fbcf05aec815710f89",
+    "run0-gemm-wide-8t.csv": "a81fde6cc895385405fcd62dc66a5887663d16a2d168d03ca0e8251fad9277c8",
+    "run0-linalg-small-1t.csv": "0aad4f20ea412fa298f25b33969199cd1c53ce062a1bed918b4fddeeb2f0d80b",
+    "run0-linalg-small-4t.csv": "7feadaa3f708405cf1fc147223785a8003bba91ef884bba31855edc12b94e173",
+    "run0-linalg-small-8t.csv": "eca060a45d53560b17031216fd7917c45944a66fcf0efe3040ded8259fab8bde",
+    "run0-linalg-mid-1t.csv": "4fa1dd3774b3b157d737bd102333bfc746882a22a6ee4760491229233867e5be",
+    "run0-linalg-mid-4t.csv": "98417899e5dbf4ceb5e56fa470e6fa5ba937628298f3c266f542aa138ef9bf19",
+    "run0-linalg-mid-8t.csv": "71d74be1b7f24767ac41426876a352c2560c934eccdd9c059b7bb4fec83825c0",
+    "run0-linalg-tall-1t.csv": "cedf5cbd500d80396402234af6381d8ef524522b41782c9767f3387499a62fdc",
+    "run0-linalg-tall-4t.csv": "48af2c79337a79955f1a53f968ef4685785624b25dd4981ea65f321b00b160e9",
+    "run0-linalg-tall-8t.csv": "2ae38b5287b09d67501d948d66b6662326ad88f72c906ca021b7f4cbf930eb58",
+    "run0-linalg-wide-1t.csv": "4b54bcf7a688531555080ec0c2354d36e164ecf04c05d4fb8844f398fab865b8",
+    "run0-linalg-wide-4t.csv": "b42132845cf4d5576d01699a0075179c8be2c8806e38dbb3c3608e83e64e7aba",
+    "run0-linalg-wide-8t.csv": "9a0546cd85e0f8fa41f89f6f195502c7aa9bcd695809b4ef01ded8a7ef7e8812"
+  },
+  "dimensions_helper_source_sha256": "217e90aa79d102a0487b21ce48062d0669740e1d6f2b92bebb0e16aee8bf449a",
+  "coverage": "independentdeclaredCartesian axes all3budgets/2dtype/2order/3engines then FULLregime/note/status identities; HH2variantsfaer/1vendorskip verified, skips retained notintersections",
+  "limits": "Draft census, notargv/runtime/source/budgetproof, notreuseoldtimings/adoption/finalcampaign, notnarrow7f2688grid. Exactrecordcommands/tool/refs stillneedfreezeafterPOST/staticqualifies. Allsquare2048/3072/4096 excludedfinal-only."
+}
