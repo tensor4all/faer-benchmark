@@ -2,6 +2,62 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — a provenance-correct baseline, three bounded investigations, two adopted changes
+
+The four `-timing-v2` pages of 2026-10-15/16 are not evidence about any revision: they
+linked the crates.io `t4a-faer 0.24.5` for the `faer-fork` row (see
+`reviews/20261016-linked-crate-provenance.md`). The first recording from a pin that
+the build script's patch-resolution guard accepts was taken here at fork `5578ccc`
+(the merged row-major QR/LU work), upstream `faer-v0.24.4`, MKL 2026.1, f64,
+`qr_factor`/`qr`/`svd_values`/`svd_thin` at 64/128/256/512, 1T/4T/8T, C and F
+(`data/results/.../20261018T000948Z-baseline-v2-diagnostic-mkl`). Its manifest names
+the checkout paths and commits, the MKL version, the boost-off power state, and the
+guards. The pin now sits on `2240b07`.
+
+What the baseline says (rotation-averaged ratios, fork/MKL, at 512 and eight threads):
+`qr_factor` 0.43 (fork 2.3x slower), `qr` 1.09 (parity), `svd_values` 0.46 (2.2x
+slower), `svd_thin` 0.79 (1.27x slower); at one thread the fork is *faster* than MKL
+on `qr_factor` (1.68) and roughly at parity on both SVDs. The QR gap is parallel
+scaling, not the kernel; the values-only SVD gap is not the bidiagonal-SVD merge.
+
+Three investigations were run in parallel with that recording, each with its own
+isolated driver (`faer-benchmark/probes/`, untracked diagnostics linked by path):
+
+- **SVD values-only** (issue item 1). Phase split at `5578ccc`: at 512/8T the
+  bidiagonalization is 71% of `svd_values` (34.3 ms of 48.1) and the bidiagonal SVD
+  29%. `divide_and_conquer` still builds the discarded singular vectors for a
+  values-only call, but routing values-only to the implicit QR iteration at every
+  size was 13% slower at 512/8T (the campaign's budget) and is **rejected**; the
+  bidiagonalization is the remaining term. Worklog:
+  `faer/docs/worklogs/2026-10-18-svd-values-only.md`.
+- **QR factor** (item 2). Phase split at `5578ccc`: panel 3-5%, compact-WY upgrade
+  10-25%, trailing block apply 60-85%. The apply's column split was capped at four
+  tasks with nested inner threads; with the rows not split it now takes the whole
+  budget. Campaign `0627828` against `5578ccc`: `qr_factor` 512^2 8T **0.881/0.879**
+  (C/F), 256^2 **0.916/0.910**, `qr` 512^2 **0.862/0.856**, 256^2 **0.862/0.849**;
+  4T/1T inside noise; `svd_values`/`svd_thin` and the tall `4096x256`/`1024x64`
+  guards inside their recorded spread. A second candidate (per-thread compact-WY
+  upgrade floor) was faster on the target but moved `householder_apply/1024x64` 8T
+  by +18% (three starts, both forms) and is **rejected**; a build with only the
+  split change reproduces the baseline on that cell. Worklog:
+  `faer/docs/worklogs/2026-10-18-qr-block-apply-splits.md`.
+- **Small-matrix GEMM** (item 3). f64 `32^3` measured 2.31 us serial and 12.0 us at
+  eight threads; the caller's budget reached `private_gemm_x86`, which threads
+  whatever it is handed (the generic `gemm` crate has a work floor, that kernel does
+  not). The budget is now handed over only above the `gemm` crate's floor expressed
+  in flops. Campaign `2000dd9` against `0627828`: f64 `32^3` **0.233/0.178** C,
+  **0.222/0.163** F; f64 `64^3` 0.702-0.869; f64 `128^3` 8T 0.88-0.90; every c64
+  cell unchanged. Worklog: `faer/docs/worklogs/2026-10-18-small-gemm-thread-floor.md`.
+
+Both adopted changes are merged at `2240b07`, whose measured paths are identical to
+the measured revisions (`git diff 2000dd9 2240b07 -- faer/src faer-traits/src
+faer-macros/src Cargo.toml Cargo.lock` is empty), so nothing was measured twice.
+`cargo test -p t4a-faer --lib` 210 passed / 2 ignored at the merged revision.
+
+**Not done yet**: the declared full suite has not been re-run on this pin. The
+`faer-kernels-large` tiers (1024/1536, 2048/4096) are not covered by the limited
+grids above and their published pages are still the invalid 2026-10-15 ones.
+
 ## 2026-10-15 — representative v2 controls: scheduled variation, a row-position effect, and the cost floor
 
 Optimization is still frozen. The three bounded POST reviews completed; the two

@@ -1,0 +1,68 @@
+{
+  "pin": {
+    "FAER_FORK_REV": "2240b076a03011b2f128988fecf2967c4b1dda1c",
+    "FAER_FORK_DIRTY": "false",
+    "FAER_FORK_DIR": "/home/shinaoka/projects/tensor4all/faer-benchmark/extern/t4a-faer",
+    "FAER_FORK_VERSION": "0.24.4",
+    "FAER_FORK_FEATURES": "std,rayon",
+    "FAER_UPSTREAM_REV": "0539947ffb757a739d7e703a7d2fa0c792a909c1",
+    "FAER_UPSTREAM_DIRTY": "false",
+    "FAER_UPSTREAM_DIR": "/home/shinaoka/projects/tensor4all/faer-benchmark/extern/upstream-faer",
+    "FAER_UPSTREAM_VERSION": "0.24.4",
+    "FAER_UPSTREAM_FEATURES": "std,rayon",
+    "FAER_UPSTREAM_REF": "faer-v0.24.4",
+    "BIN_DIR": "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/2240b076a030-mkl/release",
+    "BUILD_FEATURES": "fbench/link-mkl",
+    "BUILD_ENV": "MKLROOT=/opt/intel/oneapi/mkl/2026.1 MKL_THREADING_LIB=/opt/intel/oneapi/compiler/2026.1/lib/libiomp5.so",
+    "BUILD_VENDOR": "mkl"
+  },
+  "admission": {
+    "harness": {
+      "commit": "8736d7d999eae307a1c86369eb071c8f684c2166",
+      "dirty": false
+    },
+    "toolkit": {
+      "commit": "c04ea318cf7f002a751d58212fe31fc79d915665",
+      "dirty": false,
+      "measured_path": "/home/shinaoka/projects/tensor4all/campaign-toolkit"
+    },
+    "argv": [
+      "scripts/record_run.py",
+      "zen5-cpu",
+      "faer-kernels",
+      "--checkout",
+      "extern/t4a-faer",
+      "--upstream",
+      "extern/upstream-faer",
+      "--vendor",
+      "mkl",
+      "--engines",
+      "faer-fork,faer-upstream,lapack-mkl",
+      "--regimes",
+      "linalg-small,linalg-mid",
+      "--shapes",
+      "64,128,256,512",
+      "--families",
+      "qr_factor,qr,svd_values,svd_thin",
+      "--threads",
+      "1,4,8",
+      "--dtypes",
+      "f64",
+      "--reps",
+      "5",
+      "--aa",
+      "3",
+      "--prime-ms",
+      "250",
+      "--label",
+      "final-candidate-mid-mkl"
+    ]
+  },
+  "binary": {
+    "path": "/home/shinaoka/projects/tensor4all/faer-benchmark/target/faer-rev/2240b076a030-mkl/release/fbench",
+    "sha256": "9d14689ab8ea005412a100a46a6bd7b0301062ca0d4bd04b7880f38eb8b79ec6"
+  },
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+  "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)\nrelease: 1.99.0\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Ubuntu 24.4.0 (noble) [64-bit]\n",
+  "env": {}
+}
