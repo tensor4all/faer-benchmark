@@ -1,0 +1,31 @@
+   Compiling t4a-faer v0.24.4 (/tmp/faer-native-gemm-audit/faer)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.04s
+     Running unittests src/lib.rs (/home/shinaoka/projects/tensor4all/faer/target/debug/deps/faer-b7777a9bb2d343b5)
+
+running 1 test
+
+thread 'linalg::matmul::internal::tests::strict_triangle_maps_preserve_stored_entries_and_parent_guards' (1693025) panicked at faer/src/linalg/matmul/internal/mod.rs:452:29:
+m=3 n=3 depth=0 lower=true ri=false ci=false replace=true real=true error=7; c=[
+[7.0, 7.0, 7.0, 7.0, 7.0],
+[7.0, 7.0, 7.0, 7.0, 7.0],
+[7.0, 7.0, 7.0, 7.0, 7.0],
+[7.0, 7.0, 7.0, 7.0, 7.0],
+[7.0, 7.0, 7.0, 7.0, 7.0],
+]; expected=[
+[7.0, 7.0, 7.0, 7.0, 7.0],
+[0.0, 7.0, 7.0, 7.0, 7.0],
+[0.0, 0.0, 7.0, 7.0, 7.0],
+[7.0, 7.0, 7.0, 7.0, 7.0],
+[7.0, 7.0, 7.0, 7.0, 7.0],
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test linalg::matmul::internal::tests::strict_triangle_maps_preserve_stored_entries_and_parent_guards ... FAILED
+
+failures:
+
+failures:
+    linalg::matmul::internal::tests::strict_triangle_maps_preserve_stored_entries_and_parent_guards
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 214 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p t4a-faer --lib`

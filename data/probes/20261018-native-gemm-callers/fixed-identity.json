@@ -1,0 +1,50 @@
+{
+  "performance_measurement": false,
+  "integrated": false,
+  "baseline": "7364be5ce22d950343c10d82b99e9fc79d537cd2",
+  "branch": "fix/native-gemm-empty-extents",
+  "production_file_and_tests_sha256": "f58f2f617cba98aef0cb4445047b74e62e9f28b5c69b4f76f34ef518ff4fbac3",
+  "default_features": [
+    "std",
+    "rayon",
+    "sparse-linalg",
+    "rand",
+    "npy"
+  ],
+  "cpu_flags": {
+    "avx2": true,
+    "fma": true,
+    "avx512f": true
+  },
+  "observer_test_affinity": [
+    0,
+    1,
+    2,
+    3,
+    12,
+    13,
+    14,
+    15
+  ],
+  "backend_budget": "Par::Seq in focused fixtures; no forced-generic run claimed",
+  "focused": {
+    "passed": 4,
+    "failed": 0
+  },
+  "library": {
+    "passed": 214,
+    "failed": 0,
+    "ignored": 2
+  },
+  "no_rayon": {
+    "passed": true,
+    "warnings": 13,
+    "warnings_in_changed_module": 0
+  },
+  "checks": [
+    "cargo test -p t4a-faer --lib strict_triangle -- --nocapture",
+    "cargo test -p t4a-faer --lib",
+    "cargo check -p t4a-faer --no-default-features --features std,linalg"
+  ],
+  "notes": "Focused before targeted formatting, full library/no-Rayon after formatting. No other Rust source changes. PREs complete; POST pending."
+}
