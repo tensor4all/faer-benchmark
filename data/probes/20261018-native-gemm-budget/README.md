@@ -73,5 +73,26 @@ causes and original improvement guards remain, then final freeze and BOTH full
 suites/vendor arms. Square2048/3072/4096 remain strictly FINAL-ONLY; thin4096×256
 here is distinct. No final freeze, timing or adoption has happened.
 
+## Recorder command/host preparation (still no execution)
+
+`commands.json` freezes direct existing `record_run.py` argv:4 family/shape groups
+per side for each stage, avoiding accidental rectangular-selection extra cells.
+Existing `expected_cells` projection matches the frozen census (576/2592 base
+identities before independently noted variants); actual CSVs must still match
+ALL648/2688 note/status identities per start. No custom suite/recorder/statistics.
+
+Build script rejects worktree `.git` FILES. Use full `extern/t4a-faer` at exact
+A=b7715c5 / B=7f713a1, local fetch as needed, fresh builds via existing script;
+switch ONLY between completed recording runs. No old2240 binary substitution,
+concurrent build/switch or source edits. Commit all source/tool pins/commands
+before entire pair; no harness/toolkit identity changes between its parts.
+Comparator POST/delivery, runtime recheck and fresh build identity still required.
+
+`preflight-topology.json` is preparation, not durable runtime evidence. Sysfs:
+measured1/4/8T CPUs4 /4-7 /4-11; watched complete L3/SMT4-11,16-23; observer
+0-3,12-15. Agent1492359 all11 current threads outside watched L3, no repin needed.
+Boost0, governor/EPP performance, max2GHz across watched CPUs. Recheck immediately
+before recording; no host setting/shared service changed, no builds or timings.
+
 Provenance: own MIT code/tests, existing gemm getter/criterion; no vendor source.
 The census is evidence inventory, not imported third-party implementation/tests.
