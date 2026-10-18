@@ -46,7 +46,10 @@ a per-revision target directory would let a second recorder build another revisi
 measurement. Every timing goes through this repository's protocol script
 (`benchmarks/scripts/pinned.sh`, which the harness owns because faer has no `benchmarks/` directory
 of its own); it pins the cores and checks that those cores **and their SMT siblings** were idle
-before and after, and a run spoiled by other load is discarded, not published.
+before and after, and a run spoiled by other load is rejected, not published.
+Rejected stdout/CSV and detailed guard output are retained in a unique archive;
+the recorder declares the effective CSV with `PINNED_CSV`. Direct callers writing
+a CSV must declare it too. Archives are evidence, not additional accepted samples.
 
 The observing side is pinned too, because unrelated work on the measured cores is what the idle
 guard then has to reject. The rule is not machine-specific: a cell's measured threads sit in one

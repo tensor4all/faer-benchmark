@@ -26,8 +26,13 @@ program equivalence. Accepted samples, guard logs, hashes, effective pool census
 and bounded static checks are retained. One4T attempt was rejected after running;
 legacy pinned.sh overwrote its CSV on retry, so those rejected samples are lost.
 The loss is explicit in the probe README; there were no1T guard rejections, but
-this is not complete adoption evidence. Future diagnostic attempts need separate
-output files (or a retained one-attempt pre/post guard), not implicit overwrites.
+this is not complete adoption evidence. The corrective wrapper now archives
+rejected stdout/declared CSV/CPU guard details before any retry and stops safely
+on archive failure. Toolkit8484fb54 supplies each effective CSV explicitly;
+requirements.txt pins that remotely reachable feature-branch revision. Bounded
+PRE/POST review and verification are recorded in
+`docs/reviews/20261018-rejected-attempt-retention-review.md`. Numeric timing,
+thresholds, retry budgets and canonical result_files selection are unchanged.
 
 A fixed-reference host-check proposal received a completed bounded PRE-review:
 `docs/reviews/20261018-fixed-reference-control-pre-review.md`. It is meaningful

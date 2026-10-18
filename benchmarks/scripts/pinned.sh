@@ -3,7 +3,9 @@
 # before and right after it. The command's stdout is printed only for a valid
 # run; a run spoiled by other load is retried up to PINNED_RETRIES times
 # (default 3), waiting PINNED_WAIT seconds (default 30) for the cores to become
-# idle.
+# idle. Rejected executions are archived, never silently overwritten. A caller
+# writing a CSV must declare its effective output path with PINNED_CSV; this
+# generic wrapper does not guess a program's argument grammar.
 #
 #   pinned.sh CPUS -- COMMAND [ARGS...]
 #
@@ -27,25 +29,52 @@ seconds=${PINNED_IDLE_SECONDS:-3}
 max_busy=${PINNED_MAX_BUSY:-0.05}
 retries=${PINNED_RETRIES:-3}
 wait=${PINNED_WAIT:-30}
-check() { python3 "$here/idle_cpus.py" check "$cpus" --seconds "$seconds" --max-busy "$max_busy" 2>/dev/null; }
+check() { python3 "$here/idle_cpus.py" check "$cpus" --seconds "$seconds" --max-busy "$max_busy" 2> "$guard"; }
 if [[ $(uname -s) != Linux ]] || [[ ! -r /proc/stat ]] || ! command -v taskset >/dev/null; then
     echo "pinned.sh: CPU pinning unavailable on this host (Linux only); running unpinned" >&2
     exec "$@"
 fi
 echo "pinned.sh: cpus=$cpus idle_window=${seconds}s max_busy=$max_busy retries=$retries" >&2
-tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
+tmp=$(mktemp)
+guard=$(mktemp)
+keep=0
+cleanup() {
+    if [[ $keep == 1 ]]; then
+        echo "pinned.sh: evidence retained at $tmp and $guard" >&2
+    else
+        rm -f "$tmp" "$guard"
+    fi
+}
+trap cleanup EXIT
 for attempt in $(seq 1 "$retries"); do
     if ! check; then
         echo "pinned.sh: cpus $cpus busy before run (attempt $attempt); waiting" >&2
+        cat "$guard" >&2
         sleep "$wait"; continue
     fi
-    taskset -c "$cpus" "$@" > "$tmp"
+    keep=1  # Retain through command execution, post-check and fallible archival.
+    if taskset -c "$cpus" "$@" > "$tmp"; then
+        :
+    else
+        status=$?
+        echo "pinned.sh: command failed ($status); no post-check or retry" >&2
+        exit "$status"
+    fi
     if check; then
         cat "$tmp"
+        keep=0
         echo "pinned.sh: cpus $cpus idle before and after (attempt $attempt)" >&2
         exit 0
     fi
-    echo "pinned.sh: cpus $cpus busy after run (attempt $attempt); discarding it" >&2
+    echo "pinned.sh: cpus $cpus busy after run (attempt $attempt); rejecting it" >&2
+    archive=$(mktemp -d "${PINNED_CSV:-${TMPDIR:-/tmp}/pinned}.rejected.XXXXXX")
+    echo "pinned.sh: rejected attempt $attempt archived at $archive" >&2
+    cp -- "$tmp" "$archive/command.stdout"
+    if [[ -n ${PINNED_CSV:-} ]]; then
+        cp -- "$PINNED_CSV" "$archive/result.csv"
+    fi
+    cp -- "$guard" "$archive/guard.log"
+    keep=0
 done
 echo "pinned.sh: no valid run on cpus $cpus" >&2
 exit 75
