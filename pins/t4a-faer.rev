@@ -17,5 +17,11 @@
 # revision; see `docs/reviews/20261016-linked-crate-provenance.md`. The next recording
 # from this pin replaces them with a run that linked this checkout (the build script
 # refuses a graph that does not).
-5578ccc3df0d980374b2fda6327710d0dcb52c8c
-
+2240b076a03011b2f128988fecf2967c4b1dda1c
+#
+# Moved again on 2026-10-18 to the merge of the two adopted optimizations:
+# `0627828` (the block Householder apply's column split takes the whole budget)
+# and `2000dd9` (the native gemm thread budget is decided in flops), merged at
+# `2240b07`. Both were measured at those revisions; the merge carries their
+# measured trees (`git diff 2000dd9 2240b07 -- faer/src ... Cargo.lock` is empty),
+# so the measurements were not repeated.
