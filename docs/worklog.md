@@ -42,14 +42,20 @@ bidiagonalization, not the merge, as `faer/docs/worklogs/2026-10-18-svd-values-o
 shows. `lu`/`solve` (2.3-3.4x) and `eigh` remain the largest vendor gaps; they are
 the declared out-of-scope families of this iteration (guards only).
 
-**Versus upstream over the whole suite**: the fork is faster in 399 cells, slower in
-92, and inside the between-start band elsewhere (MKL arm; 561 / 305 on the OpenBLAS
-arm). The slowest cells are pre-existing fork behaviour, not this iteration's:
-`solve/n256` c64 F 8T 1.51x, `householder_apply/n64` f64 F 4T 1.45x, `lu/n256` c64
-1.37x, tall `householder_apply/4096x256` C 8T 1.30x, and `gemm/128^3` F 8T 1.29x
-(a 0.09-0.12 ms cell whose own between-start range is over 5%). None of them is a
-cell the two adopted changes touch, and both candidates' upstream control rows
-reproduced the baseline.
+**Versus upstream over the whole suite** (MKL arm, the only arm with an upstream
+row): the fork is faster in 399 cells, slower in 92, and inside the between-start
+band in the other 865. Every slower cell is in a family this iteration did not
+change - `solve` 19, `householder_apply` 23, `lu` 22, `full_piv_lu` 13,
+`triangular_solve` 3, `cholesky` 12 - and there are **none** in `qr_factor`, `qr`,
+`svd_values`, `svd_thin`, `gemm` or `eigh`. The slowest are `solve/n256` c64 F 8T
+1.51x, `householder_apply/n64` f64 F 4T 1.45x (its sequence form), `lu/n256` c64
+1.37x and tall `householder_apply/4096x256` C 8T 1.30x. They pre-date this
+iteration: a direct probe of `householder_apply/n64` f64 F 4T on the baseline and
+merged-revision binaries gives the same fork times (0.0243 / 0.0341 ms block and
+sequence, upstream 0.0239 / 0.0233), and the candidates' upstream control rows
+reproduced the baseline. The OpenBLAS arm has no upstream row (its two declared
+rows are `faer-fork`, `lapack-openblas`), so its 561 / 305 faster/slower count is
+against OpenBLAS, not upstream.
 
 **Vendor gaps that remain and are measured, not explained**: `gemm` at `128^3` and
 `192^3` (f64 F 8T: fork 0.113/0.154 ms, MKL 0.032/0.074, OpenBLAS 0.027/0.081) is
