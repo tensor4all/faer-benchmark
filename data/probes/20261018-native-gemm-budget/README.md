@@ -86,7 +86,15 @@ A=b7715c5 / B=7f713a1, local fetch as needed, fresh builds via existing script;
 switch ONLY between completed recording runs. No old2240 binary substitution,
 concurrent build/switch or source edits. Commit all source/tool pins/commands
 before entire pair; no harness/toolkit identity changes between its parts.
-Comparator POST/delivery, runtime recheck and fresh build identity still required.
+Comparator POST/delivery is complete (toolkit9daa5bc remotely verified and pinned;
+hosted CI content job succeeded). `record-stage1.sh` invokes only these8 existing
+recorder commands, serial A then B, with the declared retry/idle settings and
+15-minute process-group deadlines; no outer retry or automatic stage2/adoption.
+It retains full Cargo metadata per side, logs and partial evidence, refuses to
+reuse its runtime output directory, and holds the existing campaign lock while
+switching or resolving graphs. Each recorder owns its normal build/verify/timing
+lock, source/binary identity checks and runtime observer/boost rechecks. No source
+edit/commit is permitted until the entire stage1 job finishes or fails.
 
 `preflight-topology.json` is preparation, not durable runtime evidence. Sysfs:
 measured1/4/8T CPUs4 /4-7 /4-11; watched complete L3/SMT4-11,16-23; observer
