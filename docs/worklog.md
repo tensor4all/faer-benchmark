@@ -2,6 +2,65 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 (later) — the declared suite, both arms, at the merged revision
+
+The full declared `faer-kernels` suite was recorded once at `2240b07` (the merge of
+the two adopted changes), MKL arm first and OpenBLAS arm second, sequentially, with
+the frozen policy (250 ms priming, 5 calls, three/six process rotations for the
+three-row/two-row arm, boost off, observer off the measured L3, whole-domain idle
+guard). MKL: `20261018T022054Z-final-full-mkl`, 15,156 rows, coverage `full`.
+OpenBLAS: `20261018T044649Z-final-full-openblas`, 6,672 rows, the two declared rows
+(`faer-fork`, `lapack-openblas`). Nothing was re-measured: the merged revision's
+measured-path trees are identical to the candidate revisions.
+
+**The adopted changes, at the merged revision against the `5578ccc` baseline**
+(same cells, f64, rotation-averaged ratio below 1 is faster): `qr_factor` 512^2
+8T **0.870 / 0.864** (C/F), 256^2 8T **0.894 / 0.889**; `qr` 512^2 8T **0.864 /
+0.855**, 256^2 8T **0.854 / 0.834**; 4T 0.96-0.97; 1T 0.99-1.03. `svd_values`
+0.995-1.005 and `svd_thin` 0.965-1.012 (it calls the apply to form U/V). The
+`faer-upstream` row reproduced the baseline (0.97-1.04). The small `64^2`/`128^2`
+`qr_factor` cells move by 3-5% in both directions, which is their own spread (the
+page calls them dispatch-dominated).
+
+**Against the two vendors, 512^2 f64 F order, eight threads** (ms, and the page's own
+direction):
+
+| family | fork | upstream | MKL | OpenBLAS |
+| --- | --- | --- | --- | --- |
+| `qr_factor` | 4.52 / 4.49 | 10.00 | 2.20 (2.06x slower) | 6.81 (1.52x faster) |
+| `qr` | 8.27 / 8.26 | 14.77 | 10.34 (1.25x faster) | 15.49 (1.88x faster) |
+| `svd_thin` | 58.3 / 58.4 | 59.9 | 47.97 (1.21x slower) | 79.7 (1.36x faster) |
+| `svd_values` | 48.3 / 48.8 | 48.6 | 22.40 (2.16x slower) | 46.6 (in band) |
+| `lu` | 4.14 / 4.12 | 4.76 | 1.23 (3.36x slower) | 1.77 (2.33x slower) |
+| `cholesky` | 1.07 / 1.06 | 1.20 | 0.96 (1.11x slower) | 1.21 (1.14x faster) |
+| `eigh` | 23.8 / 23.7 | 24.5 | 14.87 (1.60x slower) | 22.66 (1.05x slower) |
+
+The composite `qr` (factor + compact Q, what a caller uses) is now faster than both
+vendors at this cell; the bare `qr_factor` is behind MKL's `dgeqrf` (2.06x) and
+ahead of OpenBLAS's. `svd_values` is a MKL-only gap now (OpenBLAS at parity): the
+bidiagonalization, not the merge, as `faer/docs/worklogs/2026-10-18-svd-values-only.md`
+shows. `lu`/`solve` (2.3-3.4x) and `eigh` remain the largest vendor gaps; they are
+the declared out-of-scope families of this iteration (guards only).
+
+**Versus upstream over the whole suite**: the fork is faster in 399 cells, slower in
+92, and inside the between-start band elsewhere (MKL arm; 561 / 305 on the OpenBLAS
+arm). The slowest cells are pre-existing fork behaviour, not this iteration's:
+`solve/n256` c64 F 8T 1.51x, `householder_apply/n64` f64 F 4T 1.45x, `lu/n256` c64
+1.37x, tall `householder_apply/4096x256` C 8T 1.30x, and `gemm/128^3` F 8T 1.29x
+(a 0.09-0.12 ms cell whose own between-start range is over 5%). None of them is a
+cell the two adopted changes touch, and both candidates' upstream control rows
+reproduced the baseline.
+
+**Vendor gaps that remain and are measured, not explained**: `gemm` at `128^3` and
+`192^3` (f64 F 8T: fork 0.113/0.154 ms, MKL 0.032/0.074, OpenBLAS 0.027/0.081) is
+2-4x behind both vendors and the same kernel is fastest at `512^3` (1.20 against
+1.52 / 1.31) - a mid-size kernel-efficiency question, not the small-shape fixed cost
+the flop floor addressed.
+
+**Still not covered**: `faer-kernels-large` (1024/1536 and the adoption tiers). Its
+published pages are the invalid 2026-10-15 ones; the 1024 shapes in the invalid
+historical page are not evidence and were not re-recorded here.
+
 ## 2026-10-18 — a provenance-correct baseline, three bounded investigations, two adopted changes
 
 The four `-timing-v2` pages of 2026-10-15/16 are not evidence about any revision: they
