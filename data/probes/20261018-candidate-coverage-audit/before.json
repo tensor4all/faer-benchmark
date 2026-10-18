@@ -1,0 +1,55 @@
+{
+  "source_run": "data/results/zen5-cpu/faer-kernels/20261018T070736Z-upstream-lu-baseline",
+  "source_changed": false,
+  "performance_measurement": false,
+  "reference_validates": true,
+  "cases": [
+    {
+      "case": "empty-results",
+      "returncode": 0,
+      "stdout": "measured revision 2240b076a030 and merged revision 2240b076a030 carry identical measured paths\nfaer-upstream control over 0 cells: reproduces the baseline\nfaer-fork: 0 cells compared, faster 0, slower 0 (beyond 5%; the rest is inside the recorded spread)\n",
+      "stderr": "",
+      "candidate_validation_errors": [
+        "result_files is empty: a run has to name the files that hold what it measured, or the report and the validator are reading different evidence",
+        "v2 timing evidence: missing complete-set process repeat"
+      ],
+      "expected_refusal": true
+    },
+    {
+      "case": "missing-controls",
+      "returncode": 0,
+      "stdout": "measured revision 2240b076a030 and merged revision 2240b076a030 carry identical measured paths\nfaer-upstream control over 0 cells: reproduces the baseline\nfaer-fork: 396 cells compared, faster 0, slower 0 (beyond 5%; the rest is inside the recorded spread)\n  (1, 'cholesky', 'c64', 'c', '128x128', ''): 1.000 (0.187657 -> 0.187657 ms)\n  (1, 'cholesky', 'c64', 'c', '256x256', ''): 1.000 (1.22344 -> 1.22344 ms)\n  (1, 'cholesky', 'c64', 'c', '32x32', ''): 1.000 (0.0052 -> 0.0052 ms)\n  (1, 'cholesky', 'c64', 'c', '512x512', ''): 1.000 (7.89904 -> 7.89904 ms)\n  (1, 'cholesky', 'c64', 'c', '64x64', ''): 1.000 (0.030466 -> 0.030466 ms)\n",
+      "stderr": "",
+      "candidate_validation_errors": [
+        "v2 timing evidence: run0-gemm-mid-1t.csv: missing, unexpected or status-changed timed cells"
+      ],
+      "expected_refusal": true
+    },
+    {
+      "case": "missing-third-start",
+      "returncode": 0,
+      "stdout": "measured revision 2240b076a030 and merged revision 2240b076a030 carry identical measured paths\nfaer-upstream control over 396 cells: reproduces the baseline\nfaer-fork: 396 cells compared, faster 0, slower 0 (beyond 5%; the rest is inside the recorded spread)\n  (1, 'cholesky', 'c64', 'c', '128x128', ''): 1.000 (0.187343 -> 0.187343 ms)\n  (1, 'cholesky', 'c64', 'c', '256x256', ''): 1.000 (1.23879 -> 1.23879 ms)\n  (1, 'cholesky', 'c64', 'c', '32x32', ''): 1.000 (0.0051995 -> 0.0051995 ms)\n  (1, 'cholesky', 'c64', 'c', '512x512', ''): 1.000 (7.90735 -> 7.90735 ms)\n  (1, 'cholesky', 'c64', 'c', '64x64', ''): 1.000 (0.0305165 -> 0.0305165 ms)\n",
+      "stderr": "",
+      "candidate_validation_errors": [
+        "v2 timing evidence: missing complete-set process repeat"
+      ],
+      "expected_refusal": true
+    },
+    {
+      "case": "unmatched-selector",
+      "returncode": 0,
+      "stdout": "measured revision 2240b076a030 and merged revision 2240b076a030 carry identical measured paths\nfaer-upstream control over 0 cells: reproduces the baseline\nfaer-fork: 0 cells compared, faster 0, slower 0 (beyond 5%; the rest is inside the recorded spread)\n",
+      "stderr": "",
+      "candidate_validation_errors": [],
+      "expected_refusal": true
+    },
+    {
+      "case": "valid-unselected-dtype-subset",
+      "returncode": 0,
+      "stdout": "measured revision 2240b076a030 and merged revision 2240b076a030 carry identical measured paths\nfaer-upstream control over 198 cells: reproduces the baseline\nfaer-fork: 198 cells compared, faster 0, slower 0 (beyond 5%; the rest is inside the recorded spread)\n  (1, 'cholesky', 'f64', 'c', '128x128', ''): 1.000 (0.070241 -> 0.070241 ms)\n  (1, 'cholesky', 'f64', 'c', '256x256', ''): 1.000 (0.388916 -> 0.388916 ms)\n  (1, 'cholesky', 'f64', 'c', '32x32', ''): 1.000 (0.003527 -> 0.003527 ms)\n  (1, 'cholesky', 'f64', 'c', '512x512', ''): 1.000 (2.53702 -> 2.53702 ms)\n  (1, 'cholesky', 'f64', 'c', '64x64', ''): 1.000 (0.016661 -> 0.016661 ms)\n",
+      "stderr": "",
+      "candidate_validation_errors": [],
+      "expected_refusal": true
+    }
+  ]
+}
