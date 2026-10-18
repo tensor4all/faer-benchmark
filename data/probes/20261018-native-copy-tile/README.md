@@ -63,3 +63,41 @@ proof. build-prefilter.json frozenexistingbuilder/mkl/release/fullrefs/tool9daa
 andfilterargv. FreshA/B underlock/serial, cleanactualcheckoutmetadata, rawcommand/
 status/hashcapture. NOkernel/performanceverify/timingbefore4densepass. Formal
 3624inventory remainsdraftonly, no clockexecutionapproval/acceptance inferred.
+
+## Fresh static qualification and public-probe builds (NO timing)
+
+499da6e/tool9daa existingFBEbuilder serialA7364/B60de bothsuccessful;
+ALL4matchingdense sizes+normalizedbodies EQUAL/0difflines. Not RIP/caller/kernel/
+wholeprogram/causal/performanceapproval. Actualrawbuilds/ andstatic-dense/ saved.
+No staticgatewaiver: thiscandidatepassed, originalf013HOLD remainsbinding.
+
+Unchangedexistingowned-copy Rust/Cargo/lock compiledintoSEPARATEtargetdirs A/B,
+--release/locked/offline, fullcheckout eachref underlock. ActualCargo graph exact
+t4a-faer ANDtraits full externpaths, allsource/lockhashesunchanged, FBEhashesstill
+matchstaticreport. ProbeELF A974bc3cf.../B7d060cae...; fullmetadata/stdout/stderr/
+argv/started/status/refs/hashes inprobe-builds/. No probeprocess launched, actual
+1Tstderr/readback notyetobserved. draft-public-config source/topology/power
+preparationonly, nottiming/acceptance. Newthinpublicrecorder needscompleted
+operationalPRE/POST/offlinechecks/source+config+argvfreeze BEFOREanyclock;
+currentlyPREactive16901byte318line immutablebundle. No existingRustprobe/pinned
+wrapper/toolkit edits, no clockcontroller implementationbeforePRE.
+
+## Public diagnostic freeze after completed operational POST
+
+CompletedPOST2da8e22b found3Important; verbatimreport archived, notclaimedapproval
+withoutfindings. Mainverifiedandcorrectedterminal fallback/interruptownership/
+validationdeadline. Oldsafe2failure reproducers +newactualdummyreal-signals checks
+pass, Ruff/compile/diffpass; zero-contextdelta andresolution archived. Perproject
+corrective-policyrelevantchecksrerun, no newdesign/reviewloop. Librarysource60
+unchanged, documentationarchive1164bdbpushedverified; no main/pin/releasechange.
+public-config.json andpublic-commands.json FROZENfor8ABBABAAB/4starts eachbinary,
+64records/start, all5samples/250ms/no batching, explicitPool1/Seq/readback andCPU4
+withruntimewholeL3watchderived4-11/16-23. Source/script/config/argv/fullimagehashes
+committedBEFOREclock. Phase1200job420 includesvalidation; onlyboundedtermination
+graceallowed, neverlatecomplete. No existingRustprobe/pinned/toolkit/criteriaedit.
+
+Noactualprobeprocess atthisfreeze. Aftercommit+clean/sourcechecks runrealrecord
+once; anyfailurepartialnocomplete retained, noouterretry. All48unchangedcontrols
+retainedalong16Cto_ownedtargets; analyzerdescriptiveonly, noformalAA3/adoption.
+3624recordformalgridstaysdraft; originalformalcontrols/guards/coverage/statistics
+remainrequired, no final-onlylarge squareduringdevelopment.

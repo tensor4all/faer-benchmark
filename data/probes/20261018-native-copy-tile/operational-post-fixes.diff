@@ -1,0 +1,159 @@
+--- reviewed/record_public.py
++++ fixed/record_public.py
+@@ -31,0 +32,17 @@
++INTERRUPTS = []
++
++
++def install_interrupt_handlers():
++    # Never raise asynchronously inside Popen ownership or group cleanup.
++    # The CLI owns this process; waits observe requests within 100 ms.
++    for sig in (signal.SIGTERM, signal.SIGINT):
++        signal.signal(sig, lambda signum, frame: INTERRUPTS.append(signum))
++
++
++def check_budget(deadline):
++    if INTERRUPTS:
++        raise InterruptedError(f'recorder received signals {INTERRUPTS}')
++    if time.monotonic() >= deadline:
++        raise TimeoutError('absolute deadline expired')
++
++
+@@ -153,0 +171 @@
++        check_budget(deadline)
+@@ -155,2 +173 @@
+-        if time.monotonic() >= deadline:
+-            raise TimeoutError('deadline before launch; no child started')
++        check_budget(deadline)
+@@ -161,5 +178,12 @@
+-            try:
+-                code = child.wait(timeout=max(0, deadline - time.monotonic()))
+-                terminal = {'kind': 'exit', 'returncode': code}
+-            except subprocess.TimeoutExpired:
+-                terminal = {'kind': 'timeout', 'returncode': None}
++            while terminal is None:
++                if INTERRUPTS:
++                    raise InterruptedError(f'recorder received signals {INTERRUPTS}')
++                remaining = deadline - time.monotonic()
++                if remaining <= 0:
++                    terminal = {'kind': 'timeout', 'returncode': None}
++                    break
++                try:
++                    code = child.wait(timeout=min(.1, remaining))
++                    terminal = {'kind': 'exit', 'returncode': code}
++                except subprocess.TimeoutExpired:
++                    pass
+@@ -180,6 +204 @@
+-                handlers = {sig: signal.signal(sig, signal.SIG_IGN) for sig in (signal.SIGTERM, signal.SIGINT)}
+-                try:
+-                    dump(directory / 'cleanup.json', stop_group(child, directory / 'cleanup.json'))
+-                finally:
+-                    for sig, handler in handlers.items():
+-                        signal.signal(sig, handler)
++                dump(directory / 'cleanup.json', stop_group(child, directory / 'cleanup.json'))
+@@ -199,0 +219,4 @@
++    try:
++        check_budget(deadline)  # inventory/after-guard are phase work too
++    except (InterruptedError, TimeoutError) as exc:
++        errors.append('post-validation: ' + repr(exc))
+@@ -200,0 +224 @@
++    dump(directory / 'final.json', {'terminal': terminal, 'errors': errors, 'signals': INTERRUPTS.copy()})
+@@ -202 +226 @@
+-        raise RuntimeError(f'command stopped; original terminal/evidence retained in {directory}')
++        raise RuntimeError(f'command stopped: {terminal!r}; evidence retained in {directory}')
+@@ -218,5 +242 @@
+-    def interrupted(signum, frame):
+-        raise InterruptedError(f'recorder received signal {signum}')
+-
+-    for sig in (signal.SIGTERM, signal.SIGINT):
+-        signal.signal(sig, interrupted)
++    install_interrupt_handlers()
+@@ -250,0 +271 @@
++            check_budget(deadline)
+@@ -257,0 +279 @@
++        check_budget(deadline)
+@@ -269 +290,0 @@
+-
+--- reviewed/check_public.py
++++ fixed/check_public.py
+@@ -4,0 +5 @@
++import signal
+@@ -15,0 +17 @@
++    run.install_interrupt_handlers()
+@@ -63,0 +66 @@
++            run.INTERRUPTS.clear()  # dummy processes only; actual record never clears requests
+@@ -116 +119,69 @@
+-        assert 'deadline before launch' in (expired / 'terminal.json').read_text()
++        assert 'absolute deadline expired' in (expired / 'terminal.json').read_text()
++        # POST1: primary terminal path alone fails; original exit still has a
++        # durable final receipt. No command or filesystem-wide failure implied.
++        def broken_terminal(path, value):
++            if path.name == 'terminal.json':
++                raise OSError('dummy primary terminal failure')
++            original_dump(path, value)
++
++        with mock.patch.object(run, 'dump', side_effect=broken_terminal):
++            fallback = call('terminal-fallback', [sys.executable, '-c', 'import sys;sys.exit(3)'], failure=True)
++        assert not (fallback / 'terminal.json').exists()
++        assert json.loads((fallback / 'final.json').read_text())['terminal'] == {'kind': 'exit', 'returncode': 3}
++        # POST2: REAL signals arrive after OS launch but BEFORE caller ownership,
++        # and on the first cleanup group scan. Handler must never raise there.
++        original_popen = run.subprocess.Popen
++        owned = []
++
++        def interrupted_launch(*args, **kwargs):
++            child = original_popen(*args, **kwargs)
++            owned.append(child)
++            os.kill(os.getpid(), signal.SIGTERM)
++            return child
++
++        with mock.patch.object(run.subprocess, 'Popen', side_effect=interrupted_launch):
++            launch_interrupt = call('launch-interrupt', [sys.executable, '-c', 'import time;time.sleep(60)'], failure=True)
++        assert owned[0].returncode is not None and not run.group_members(owned[0].pid)
++        assert json.loads((launch_interrupt / 'final.json').read_text())['signals'] == [signal.SIGTERM]
++        original_group_members = run.group_members
++        scans = []
++
++        def interrupted_cleanup(pgid):
++            if not scans:
++                scans.append(pgid)
++                os.kill(os.getpid(), signal.SIGINT)
++            return original_group_members(pgid)
++
++        with mock.patch.object(run, 'group_members', side_effect=interrupted_cleanup):
++            cleanup_interrupt = call('cleanup-interrupt', [sys.executable, '-c', 'import time;time.sleep(60)'], seconds=.3, failure=True)
++        assert not original_group_members(scans[0])
++        assert json.loads((cleanup_interrupt / 'cleanup.json').read_text())['direct_child_reaped']
++        # POST3: a quick child succeeds but validation consumes remaining budget.
++        def slow_after():
++            time.sleep(.25)
++            return {}
++
++        run.INTERRUPTS.clear()
++        guards = []
++
++        def validation_state():
++            guards.append(True)
++            return {} if len(guards) == 1 else slow_after()
++
++        with mock.patch.object(run, 'state', side_effect=validation_state):
++            late = root / 'late-validation'
++            try:
++                run.capture(late, [sys.executable, '-c', 'pass'], dict(os.environ), time.monotonic() + .2)
++            except RuntimeError:
++                pass
++            else:
++                raise AssertionError('late validation accepted')
++        final = json.loads((late / 'final.json').read_text())
++        assert final['terminal'] == {'kind': 'exit', 'returncode': 0}
++        assert 'post-validation' in str(final['errors'])
++        try:
++            run.check_budget(time.monotonic() - 1)
++        except TimeoutError:
++            pass
++        else:
++            raise AssertionError('completion budget check failed open')
+@@ -149,2 +220,2 @@
+-          'KILL/reap; -O/env refusal. No benchmark executed.')
+-
++          'KILL/reap; primary-terminal fallback/real launch+cleanup interrupts/late-validation deadline; '
++          '-O/env refusal. No benchmark executed.')

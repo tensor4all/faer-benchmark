@@ -1345,3 +1345,19 @@ conservativecopychainfamiliesALLmainshapes +guards, HHvariants/skips retained;
 notoldnarrow2688intersection, notrecordargv/runtimeproof/adoption. No clock
 controller infrastructure builtbeforestaticqualifies. Final/main/pin unchanged.
 FefarchiveCI39156019409green/fullstepsreceipt retained.
+
+### Builtin-copy qualified static gate; public diagnostic freeze
+
+Source60de2ee/base7364 libraryPRE/POSTcomplete, archive1164bdb. FreshFBEbuilder
+499da6e/tool9daa: ALL4densesizes/normalizedbodiesequal0diff, noRIP/caller/whole
+programequivalence inferred. UnchangedpublicRustprobe separatelybuiltA/Bfull
+checkoutwithactualfaer+traitspackagepathmetadata andELFhashes. OperationalPRE/POST
+complete; POSTthreeImportantverified/fixed/maincorrectivecheckspass, notfresh
+reviewerofthecorrection. public-config/commands/scripts andrawbuild/static/review
+evidencefrozenbeforeanyclock; publicdiagnostic8starts512rows/2560rawsamples,
+explicitworker1/Seq, allcontrols/rejections/source/topology/power checks. No
+actualtimingyetatfreeze, noadoption/mainpin/contract/f013gatechange. Root499CIrun
+39159359591successreceipt saved. Independentreadonlyfullpivotingsourceaudit
+showsremainingfactorfilebyteequalUPafterremoving18rowmajoradaptationlines;
+ownedhighlevelpathbypassesit/default256andthinupdatesSeqevennominal4/8T.
+Sourceboundsnotruntimecounts/causeproof; no newfix ormeasurementfromthataudit.

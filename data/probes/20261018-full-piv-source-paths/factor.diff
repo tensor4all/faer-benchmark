@@ -1,0 +1,24 @@
+diff --git a/faer/src/linalg/lu/full_pivoting/factor.rs b/faer/src/linalg/lu/full_pivoting/factor.rs
+index 17e5ed1..95849da 100644
+--- a/faer/src/linalg/lu/full_pivoting/factor.rs
++++ b/faer/src/linalg/lu/full_pivoting/factor.rs
+@@ -485,0 +486 @@ pub fn lu_in_place<'out, I: Index, T: ComplexField>(
++	// Same row-major adaptation as the partial-pivoting factorisation above.
+@@ -486,0 +488,17 @@ pub fn lu_in_place<'out, I: Index, T: ComplexField>(
++	if mat.row_stride().unsigned_abs() != 1 && M >= N && N > 1 {
++		let mut work = alloc::vec![zero::<T>(); M * N];
++		let mut work = MatMut::from_column_major_slice_mut(&mut work, M, N);
++		linalg::copy_across_layouts(work.rb_mut(), mat.rb(), par);
++		let ret = lu_in_place(
++			work.rb_mut(),
++			row_perm,
++			row_perm_inv,
++			col_perm,
++			col_perm_inv,
++			par,
++			stack,
++			params,
++		);
++		linalg::copy_across_layouts(mat, work.rb(), par);
++		return ret;
++	}

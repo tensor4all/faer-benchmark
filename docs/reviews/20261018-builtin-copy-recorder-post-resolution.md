@@ -1,0 +1,29 @@
+# Completed operational POST: main-agent correction closure
+
+Reportsa2da8e22b COMPLETE withthreeImportant, notno-findingsapproval. Verifiedall
+againstsource; two safeold-snapshotdummyreproducers showterminal-writefailure
+losesoriginaldurableresult andlatevalidationwasaccepted. Interruptiongapverified
+fromraisinghandler+unprotectedPopen/group scan; no unsafeoldleaking-childretest.
+
+1.final.json preservesORIGINALterminal dict evenprimaryterminal.json isunwritable;
+checks failonlyprimaryfile, exit3retained. errors/rawfiles remain, neveradopt.
+2.signalhandlers nowONLYappendrequests, neverraiseasynchronously. Popenalways
+establishesownership; explicitrequestscheckedafterownership/in100msboundedwait
+slices. Cleanupcannotbethrownoutbyrepeatedsignalsfromitsfirstoperation. Actual
+SIGTERM afterOScreationbeforeassignment andSIGINTfirstcleanupscan tested with
+own sleepingdummyprocesses, allterminated/reaped. Productionneverclearsrequests.
+No masks/preexec/helperframework/newdependency; TERM/KILL/reap unchanged.
+3.absolutebudget checkedaftercaptureinventory/afterguard, afterCSVaudit and
+immediatelybeforecomplete markerafterfinalstate. Slowafterguardtestpreserves
+exit0terminal BUTrejectsexpiredvalidation; completioncheckrefusesexpiredbudget.
+Phase1200andjob420 unchanged; cleanupgraceonlynotpermissiontolate-success.
+
+Actualrelevant--check/Ruff/compile/diffPASS savedrecorder-check-post-fixes.log.
+operational-post-fixes.diff iszero-context deltafromreviewedfullsnapshot. Main
+self-reviewedcoherentcorrection/runtimecallers; no newdesign/publiccontractor
+comparisoncriteria. Perprojectcorrectiveeditpolicy relevantchecksrerun, nota
+newdesign/reviewcycle. No claimfreshindependentapprovalofthecorrectivedelta.
+LibrarysourcePOSTremainsseparatecomplete, no newRustcode/threshold/flags/tests.
+StillNOactualprobeprocess/verify/timing. Currentfreezeallowsonlydeclaredpublic
+diagnostic aftercommit; cannotADOPT/replaceformalcomparators/erasecontrols or
+oldf013HOLD. All4staticpassedbeforeanyperformanceverify/timing.
