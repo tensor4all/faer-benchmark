@@ -122,6 +122,13 @@ CPU set spans two L3 domains, and prints the derived free CPUs. The pin therefor
 instead of publishing a contaminated number, and no CPU list is hardcoded per machine - the profile
 for each host carries its own sets.
 
+The refusal leaves no trace once it passes, so an admitted run also *states* the pin: the manifest's
+`threads.observer` carries the recording process's own `sched_getaffinity` and the CPUs that were
+free of every measured L3 domain (`affinity`, `free_cpus`, and the `source` of both), both derived
+from this host's topology. A run recorded before that field existed is still valid - the refusal
+that admitted it was the same rule - but its observer pin is not visible in its provenance, and the
+agent's own pin has to be re-established after a restart because affinity lives in the process.
+
 ## What a report may and may not claim
 
 A report states the fork revision, the upstream revision, the harness, the host,

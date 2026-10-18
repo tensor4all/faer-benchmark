@@ -2,6 +2,44 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the observer pin is recorded; the adopted pairs re-checked
+
+**Provenance instead of an invisible precondition.** An admitted run's manifest said nothing about
+the observing side's CPUs: `require_observer_off_measured_cpus` refuses an observer inside the
+measured L3 domain, but once it passes there is no trace of what the pin was, and a restarted agent
+silently loses its own affinity. The recorder now writes `threads.observer` with `affinity` (the
+recording process's `sched_getaffinity`), `free_cpus` (every CPU outside the measured L3 domains)
+and the `source` of both, derived from the host topology and hardcoded nowhere. Toolkit
+`8fbf10f8bffeba0c9f10f874c3782e27e3586a7c` on `feat/observer-affinity-provenance`, suite 64 tests
+OK, `requirements.txt` moved to that revision. The field is optional in the schema, so earlier
+manifests remain valid; their observer is not visible in provenance.
+
+Confirmed on this host: CPUs 0-3 (+12-15) share 16 MiB and are the Zen5 cluster; 4-11 (+16-23)
+share 8 MiB and are the Zen5c cluster. The declared sets `4` / `4-7` / `4-11` therefore measure on
+Zen5c, and the observer belongs on 0-3,12-15. `/proc/interrupts` currently counts zero on 4-11 and
+irqbalance is inactive; the guard's 3 s / 5% window cannot see sub-millisecond interference on a
+3-350 us cell, which stays a hypothesis about the small-cell tail, not an established cause.
+
+**The two changes adopted through the campaign comparator, re-checked against its own gate**
+(`candidate.control_check`, unchanged upstream row, no new measurement):
+
+| adopted change | pair | control gate |
+| --- | --- | --- |
+| QR block-apply column split `0627828` | `5578ccc` -> `0627828` | **PASS**, 0/96, median 0.9995 |
+| Native GEMM flop floor `2000dd9` | `0627828` -> `2000dd9` | **FAIL**, 1/60, median 1.0000 |
+
+The failing cell is `gemm c64 f 64x64x64` 4T in the *unchanged upstream* row: 0.0448 ms
+[0.0438, 0.0451] -> 0.0364 (0.81). The ratio range over those 60 control cells is 0.741-1.355, so
+the grid's control row is far wider than the gate assumes even though its median is exactly 1.000.
+This is the same confound the LU pairs hit, on a change that was adopted anyway; it is not evidence
+that the GEMM floor is wrong, and it is not waived by the adoption.
+
+**Consequence for the plan.** The twelve remaining `KEEP` perf rows predate the v2 comparator:
+their evidence is isolated drivers (paired, best of 4-21), not a campaign pair. Re-confirming all
+of them would be a day of measurement; accepting them as pre-protocol adoptions with an explicit
+evidence class costs nothing and claims less. That choice, and the gate redefinition it depends on,
+are the two open decisions.
+
 ## 2026-10-19 — the 92 slower cells, their cause, and the two corrections they forced
 
 The fork `2240b07` against upstream `0539947` on the MKL arm is 399 faster / 92 slower /
