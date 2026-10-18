@@ -12,8 +12,8 @@ No new threshold/shape/CPU tuning/API/unsafe/scratch/dependency. Legacy dense
 2*threshold arithmetic intentionally remains baseline, not globally hardened.
 
 Focused2/library217pass2ignored/noRayonstd,linalg13existingwarnings; rawlogs here.
-Kache33975/33975 valid. No reviewer execution claimed. Broad PRE/POST each timedout
-INCOMPLETE, explicitly retained. Narrow actual-delta PRE/POST COMPLETE gpt-6.1-sol,
+Kache33975/33975 valid. No reviewer execution claimed. Broad PRE hit its16-tool-call
+limit; broad POST timedout150s. Both INCOMPLETE, explicitly retained. Narrow actual-delta PRE/POST COMPLETE gpt-6.1-sol,
 no findings, inherits prior completedPOST for unchanged3files; reports in
 ../../../docs/reviews/20261018-native-structured-floor-*. Neither is performance,
 merge or adoption approval. Prior7f formal refusals/GEMM guards/upstream-only

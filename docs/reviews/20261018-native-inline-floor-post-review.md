@@ -1,0 +1,41 @@
+## Files reviewed
+- `/tmp/native-inline-floor-post.md` (lines 1–724), read completely once: candidate/base identities, coherent three-file diff, native-call contexts, worklog, and completed PRE.
+- Source represented in that bundle:
+  - `faer/src/linalg/matmul/internal/mod.rs`: registration, native dispatch/fallback (lines 2–250), and strict/K0 test changes (lines 453–600).
+  - `faer/src/linalg/matmul/triangular.rs` (lines 595–705).
+  - `faer/src/linalg/matmul/internal/tests/native_budgets.rs` (lines 1–192, complete).
+
+## Status
+**COMPLETE — bounded finished-code POST** for candidate `f013756c74213796cd6feb92ef5577a06c9f6cf7` against base `b7715c53ba75946d68a97d5655f481b198332447`.
+
+All requested source-review areas are covered. No repository discovery, commands, tests, builds, edits, or timing were performed.
+
+## Focus area verdicts
+
+1. **Two direct budget expressions: PASS.** Both compare saturating MAC work against `gemm::get_threading_threshold().div_ceil(if T::IS_REAL { 1 } else { 4 })`, selecting exactly caller `par.degree()` or `1` (`internal/mod.rs:221–230`; `triangular.rs:679–691`). Equality retains the caller budget. Saturation preserves comparisons against representable cutoffs; ceiling division avoids an overflowing handwritten addition. No helper, threshold constant, new API, or independent budget selector is introduced.
+
+2. **Actual effective dimensions and native cfg: PASS.** The indexed path adjusts strict/unit views and maps before locally deriving the dimensions passed to native GEMM (`internal/mod.rs:123–174`); its budget uses those same dimensions (`:223–225`). The triangular path performs `skip_diag` slicing before supplying both dimensions and budget (`triangular.rs:633–656`, `:681–686`). Both expressions remain inside existing x86_64/std, native-dtype, supported-instruction-set dispatch (`internal/mod.rs:104–124`; `triangular.rs:613–634`). This is identical policy applied to effective arguments, not necessarily identical budgets for differently adjusted operations.
+
+3. **Original fallback semantics and call arguments: PASS.** The native branch returns before the relocated, unchanged `32³` gate (`internal/mod.rs:231–242`). Native-only shadows end with that branch, so the fallback gate still uses original outer dimensions and incoming budget. The old nonsaturating first multiplication is preserved, not newly hardened. The coherent diff changes no pointer, map, stride, conjugation, accumulation, alpha, diagonal, scratch, or generic computation arguments (`internal/mod.rs:174–250`; `triangular.rs:647–705`).
+
+4. **Implementation-owned test placement and cfg: PASS.** The new module registration is guarded by `test`, x86_64, std, and rayon (`internal/mod.rs:5–7`). Its imports are implementation-local (`internal/tests/native_budgets.rs:1–3`). Existing sequential strict/K0 checks remain; the additional rayon-gated repeat uses an owned eight-thread pool and checks its effective thread count (`internal/mod.rs:575–600`). No production test hook or replacement helper is added.
+
+5. **Numerical oracle and coverage claims: PASS, with explicit limits.**
+   - Independent scalar products cover genuine f64/c64, transposed/nontransposed layouts, conjugation, Add/Replace, triangular storage masks, sequential/eight-thread budgets, finite outputs, and whole-parent comparisons including unstored entries and guards (`internal/tests/native_budgets.rs:5–104`, `:178–192`).
+   - Indexed cases cover reversed row/column maps, rectangular/strict-lower destinations, optional real diagonal weights, finite outputs, and whole-parent comparisons (`:106–175`).
+   - These are not a full Cartesian product: indexed cases use Add and the parallel budget. Numerical equality does not observe selected budgets or worker utilization, and does not establish f32/c32 or forced-generic coverage.
+   - With no production helper, retaining a helper-decision test is unnecessary. Its reported removal is historical context; the supplied base-relative diff does not itself show that deletion.
+
+6. **Scope, identity, provenance, and subsequent gates: PASS as a bounded record, not independent execution evidence.** The coherent diff contains only the two production expressions, fallback-gate relocation, and associated test changes. No new unsafe block, dependency, flag, or source-position adjustment appears. The bundle supplies the entire dense-owning module’s baseline SHA256 `bc37dbe8e3f9d9e3b596b0fac235080899727889583077ae1510800d70f46238` (`/tmp/native-inline-floor-post.md:1–15`); I did not rehash or independently authenticate it.
+
+   The worklog retains the required **fresh four dense size/body equalities before any timing**, otherwise **HOLD without tweaks**; unchanged 648-record stage 1 with all controls/guards precedes conditional 2688-record/all-14 stage 2. Its reported focused/full/no-rayon checks, formatting, and provenance remain supplied evidence, not my execution. The earlier held candidate and separate same-source b771/af document-only whole-ELF equality establish neither causality nor this candidate’s equality or performance.
+
+## Findings
+**No substantiated must-fix findings in the supplied coherent diff.**
+
+Acceptable limitations: no direct selected-budget assertion, no utilization measurement, no new f32/c32 or forced-generic numerical coverage, and no independent build, hash, archive, or provenance verification.
+
+## Summary
+**POST source review passes for this experimental candidate.** It may proceed to the specified fresh static-equality gate; any mismatch requires HOLD before timing, without layout/flag tuning or selective retries.
+
+This is **not** assembly-equality evidence, performance approval, final freeze, adoption, or release approval.

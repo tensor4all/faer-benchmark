@@ -1274,3 +1274,25 @@ same-source-{builds,dense,outcome.json} retained. HostedCI39153055104 allsteps
 success/skipped. Distinct direct2-entry expression simplification plan written,
 PRErunning; no newcandidatecode untilreview. Denseowningfilewouldremain ENTIRELY
 baseline, no helper/pragma/flags/alignmentposition trialloops. All gatesunchanged.
+
+### Direct two-entry candidate source freeze, no timing yet
+
+Codef013756/baseb771, archive98cefa7 pushed/remoteverified after COMPLETEgpt6.1sol
+PRE/POST (coherent3files, no mustfix). Fullreports/verbatimJSON retained. Entire
+denseowningmod.rs exactbaselineSHA bc37...;2directexistingfloor expressions only,
+no helper/attributes/flags/position tuning/newthreshold/API/unsafe/scratch/dep.
+Fallbackold32³gateoriginalouterdims preserved. Focusednumeric1/library216pass
+2ignored/noRayon13existingwarnings/targetedformat/diffpass; kache33980valid.
+No productionhelperdecisiontestexists, numericoraclenotbudget/utilization/f32
+structuredgenericcoverage; sourceinspection and oldmathprooflimits explicit.
+
+Exact648/2688fullgrids/argv/tworefs/tool9daa frozen. Existingdriverguard byteexact
+prior6normal/-O-checks; newRELonly. Preflight fromsuite+sysfs measured4/4-7/4-11,
+watch4-11,16-23,observer0-3,12-15/all11pi1492359threadsoutside/boost0; preparation
+notruntimeproof, recorderrechecks. FreshfullcheckoutA/Bbuilder thenALL4densesize/
+normalizedbodyequality BEFOREtiming, mismatchHOLD/no tweaking. No old7cdwaiver,
+formalcontrols/guards/stage2requirementsunchanged; no finalfreeze/main/pinchange.
+
+Metadata correction from delayedcompletion: oldbroadstructuredPRE stopped at
+16-tool-calllimit, nottimeout; humanREADME/libraryworklog corrected, verbatim
+checkpointunchanged. ItsPOST did time out150s. BothremainINCOMPLETE/notapproval.
