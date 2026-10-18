@@ -1,0 +1,35 @@
+[
+  {
+    "kind": "svd-baseline",
+    "tool_call_id": "call_y9jxha3x",
+    "timestamp": "2026-10-18T00:24:02.862Z",
+    "command": {
+      "command": "cd /home/shinaoka/projects/tensor4all/faer-benchmark/probes/svd-phases && for t in 1 4 8; do case $t in 1) cpu=4;; 4) cpu=4-7;; 8) cpu=4-11;; esac; taskset -c $cpu ./target/release/svd-phases $t 64,128,256,512 7; done",
+      "timeout": 900
+    },
+    "source": "historical main-session tool result; no new execution",
+    "missing": "no contemporaneous binary hash/full Cargo graph/effective pool census restored"
+  },
+  {
+    "kind": "svd-candidate",
+    "tool_call_id": "call_zt4otkx8",
+    "timestamp": "2026-10-18T00:28:21.140Z",
+    "command": {
+      "command": "cd /home/shinaoka/projects/tensor4all/faer-benchmark/probes/svd-phases && cargo build --release 2>&1 | tail -2 && for t in 1 4 8; do case $t in 1) cpu=4;; 4) cpu=4-7;; 8) cpu=4-11;; esac; taskset -c $cpu ./target/release/svd-phases $t 64,128,256,512 7; done",
+      "timeout": 900
+    },
+    "source": "historical main-session tool result; no new execution",
+    "missing": "no contemporaneous binary hash/full Cargo graph/effective pool census restored"
+  },
+  {
+    "kind": "qr-masks",
+    "tool_call_id": "call_weodez7v",
+    "timestamp": "2026-10-18T00:29:48.449Z",
+    "command": {
+      "command": "cd /home/shinaoka/projects/tensor4all/faer-benchmark/probes/qr-phases && for cfg in \"1 0\" \"4 0\" \"8 0\" \"8 1\" \"8 2\" \"8 3\"; do set -- $cfg; t=$1; m=$2; case $t in 1) cpu=4;; 4) cpu=4-7;; 8) cpu=4-11;; esac; QR_PROBE_SEQ=$m taskset -c $cpu ./target/release/qr-phases $t 512 7 f; done",
+      "timeout": 600
+    },
+    "source": "historical main-session tool result; no new execution",
+    "missing": "no contemporaneous binary hash/full Cargo graph/effective pool census restored"
+  }
+]

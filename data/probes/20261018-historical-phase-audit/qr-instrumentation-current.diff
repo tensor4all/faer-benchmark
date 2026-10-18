@@ -1,0 +1,86 @@
+diff --git a/faer/src/linalg/qr/no_pivoting/factor.rs b/faer/src/linalg/qr/no_pivoting/factor.rs
+index b6a460e..f142eea 100644
+--- a/faer/src/linalg/qr/no_pivoting/factor.rs
++++ b/faer/src/linalg/qr/no_pivoting/factor.rs
+@@ -3,0 +4,29 @@ use linalg::householder::{self};
++
++// DIAGNOSTIC ONLY (not for commit): phase attribution for qr_in_place.
++#[doc(hidden)]
++pub mod qr_probe {
++	use core::sync::atomic::{AtomicU64, Ordering};
++	pub static APPLY_CALLS: AtomicU64 = AtomicU64::new(0);
++	pub static APPLY_NS: AtomicU64 = AtomicU64::new(0);
++	pub static UPGRADE_CALLS: AtomicU64 = AtomicU64::new(0);
++	pub static UPGRADE_NS: AtomicU64 = AtomicU64::new(0);
++	pub static PANEL_NS: AtomicU64 = AtomicU64::new(0);
++	/// bit 0: force the trailing block apply sequential; bit 1: force the
++	/// compact-WY upgrade sequential.
++	pub fn seq_mask() -> u64 {
++		use std::sync::OnceLock;
++		static MASK: OnceLock<u64> = OnceLock::new();
++		*MASK.get_or_init(|| {
++			std::env::var("QR_PROBE_SEQ").ok().and_then(|s| s.parse().ok()).unwrap_or(0)
++		})
++	}
++	pub fn take() -> (u64, u64, u64, u64, u64) {
++		(
++			APPLY_CALLS.swap(0, Ordering::Relaxed),
++			APPLY_NS.swap(0, Ordering::Relaxed),
++			UPGRADE_CALLS.swap(0, Ordering::Relaxed),
++			UPGRADE_NS.swap(0, Ordering::Relaxed),
++			PANEL_NS.swap(0, Ordering::Relaxed),
++		)
++	}
++}
+@@ -16,0 +46 @@ fn qr_in_place_unblocked<T: ComplexField>(
++	let _probe_t = std::time::Instant::now();
+@@ -78,0 +109,4 @@ fn qr_in_place_unblocked<T: ComplexField>(
++	qr_probe::PANEL_NS.fetch_add(
++		_probe_t.elapsed().as_nanos() as u64,
++		core::sync::atomic::Ordering::Relaxed,
++	);
+@@ -193,8 +227,22 @@ fn qr_in_place_blocked<T: ComplexField>(
+-				householder::upgrade_householder_factor(
+-					H.rb_mut()
+-						.get_mut(offset..offset + local, row..row + local),
+-					A.rb().get(row.., row..row + local),
+-					local,
+-					sub_block_size,
+-					par,
+-				);
++				{
++					let _t = std::time::Instant::now();
++					let par = if qr_probe::seq_mask() & 2 != 0 {
++						Par::Seq
++					} else {
++						par
++					};
++					householder::upgrade_householder_factor(
++						H.rb_mut()
++							.get_mut(offset..offset + local, row..row + local),
++						A.rb().get(row.., row..row + local),
++						local,
++						sub_block_size,
++						par,
++					);
++					qr_probe::UPGRADE_NS.fetch_add(
++						_t.elapsed().as_nanos() as u64,
++						core::sync::atomic::Ordering::Relaxed,
++					);
++					qr_probe::UPGRADE_CALLS
++						.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
++				}
+@@ -241,0 +290,6 @@ fn qr_in_place_blocked<T: ComplexField>(
++				let _t = std::time::Instant::now();
++				let par = if qr_probe::seq_mask() & 1 != 0 {
++					Par::Seq
++				} else {
++					par
++				};
+@@ -242,0 +297,6 @@ fn qr_in_place_blocked<T: ComplexField>(
++				qr_probe::APPLY_NS.fetch_add(
++					_t.elapsed().as_nanos() as u64,
++					core::sync::atomic::Ordering::Relaxed,
++				);
++				qr_probe::APPLY_CALLS
++					.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
