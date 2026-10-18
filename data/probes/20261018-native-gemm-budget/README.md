@@ -117,6 +117,54 @@ leaves included, not individually attributed; RIP/external references not audite
 Not equivalence or alignment causality, and NOT a replacement control gate.
 Next upstream-only isolation is a separately reviewed DIAGNOSTIC, not adoption.
 
+## Completed upstream-only isolation — diagnostic, no adoption
+
+Recording-source harness311c2fb45b50e14eb09a15fd929eb81bce343341; SAME compiled
+harness651807301c4fd0d485a66038346388dffe289073 and same A=b7715c53ba75946d68a97d5655f481b198332447 /
+B=7f713a1401f18546d1ef0c134df982be80626b2e binaries/upstream0539947ffb757a739d7e703a7d2fa0c792a909c1/
+MKL2026.1/toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5 as above. PRE COMPLETE,
+3minorwording findings fixed; POST COMPLETE2IMPORTANT (info-output retention and
+optimized-Python fail-open) source-verified/fixed with focused before/after checks.
+No reviewer execution or independent rereview of corrections claimed.
+
+All96 full identities/block ×8 ABBABAAB blocks =768 accepted timing records,
+4starts/binary, all5 samples each;18verify/72timing/6info processes with explicit
+1/4/8T readback. Exact CSV counters/finite samples/clean source/binary/power/agent
+thread affinity passed. All operations upstream-only; fork/vendor budget setters
+and MKL loading remain, not all initialization effects removed. No source edit,
+checkout or build during recording. Same dynamic L3/observer/2GHz policy. Owned
+controller1725492 exited after complete marker, no outer timing retry.
+
+`summarize_isolation.py` reads ALL768 records, references/checks all576 original
+canonical96-cell records (3repeats×2binary) without overwriting or intersecting.
+`runtime-isolation/descriptive-comparison.json` retains every process median and
+both descriptive summaries; original raw5-sample arrays stay in accepted CSVs.
+Seven/96 isolated cells leave A-process-range±5% descriptively (2Cholesky,
+1GEMM,4triangular). Not an official replacement gate or a successful control run.
+Strong example: upstream c64F256 triangular/1T A=.025298/.024907/.024907/.024927ms,
+B=.022403/.022271/.023064/.022142ms, medianB/A=.89646; all four B starts below
+A-min-5%. c64C32Cholesky/4T medianB/A=.93955; both sets stay disjoint.
+Provider execution history alone is therefore insufficient, NOT proof of binary
+alignment/caller/allocation causality. Campaigns are not contemporaneous, other
+cells change their bands/spread, and all remain reported. Canonical stage1 STILL
+REFUSED/NOT ADOPTED. No stage2, final freeze or acceptance from this diagnostic.
+
+Two rejected attempts fully archived: block0-A-cholesky1T12rows, cachepeer5 at8%;
+block1-B-gemm1T12rows, cachepeer5 at10%. Three pre-admission delays retained in
+logs, no sample/outlier removal. `retention-inventory.json` preserves full details.
+The earlier shell-background launcher produced no surviving recorder/output;
+explicit detached Popen session launch then executed this one diagnostic, receipt
+retained. Unflushed harness samples remain unrecoverable on failure; no such
+incomplete command was promoted here.
+
+Bounded dense generated-code inspection in `runtime-stage1/dense-code/` reuses
+existing analyzer functions. Four symbols match: two normalized bodies unchanged,
+two change230/634 diff lines (3444→3437,3368→3342bytes). Address/RIP normalization
+is not engine attribution/reference/whole-program equivalence. Mathematically
+equivalent dense policy refactor did NOT preserve every generated body. Next
+minimal proposal keeps the dense source body untouched and applies the adopted
+floor only at two structured entries; PRE pending, no implementation yet.
+
 ## Preflight attempt retained; zero timed cells in that attempt
 
 First stage1 launcher stopped before any build/recorder/CSV at offline Cargo

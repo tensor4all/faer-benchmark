@@ -2,6 +2,38 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-18 — isolated upstream still shifts; no adoption/contract waiver
+
+Diagnostic recording harness311c2fb45b50e14eb09a15fd929eb81bce343341, compiled harness
+651807301c4fd0d485a66038346388dffe289073; same A=b7715c53ba75946d68a97d5655f481b198332447 /
+B=7f713a1401f18546d1ef0c134df982be80626b2e, upstream0539947ffb757a739d7e703a7d2fa0c792a909c1,
+MKL2026.1, toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5. All96 cells×8 ABBABAAB
+blocks/768 records complete,4starts/binary,18verify+72timing+6info, median5/250,
+explicit1/4/8T, dynamic same watchedL3/observer/power policies; sources/binaries
+unchanged. No other provider operations constructed/executed; setters/loading
+remain. Two post-rejects retained12rows each (CPU5cachepeer8%/10%), three admission
+delays; all samples and inconclusive data retained. No outer retry or large tier.
+
+Seven/96 isolated descriptive bands fail (2Chol/1GEMM/4tri), not formal adoption.
+Upstream c64Ftriangular256/1T medianB/A=.89646 with all4 B starts below A-min-5%;
+c64CCholesky32/4T=.93955. Other-provider execution history alone is insufficient;
+not a proof of allocation/caller/layout cause or host drift exclusion. Full96-cell
+raw/summary and exact576-record canonical references in native-budget directory.
+Canonical stage1 STILLREFUSED/NOTADOPTED; no stage2/final/threshold waiver.
+
+Bounded dense code inspection:4matching symbols,2normalizedsame,2changed230/634
+lines, sizes3444→3437/3368→3342. RIP references normalized; no per-engine/whole-
+program or cause proof. Do not call the equivalent dense refactor code-identical.
+Next distinct minimal proposal: preserve dense SOURCE body, floor only structured
+entries, require4densebody static equality before any timing. PRE running; not
+implemented. Existing all-regression goal remains active, not reduced to96cells.
+
+Driver PRE COMPLETE3minor wording fixed; POST COMPLETE2IMPORTANT fixed (info
+capture/status/guards, optimized Python refusal). Real dummy subprocess success/
+exit3 evidence and old-O-exits0/new-O-refuses check pass; no reviewer execution or
+rereview claimed. Same hostedCI39145818271 rerun allsteps green after OWN reviewed
+LUfeature34d7150 made reachable, no validator relaxation or timing repeat.
+
 ## 2026-10-18 — canonical native stage1 complete, control-refused, no adoption
 
 A=b7715c53ba75946d68a97d5655f481b198332447 / B=7f713a1401f18546d1ef0c134df982be80626b2e,
