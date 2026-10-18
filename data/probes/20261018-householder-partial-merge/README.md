@@ -55,3 +55,37 @@ intersection of cells. Ratios are descriptive only, with all start medians saved
 
 **faer-kernels-large2048/3072/4096 are NOT run here. They run only after final
 candidate freeze in the final all-suite campaign, per the user's instruction.**
+
+## Stage1 outcome: NOT ADOPTED; stage2 NOT RUN
+
+Completed the full predeclared grid:144 timed full identities (fork/upstream),
+three starts per binary/cell, five samples each, explicit vendor skips, and all
+verification/thread/source/power checks. See `householder/{identities,comparison,outcome}.json`
+and the per-invocation command/CSV/log/power files. Source frozen at harness
+249b1b1 throughout; A2240b07/Bad9f2ef, not a combined LU/copy candidate.
+
+- Tall f641024x64/8T B/A median ratios across C/F block/sequence:0.889–0.903;
+ 4096x256/8T:0.925–0.950. These are descriptive, not adoption.
+- Small f64 F64² block/8T guard deteriorated: A start medians
+ `[0.028104,0.029136,0.029166]`ms versus B
+ `[0.034636,0.034536,0.028234]`ms. Median ratio1.1853; rotation-geometric ratio
+ 1.12245; B median outside the A range expanded by5%. All samples retained.
+- All72 upstream control medians remain inside the corresponding A start range
+ expanded by5%; this descriptive check does not turn this diagnostic into the
+ formal adoption comparison. The fork guard failure is not waived.
+- Small c64 F64² sequence/4T median ratio1.0727 also remains visible; its starts
+ overlap A's range. No causal claim from an algorithmically unchanged small path:
+ code generation/layout and worker state have not been separated.
+
+Observed CPUs:1T4,4T4–7,8T4–11; full watched L3 including SMT4–11,16–23;
+agent/observer0–3,12–15, derived from sysfs and recorded in `observer-pin.txt`.
+Three pre-execution busy checks delayed admission (CPU4,18,19). One executed
+A4T start was post-check rejected (CPU8 busy8%, a cache peer); its complete
+stdout,60-row CSV and detailed guard log are retained at
+`householder/process0-A-hh-4t.csv.rejected.JFC1f3/`, excluded from accepted-start
+statistics. The existing bounded wrapper admitted the next attempt; no manual
+or threshold-selective rerun occurred. This validates retention on a real rejection.
+
+No downstream guard claim, final candidate freeze, adoption or final large-suite
+coverage follows. Hold/reject this exact candidate and continue diagnosis rather
+than stopping the overall regression-removal goal.
