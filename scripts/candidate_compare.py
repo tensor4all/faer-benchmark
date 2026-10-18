@@ -14,6 +14,7 @@ import argparse
 import csv
 import json
 import pathlib
+import statistics
 import subprocess
 import sys
 
@@ -59,14 +60,18 @@ def compare(args):
     # not a request for everything, so it reaches the pairing check and is refused there.
     cells = None if args.cells is None else args.cells.split(',')
     ok, controls = candidate.control_check(args.baseline, args.candidate, args.control_engine, cells)
-    print(f'{args.control_engine} control over {len(controls)} cells: '
+    median_ratio = statistics.median(row['ratio'] for row in controls) if controls else 1.0
+    outliers = [row for row in controls if row['outside_baseline_range']]
+    print(f'{args.control_engine} control over {len(controls)} cells: median ratio '
+          f'{median_ratio:.6f}, {len(outliers)} outside their own between-start range; '
           f'{"reproduces the baseline" if ok else "does NOT reproduce the baseline"}')
     if not ok:
-        for row in controls:
-            if row['outside_baseline_range']:
-                print(f"  {row['cell']}: baseline {row['baseline_ms']:.6g} "
-                      f"(range {row['baseline_range_ms'][0]:.6g}-{row['baseline_range_ms'][1]:.6g}) "
-                      f"candidate {row['candidate_ms']:.6g}")
+        # The median is the decision, so the rows printed are the ones that moved it: sorting by
+        # distance from 1 shows the tail that a cell-by-cell rule used to refuse on.
+        for row in sorted(controls, key=lambda r: -abs(r['ratio'] - 1.0))[:10]:
+            print(f"  {row['cell']}: baseline {row['baseline_ms']:.6g} "
+                  f"(range {row['baseline_range_ms'][0]:.6g}-{row['baseline_range_ms'][1]:.6g}) "
+                  f"candidate {row['candidate_ms']:.6g} ratio {row['ratio']:.4f}")
         print('refused: the machine is not in the baseline state')
         return 1
     rows = candidate.fork_comparison(args.baseline, args.candidate, args.fork_engine, cells)
