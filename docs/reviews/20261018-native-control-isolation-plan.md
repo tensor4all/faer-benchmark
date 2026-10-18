@@ -19,9 +19,8 @@ The actual runtime is one global explicitly sized Rayon pool shared by providers
 Rows rotate and run sequentially; operations are built only for selected rows
 (:482–567). Each op receives250ms priming then five timed calls and an outside-
 clock check (`timing.rs:12–35`). Thus changing fork work can change preceding
-worker/allocation/cache history seen by the source-unchanged row. MKL alone cannot
-explain everything: triangular_solve vendor entries are skipped and that family
-also moved. History is a hypothesis, not a proven explanation. Four matching
+worker/allocation/cache history seen by the source-unchanged row. Triangular solve also moved despite having no vendor row; this does not exclude
+vendor initialization or preceding vendor history. History is a hypothesis, not a proven explanation. Four matching
 fork/upstream SIMD Cholesky leaves have identical normalized instructions/sizes,
 all moved -211312 bytes (+16 modulo64); RIP/external targets are not verified.
 No whole-program equivalence or instruction-alignment causality claim follows.
@@ -54,9 +53,10 @@ Total96 cells/start, no intersection or post-hoc selection. Preserve family,
 dtype, layout, shape, budget, variant, full raw samples and skips if any. Dedicated
 diagnostic regime keeps these files distinct from declared-suite acceptance data.
 Verify each binary/family/budget before timing (all18 invocations), then eight
-binary starts in ABBABAAB order: four per binary. Within each start use fixed
-family order cholesky,gemm,triangular_solve and budgets1,4,8. Exactly96 cells each
-start; no selective retries or optional early success stop. Keep median5/250ms,
+schedule blocks in ABBABAAB order: four per binary. Within each block use fixed
+family order cholesky,gemm,triangular_solve and budgets1,4,8: nine fresh timing
+processes/block,72 timing processes plus18 verification invocations. Exactly96 cells
+per block; no selective retries or optional early success stop. Keep median5/250ms,
 normal idle3s/max5%/8 bounded protocol retries, all rejected evidence. Existing
 campaign lock across verification+timing, no builds/source edits/checkouts during
 recording, runtime topology/power/hash/source checks. All1T processes explicitly
@@ -64,7 +64,10 @@ request/read back one Rayon worker and one vendor thread; no all-core baseline.
 Use only one L3 domain for each measured cell; observer outside complete L3/SMT.
 
 Retain argv/info/source identities, full stdout/CSV/guard logs, all failures and
-raw incomplete evidence. A command failure stops without outer retry. Use normal
+all available incomplete evidence. Samples buffered in the unchanged harness
+before CSV output cannot be recovered after command failure/timeout. A120second
+deadline may abort before all eight protocol attempts; this remains incomplete,
+not permission for an outer retry. A command failure stops without outer retry. Use normal
 process-group deadlines (~120seconds for each verify/timing invocation, total
 expected ~12–15minutes); inspect owned descendants/logs on timeout, don't blindly
 repeat. No large square tier or stage2/final campaign here.
@@ -78,13 +81,16 @@ stage1 evidence/results remain immutable and refused.
 If shifts persist over balanced isolated starts, cross-engine execution history
 is not a sufficient explanation; pursue bounded binary/code/reference evidence.
 That still does not prove alignment, allocation, or whole-program causality. If
-shifts shrink/change, provider/process history remains a supported lead, not
-proof of MKL spinning or a specific synchronization mechanism. Compare all96
+shifts shrink/change, provider/process history remains a lead, not proof of MKL
+spinning or a specific synchronization mechanism. Canonical and diagnostic runs
+are not contemporaneous; elapsed time and host drift remain alternatives, so
+disappearance alone does not identify a cause. Compare all96
 cells and all starts/spread; never remove inconvenient data or promote a quiet
 subset to formal acceptance. No universal attribution from a single counter.
 Any later change to formal measurement/adoption contract requires separate
 explicit user approval; none is requested or made by this diagnostic.
 
-Own project protocol and own experiment data; no foreign implementation/tests.
+Own experiment data; existing attributed protocol reused unchanged; no new
+foreign implementation/tests imported. Preserve wrapper's existing MIT notices.
 PRE required before execution; a bounded POST covers the final operational driver
 before it is run, not an independent timing execution or performance approval.
