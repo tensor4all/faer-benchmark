@@ -1296,3 +1296,25 @@ formalcontrols/guards/stage2requirementsunchanged; no finalfreeze/main/pinchange
 Metadata correction from delayedcompletion: oldbroadstructuredPRE stopped at
 16-tool-calllimit, nottimeout; humanREADME/libraryworklog corrected, verbatim
 checkpointunchanged. ItsPOST did time out150s. BothremainINCOMPLETE/notapproval.
+
+### Directentry fresh static HOLD; explicit development-gate decision pending
+
+Fresh74a1a8b A/b771/B/f013 bothbuilds successful. ALL4dense sizes andnormalized
+bodies differ, same1248/1226/1317/1249diff counts as7cd. A2dec..., Bfa3f9f44...;
+HOLD/NOTADOPTED/no fbenchverify/timing/stage1/stage2. Sourcearchivee187984 pushed/
+remoteverified, codef013unchanged/reviewed/216tests. No retry/flags/alignment/
+position tweaks. ENTIREdensefilebaseline didnot retain compiledbody.7cd/f013all4
+sizes+normalizedbodies match, butELFimages differ; no reference/wholeprogram or
+causal/provider proof. Staticcallform differences retained, not provedmechanism.
+
+Offlineonly diagnostic partitions ofALL96existingUP-onlycells×4starts/binary,
+ALL3balanced2vs2partitions×bothdirections retained: Aflagcounts7,7,6,6,4,8;
+B7,6,6,8,6,8. TWOstartsperhalf, notformalAA3orindependentreps/pvalues/control
+waiver/cause. Noerase7betweenbinaryflags orclaimnoisefullyexplains; originalraw
+5samples untouched. Allrows/inputSHA in native-inline-floor/.
+
+Any changefrom extraPRE-TIMINGexact4bodyequality tostaticdiagnostic-record+existing
+FULLformalcontrols/GEMMguards needs explicituserdecision andupdatedoperational
+plan/reviews/checks beforeexecution. Nothingchangedyet, no permissioninferred.
+Originalformalcomparator/targetspread/control/guard/statisticalrules, exactgrids/
+skips/starts/samples, largefinal-only, finalfreeze/main/pin remainunchanged.

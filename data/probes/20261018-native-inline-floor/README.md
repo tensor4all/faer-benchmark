@@ -43,3 +43,23 @@ No sourceedits/checkout/builds concurrentrecording. Square2048/3072/4096final-on
 strict/unitcorrectnessDEV. No finalfreeze/main/pin/release/upstreamsubmission.
 Expandedgoal/remainingregressions NOTcomplete. Prior7cdHOLD andsame-source
 A/CidenticalELFdiagnosticretainedin ../20261018-native-structured-floor/.
+
+## Fresh static gate: HOLD, no timing
+
+74a1a8b/tool9daa/MKL2026.1 freshA/Bbuilds completed. Asha2decf425..., Bfa3f9f44... .
+All4matchingdense sizes/bodies differ,1248/1226/1317/1249normalizeddifflines.
+HOLD/NOTADOPTED/no fbenchverify/timing/stage1/stage2, no retry/flags/placement
+fiddling. Rawbuilds/,static-dense/ retained; originalfrozen7cdHOLD unchanged.
+7cd/f013all4sizes+normalizedbodies equal despite helperremoval/rootfilepreservation;
+ELFnotidentical, RIP/reference/wholeprogram/causality NOTinferred. Existingstatic
+callforms differ versusbaseline (includingindirectversusdirectgemmcallforms),
+not enough toproveinliningmechanism or provider attribution. No more codeforms
+triedmerelytofitassembly; currentextra pre-timinginvariant remainsbinding.
+
+AdditionalOFFLINE existingdata-only analysis: all96UP-onlycells×4starts/binary,
+all3balanced2vs2partitions andbothdirections retained. Eachcomparison has2starts,
+NOTformalAA3gate; countsA[7,7,6,6,4,8]/B[7,6,6,8,6,8] outsidebaseline2range±5%.
+No freshdata, independentreplicates/pvalues, cause or comparison-contract waiver;
+original5samples untouched. This does not erase the7between-binary flags or
+provefixedbinarynoiseexplains them. InputsSHA/allrows/limits in
+existing-fixed-binary-partitions.json; staticanalysis inheld-variant-code-analysis.json.
