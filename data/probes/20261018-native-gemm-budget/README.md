@@ -73,7 +73,21 @@ causes and original improvement guards remain, then final freeze and BOTH full
 suites/vendor arms. Square2048/3072/4096 remain strictly FINAL-ONLY; thin4096×256
 here is distinct. No final freeze, timing or adoption has happened.
 
-## Recorder command/host preparation (still no execution)
+## Preflight attempt retained; zero timed cells
+
+First stage1 launcher stopped before any build/recorder/CSV at offline Cargo
+metadata: uncached `redox_users 0.4.6` under the MKL feature. All partial output,
+source commit IDs and log retained in `preflight-offline-missing-crate/`. No owned
+recorder/build descendants or native-floor result directories remained. This was
+not a measured pair, guard rejection or performance result.
+
+Existing Cargo metadata with the SAME patches/features plus `--locked` and
+network access populated the declared target-platform dependencies (redox/windows);
+full graph/fetch log retained. Cargo.lock unchanged; no dependencies, guard,
+statistics, pin or host policy changed. Resume normal offline preflight using
+unchanged launcher; no selective timing retry or old-binary substitution.
+
+## Recorder command/host preparation
 
 `commands.json` freezes direct existing `record_run.py` argv:4 family/shape groups
 per side for each stage, avoiding accidental rectangular-selection extra cells.
