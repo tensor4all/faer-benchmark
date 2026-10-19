@@ -2,6 +2,23 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — B1 taken: the twelve pre-comparator rows are recorded as what they are
+
+The choice between re-measuring the twelve `KEEP` performance rows as campaign pairs (a day, and some
+would not pass the current gate) and labelling them was taken as **B1, cost zero**. `PATCHSET.md` now
+carries an "Evidence class of the adopted changes" section: two rows went through the v2 comparator
+(one passing control, one whose control failed on the binary-layout effect measured separately), the
+rest are *pre-protocol adoptions* from isolated drivers, and the three correctness rows have tests and
+no timing claim. A page may not cite a pre-protocol row as a gated result.
+
+The same commit settles the six candidates that were neither adopted nor dropped: the copy tile
+`60de2ee` stays on **HOLD** because its own control question is unanswered (the ELF-identity argument
+is demoted to a static observation, so the unchanged control that moved 17% still has no explanation),
+and `7cd372f`, `f013756`, `7f713a1`, `ad9f2ef` and `d6358ca` are **DROPPED** with the gate that
+refused each. The ledger's legend gains `HOLD` so the distinction is visible rather than implied.
+
+Record: `tensor4all/faer` PR #22, merged 2026-10-19. Closes faer-benchmark #20 and #21.
+
 ## 2026-10-19 — the periodic run at `a5e6b7d`: the first pages from a post-merge recording
 
 The full declared `faer-kernels` suite was recorded at the merged main, both arms, sequentially:
