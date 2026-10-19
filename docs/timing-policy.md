@@ -102,6 +102,19 @@ fork's row splits are exactly a threaded-kernel change.
 
 ## Guarding the host
 
+## What runs periodically, and what does not
+
+The periodic run is the full declared `faer-kernels` suite plus the **1024** tier of
+`faer-kernels-large`. That is the largest thing this machine records on a schedule: measured on
+2026-10-19, the small suite takes 2h21 (MKL) and 2h56 (OpenBLAS), and the 1024 tier takes 2h33 and
+3h04, so a complete periodic pass is about ten hours of wall time.
+
+Anything above 1024 — the 1536 tier and the 2048/3072/4096 squares — runs **on demand only**, when a
+question needs it, and its page says it was recorded out of cadence. The reason is cost, and the
+estimate in `faer-benchmark#22` is what that decision is made on: 1536 alone is roughly 3.8x the
+work of 1024 per cell, and the 2048+ squares are 8x to 64x, which puts them at days of wall time
+rather than hours.
+
 The frozen settings and preconditions for the current baseline are in
 [protocol-v2-baseline.md](protocol-v2-baseline.md).
 
