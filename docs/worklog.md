@@ -2,6 +2,19 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the site moves to the adopted revision
+
+The pin moved to `2870062` with the adoption, so the site had to move with it. `result/INDEX.md`
+was regenerated: the reference revision is `2870062`, and the `2240b07` pages are now **3 behind**
+rather than current. The adoption pair's candidate run was published as
+`result/zen5-cpu/faer-kernels/2870062a7ee6-0539947ffb75-mkl-timing-v2.md`, marked `partial` - it
+covers `lu`, `solve`, `full_piv_lu`, `cholesky` and `gemm` at 1/4/8T, not the declared suite - and it
+never displaces the full-coverage page at `2240b07`. It is the page that carries the cells the
+adoption was decided on: `solve/n256` c64 is now 1.06x and 1.18x faster than `faer-upstream` where
+the `2240b07` page had it 1.35x and 1.37x slower.
+
+The full declared suite at `2870062`, both arms, is still the periodic run and has not been started.
+
 ## 2026-10-19 — the agent's pin is checked, and the merge gate stops pretending to be a full test
 
 **The pin is now checked deterministically, before the build.** Two runs were spoiled because the
