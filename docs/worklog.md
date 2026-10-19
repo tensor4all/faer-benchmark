@@ -2,6 +2,30 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the periodic run at `a5e6b7d`: the first pages from a post-merge recording
+
+The full declared `faer-kernels` suite was recorded at the merged main, both arms, sequentially:
+MKL `20261019T025721Z` (15,156 rows, `full`) and OpenBLAS `20261019T052233Z` (20,016 rows, the
+two-engine arm). Three process sets for the three-row arm and six for the two-row arm, the frozen
+policy, the observer pinned off the measured domain and checked by the recorder before the build.
+
+Two things went wrong on the way and both were caught before a number was published:
+
+* the recorder refused the first attempt because `herdr` (a terminal daemon at 4% of a core) still
+  owned the measured CPUs - the new ancestor check, refusing before the build rather than after a
+  spoiled run;
+* the OpenBLAS arm was refused with ">=2 calls, >=2 process sets and complete engine-order rotation
+  cycles": two engines need a multiple of two process sets, so `--aa 3` is not a legal arm and
+  `--aa 6` is. The earlier OpenBLAS recording used six for the same reason.
+
+The MKL arm ran 2h20m with six guard rejections and the OpenBLAS arm 2h20m after a 17-minute verify,
+with eleven; every rejected attempt is retained under its run directory and the accepted CSV is the
+one the guard admitted. The pin moves to `a5e6b7d` and the index now reads from it: the MKL page is
+`full`, the OpenBLAS page is `partial` because that arm has no upstream row, and both are `current`.
+
+`faer-kernels-large` was deliberately out of scope for this session; the cost estimate and the
+2048/3072/4096 squares are issue #22.
+
 ## 2026-10-19 — the CI failure was a kernel bug on AVX2-only machines, and it is fixed
 
 `main` went red on `testing-stable-ubuntu-latest` at `2870062` in

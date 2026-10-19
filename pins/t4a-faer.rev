@@ -27,4 +27,10 @@
 # benchmark path). The floor change was measured as `2870062` against `b7715c5` on
 # the `lu`/`solve`/`full_piv_lu`/`cholesky`/`gemm` grid at 1/4/8T, both orders and
 # dtypes; the merge is a fast-forward, so the merged tree is the measured tree.
-2870062a7ee60c440a88bd08fd421cb94421cd56
+# `a5e6b7d` from 2026-10-19, the merge of the kernel fix: `t4a-private-gemm-x86 0.1.24`
+# (256-bit masked-store offset clamped, generated assembly symbols prefixed `t4a_` so the
+# campaign's harness can link it next to upstream's `private-gemm-x86`). Recorded as the
+# full declared `faer-kernels` suite on both arms - MKL `20261019T025721Z` (15,156 rows,
+# full) and OpenBLAS `20261019T052233Z` (20,016 rows, the two-engine arm) - so this is the
+# first revision whose pages come from a post-merge periodic run rather than an adoption pair.
+a5e6b7d239466fb0d685edc20db6c4f3f3a71411
