@@ -13,7 +13,7 @@ It is a view over recorded data, not a new measurement: a cell that one arm does
 not carry is shown as a dash, and the per-arm Markdown pages plus their manifests
 stay authoritative for the control statement and the verification record.
 """
-import argparse, csv, glob, html, pathlib, statistics, sys
+import argparse, csv, glob, html, pathlib, statistics, subprocess, sys
 import yaml
 
 KEY = ('regime', 'family', 'dtype', 'order', 'm', 'n', 'k', 'batch', 'threads', 'note')
@@ -161,11 +161,22 @@ against <code>lapack-openblas</code>. Median baseline/fork ratio (above 1.00 mea
 
 def write_index(index_path, comparison, cells):
     root = index_path.parent
+    # A Markdown page served as text is not readable in a browser, so those link to the
+    # rendering GitHub does, at the commit this artifact came from. The HTML pages link
+    # relatively because they are what the site serves.
+    head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+    remote = subprocess.run(['git', 'remote', 'get-url', 'origin'], capture_output=True, text=True).stdout.strip()
+    blob = remote.removesuffix('.git').replace('git@github.com:', 'https://github.com/')
     pages = sorted(root.rglob('*-timing-v2.md')) + sorted(root.rglob('*comparison.html'))
     items = []
     for page in pages:
         rel = page.relative_to(root)
-        items.append(f'<li><a href="{html.escape(str(rel))}">{html.escape(str(rel))}</a></li>')
+        if page.suffix == '.md' and head and 'github.com' in blob:
+            href = f'{blob}/blob/{head}/{page.relative_to(root.parent)}'
+            note = ' <span class="muted">(Markdown, rendered by GitHub)</span>'
+        else:
+            href, note = str(rel), ''
+        items.append(f'<li><a href="{html.escape(href)}">{html.escape(str(rel))}</a>{note}</li>')
     index_path.write_text(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>faer benchmark results</title>
 <style>body{{font:14px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem}}
