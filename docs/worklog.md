@@ -2,6 +2,38 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the CI failure was a kernel bug on AVX2-only machines, and it is fixed
+
+`main` went red on `testing-stable-ubuntu-latest` at `2870062` in
+`linalg::matmul::internal::tests::strict_triangle_maps_preserve_stored_entries_and_parent_guards`,
+the guard test that shipped with the empty-extent/K0 fix. It was not a flaky test and not the LU
+commit: the store epilogue of `private-gemm-x86`'s 256-bit kernels selected a shifted entry of
+`mask.data` and clamped only the top of the range, so a vector row entirely past the diagonal read a
+mask from before the table and stored a full vector into entries the destination structure says are
+not written. The 512-bit kernels build their masks from k-register arithmetic, which is why the same
+code is correct on an AVX-512 host and wrong on an AVX2-only runner - and why the failure appeared on
+one CI run and not the eleven before it.
+
+Reproduced by disabling the AVX-512 dispatch (`feat = Avx256`) locally, then at the kernel's own API
+in `tensor4all/t4a-private-gemm-x86` (a fork of `sarah-quinones/gemm-x64-v2`): c64, m = n = 3,
+k = 2, `DstKind::Upper`, one thread writes `(2, 0)` on the 256-bit path and leaves it on the
+512-bit one. A sweep of {f64, c64} x {upper, lower} x m, n in 1..=9 x k in 1..=3 stores 486 entries
+outside the triangle before the clamp and 0 after it.
+
+Fixed in the fork by clamping the mask index at zero as well, published as
+`t4a-private-gemm-x86 0.1.23` (the library keeps the name `private_gemm_x86`), and `main` now
+depends on it: `4ad6c01`, "Merge pull request #19". The guard tests pass with the AVX-512 dispatch
+disabled and enabled, and the lib suite is 214 passed / 2 ignored either way; all CI jobs on the PR
+passed, including the one that had failed. Upstream report and fix:
+`sarah-quinones/gemm-x64-v2#5` and `#6`, still open, so the dependency stays on the fork until it
+is merged and released.
+
+**Effect on this campaign's evidence.** `faer/Cargo.toml` and `Cargo.lock` are measured paths, so the
+adoption pair recorded at `2870062` describes `2870062`, not `4ad6c01`. Nothing measured changes in
+principle - `spicy_matmul` reaches dense LDLT and sparse Cholesky, neither of which is a declared
+cell - but the next recording must be taken at the new revision rather than reusing these numbers,
+and the pin stays at `2870062` until that run exists.
+
 ## 2026-10-19 — the site moves to the adopted revision
 
 The pin moved to `2870062` with the adoption, so the site had to move with it. `result/INDEX.md`
