@@ -31,7 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check the landing page exists
-        run: test -f result/index.html || (echo "result/index.html is missing: run scripts/gen_comparison.py --index" && exit 1)
+        run: |
+          test -f result/index.html || {
+            echo "result/index.html is missing; run scripts/gen_comparison.py --index"
+            exit 1
+          }
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
