@@ -33,4 +33,16 @@
 # full declared `faer-kernels` suite on both arms - MKL `20261019T025721Z` (15,156 rows,
 # full) and OpenBLAS `20261019T052233Z` (20,016 rows, the two-engine arm) - so this is the
 # first revision whose pages come from a post-merge periodic run rather than an adoption pair.
-a5e6b7d239466fb0d685edc20db6c4f3f3a71411
+# `50c2b98` from 2026-10-19, the merge of the row-major copy floor (`faer#23`), moved
+# without re-recording because the only declared cells whose code path changes are
+# `linalg-small/32` for lu, full_piv_lu, solve, qr_factor, qr, svd_values and svd_thin:
+# the floor is 4096 elements, so 64^2 = 4096 and everything above it take the copy
+# exactly as at `a5e6b7d`, and tall/wide are far above it. Those 32-square cells were
+# measured as a pair (`20261019T163156Z-base-rm-floor-r2` against
+# `20261019T170716Z-cand-rm-floor-4k`, 288 cells at 4T/8T, control 0.9976 with one cell
+# outside): 29 faster, 1 slower, and the slower one is a `householder_apply` cell the
+# change cannot reach. The published `a5e6b7d` pages therefore understate the 32-square
+# cells by 1.4-1.8x on `qr_factor` and are exact everywhere else; the next publication
+# replaces them. 1T at 32 was not re-measured: at 1T the copy never paid, and the change
+# removes it.
+50c2b989484f063f4e1b132adc333715391d8b73
