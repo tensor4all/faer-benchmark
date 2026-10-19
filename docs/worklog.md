@@ -2,6 +2,32 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the agent's pin is checked, and the merge gate stops pretending to be a full test
+
+**The pin is now checked deterministically, before the build.** Two runs were spoiled because the
+harness process kept the whole machine in its affinity and used CPU 4 while the cells were timed;
+pinning the recorder cannot move it, because affinity is per process and is not inherited backwards.
+`require_observer_off_measured_cpus` now walks the ancestor chain and refuses when a process that has
+already burned one second of CPU still owns a measured L3 CPU, naming each offender with pid, comm,
+affinity and CPU time, and printing the `taskset -pc <free> <pid>` that fixes it. A transient wrapper
+shell is not an offender; a worker is. The recorder also writes the resulting pin into
+`threads.observer`, so the manifest shows what was allowed. Toolkit
+`69c1c139ae1f139cd3a3d00d2fee4a2b34eff3b4`, suite 67 tests OK, `requirements.txt` moved to it.
+
+**A merge proves its cells, not the suite.** `docs/merge-procedure.md` now states the division
+explicitly: the candidate pair answers "did the change do what it was written for" and "did it break
+what it can reach" and "is the machine still the machine", at about an hour; "did anything regress
+anywhere else" is answered only by the periodic full declared suite at a frozen candidate, about 3.5
+hours for both arms, and that run - not a per-merge argument - is what a suite-wide claim may cite. A
+case no candidate targets is left to the periodic run; its last published page stands until then.
+The cadence is manual for now: after a batch of merges, or before a page is quoted.
+
+The reason is the distribution: every number carries a between-start spread, so certifying the whole
+declared grid per merge would cost hours and still be a distributional claim, while the cells the
+merge actually touches are exactly the ones a candidate pair measures cheaply. The checklist also
+records the four preconditions in order (agent pinned, measured sets read from the suite, nothing
+else running, the pin recorded), so the step that was forgotten is the first one written down.
+
 ## 2026-10-19 — the LU floor's unit fixed and adopted; both merge candidates merged
 
 **Measured, adopted, merged.** `0c71ca2` counts the blocked partial-pivoting LU recursion's work

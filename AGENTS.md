@@ -63,9 +63,13 @@ guard then has to reject. The rule is not machine-specific: a cell's measured th
 L3 domain, and everything else - the agent, the recorder, the guard checker - runs on the CPUs
 outside that domain. The recorder derives both sets from the machine's own topology, refuses to
 start when its affinity overlaps the measured set (SMT siblings included) or when a declared CPU
-set spans more than one L3 domain, and names the derived free CPUs in the refusal. The affinity
-lives in the process, so the agent's own pin must be re-established after a restart; the profile
-for the current host records the concrete CPU sets and their cache sizes.
+set spans more than one L3 domain, and names the derived free CPUs in the refusal. It checks the
+whole ancestor chain, not only itself: pinning the recorder cannot move the agent that launched it,
+so a process that has already burned a second of CPU while still owning a measured CPU is refused
+by name with the `taskset -pc` that fixes it. The affinity lives in the process, so the agent's own
+pin must be re-established after a restart - the check is what makes forgetting it visible before a
+build rather than after a spoiled run; the profile for the current host records the concrete CPU
+sets and their cache sizes.
 
 Priming is **time-based** and identical on every arm. A fixed
 call count is not a substitute: after an idle gate this host reads low for the first second or two

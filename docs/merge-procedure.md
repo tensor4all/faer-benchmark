@@ -27,6 +27,26 @@ published afterwards. A merge is not an adoption claim about cells nobody measur
    dense LDLT and sparse Cholesky is the worked example - and merge on the tests. That is a
    statement about reachability, not a performance claim, and it is recorded as such.
 
+## Before the pair: the observer checklist
+
+The recorder refuses to start when the observing side is on a measured core, but that refusal has to
+see the whole chain: pinning the recorder does nothing for the agent that launched it, because the
+affinity is per process and is not inherited backwards. Two runs of this campaign were spoiled by
+exactly that - the harness process kept the whole machine in its affinity and used CPU 4 while the
+cells were timed. So the checklist is short and every line is checked by the recorder itself:
+
+1. **The agent is pinned off the measured domain.** `require_observer_off_measured_cpus` walks the
+   ancestor chain and refuses when a process that has already burned a second of CPU still owns a
+   measured CPU, naming the pid, the comm, the affinity and the CPU time, and printing the `taskset
+   -pc <free> <pid>` that fixes it. Do that before anything else, and redo it after a restart.
+2. **The measured sets come from the suite**, not from memory: `benchmarks/suites/<suite>.yaml`
+   declares them per thread count and the profile names the L3 domains.
+3. **Nothing else is running.** The guard checks the whole domain three seconds before and after
+   every cell, and a rejected attempt is archived, not published - but a rejection costs a rebuild
+   and a retry, so the cheap checks come first.
+4. **The recorder records the pin** in `threads.observer`, so the manifest shows what the check
+   allowed instead of leaving it to the operator's memory.
+
 ## The pair
 
 The target and guard grids are declared **before** the runs, from the changed paths: the affected
@@ -57,6 +77,29 @@ three collateral cells of families the change cannot reach.
   is the publication step that follows a merge, and it is a separate, deliberately started run.
 - Rejected and HOLD branches stay where they are with their records. A merge does not delete the
   branches that lost, and a HOLD candidate is not revived by a neighbouring merge.
+
+## What a merge does and does not prove
+
+A merge proves the cells it measured: the declared target set improved, the declared guard set did
+not regress beyond the recorded spread, and the unchanged row's median reproduced the baseline. It
+does **not** prove that no case anywhere regressed, and it is not supposed to. Every number this
+campaign produces carries a distribution - the between-start spread is part of the page - and
+certifying the whole declared grid before each merge would cost hours per candidate and still be a
+distributional claim.
+
+The division of labour is therefore:
+
+| question | answered by | cost |
+| --- | --- | --- |
+| did this change do what it was written for? | the candidate pair on the target cells | ~1 h |
+| did it break the families it can reach? | the declared guard set in the same pair | included |
+| is the machine still the machine? | the unchanged row's median, in the same pair | included |
+| did anything regress anywhere else? | the **periodic full declared suite**, run manually at a frozen candidate and published | ~3.5 h both arms |
+
+So a case that no candidate targets is left to the periodic run: it is not re-measured per merge, and
+its last published page stands until the periodic run replaces it. The periodic cadence is currently
+manual - run it after a batch of merges, or when a page is about to be quoted - and its result, not
+a per-merge argument, is what a "no regression across the suite" claim may cite.
 
 ## Current candidates
 
