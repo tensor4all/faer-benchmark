@@ -48,9 +48,12 @@ Fixed in the fork by clamping the mask index at zero as well, published as
 `t4a-private-gemm-x86 0.1.23` (the library keeps the name `private_gemm_x86`), and `main` now
 depends on it: `4ad6c01`, "Merge pull request #19". The guard tests pass with the AVX-512 dispatch
 disabled and enabled, and the lib suite is 214 passed / 2 ignored either way; all CI jobs on the PR
-passed, including the one that had failed. Upstream report and fix:
-`sarah-quinones/gemm-x64-v2#5` and `#6`, still open, so the dependency stays on the fork until it
-is merged and released.
+passed, including the one that had failed. Upstream report: `sarah-quinones/gemm-x64-v2#5`. The
+first fix PR (#6) was closed without a comment and without a commit upstream, so the diagnosis was
+resubmitted as #7, which touches `build.rs` and the test only — the package rename, the CI workflow
+and the dev-dependency cleanup of #6 are not in it. Until upstream takes it, the dependency stays on
+`t4a-private-gemm-x86`, whose main, tags `v0.1.23`/`v0.1.24` and green CI now match what crates.io
+serves.
 
 **Effect on this campaign's evidence.** `faer/Cargo.toml` and `Cargo.lock` are measured paths, so the
 adoption pair recorded at `2870062` describes `2870062`, not `4ad6c01`. Nothing measured changes in
