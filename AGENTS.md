@@ -65,8 +65,8 @@ outside that domain. The recorder derives both sets from the machine's own topol
 start when its affinity overlaps the measured set (SMT siblings included) or when a declared CPU
 set spans more than one L3 domain, and names the derived free CPUs in the refusal. It checks the
 whole ancestor chain, not only itself: pinning the recorder cannot move the agent that launched it,
-so a process that has already burned a second of CPU while still owning a measured CPU is refused
-by name with the `taskset -pc` that fixes it. The affinity lives in the process, so the agent's own
+so an ancestor that still owns a measured CPU and was using at least 1% of a core during a
+half-second sample is refused by name with the `taskset -pc` that fixes it. The affinity lives in the process, so the agent's own
 pin must be re-established after a restart - the check is what makes forgetting it visible before a
 build rather than after a spoiled run; the profile for the current host records the concrete CPU
 sets and their cache sizes.

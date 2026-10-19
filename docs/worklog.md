@@ -7,9 +7,9 @@ Decisions, fixed failures and open items for this campaign. Newest first.
 **The pin is now checked deterministically, before the build.** Two runs were spoiled because the
 harness process kept the whole machine in its affinity and used CPU 4 while the cells were timed;
 pinning the recorder cannot move it, because affinity is per process and is not inherited backwards.
-`require_observer_off_measured_cpus` now walks the ancestor chain and refuses when a process that has
-already burned one second of CPU still owns a measured L3 CPU, naming each offender with pid, comm,
-affinity and CPU time, and printing the `taskset -pc <free> <pid>` that fixes it. A transient wrapper
+`require_observer_off_measured_cpus` now walks the ancestor chain and refuses when a process that still
+owns a measured L3 CPU was using at least 1% of a core over a half-second sample, naming each
+offender with pid, comm, affinity and rate, and printing the `taskset -pc <free> <pid>` that fixes it. A transient wrapper
 shell is not an offender; a worker is. The recorder also writes the resulting pin into
 `threads.observer`, so the manifest shows what was allowed. Toolkit
 `69c1c139ae1f139cd3a3d00d2fee4a2b34eff3b4`, suite 67 tests OK, `requirements.txt` moved to it.

@@ -118,8 +118,9 @@ unrelated workloads remain an operator precondition, and that includes the obser
 A cell's measured threads share one L3 domain; the agent, the recorder and the guard checker belong
 on the CPUs outside it. `record_run.py` derives both sets from the machine topology, refuses to
 start when its own affinity overlaps the measured set (SMT siblings included) or when a declared
-CPU set spans two L3 domains, and prints the derived free CPUs. It also walks the ancestor chain: a
-process that has already burned a second of CPU and still owns a measured CPU is refused by name,
+CPU set spans two L3 domains, and prints the derived free CPUs. It also walks the ancestor chain: an
+ancestor that still owns a measured CPU and was using at least 1% of a core over a half-second
+sample is refused by name,
 because pinning the recorder cannot move the agent that launched it - that is how two runs of this
 campaign were spoiled. The pin therefore fails the run
 instead of publishing a contaminated number, and no CPU list is hardcoded per machine - the profile

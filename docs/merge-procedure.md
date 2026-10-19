@@ -36,8 +36,8 @@ exactly that - the harness process kept the whole machine in its affinity and us
 cells were timed. So the checklist is short and every line is checked by the recorder itself:
 
 1. **The agent is pinned off the measured domain.** `require_observer_off_measured_cpus` walks the
-   ancestor chain and refuses when a process that has already burned a second of CPU still owns a
-   measured CPU, naming the pid, the comm, the affinity and the CPU time, and printing the `taskset
+   ancestor chain and refuses when a process that still owns a measured CPU was using at least 1% of a core during a
+   half-second sample, naming the pid, the comm, the affinity and the rate, and printing the `taskset
    -pc <free> <pid>` that fixes it. Do that before anything else, and redo it after a restart.
 2. **The measured sets come from the suite**, not from memory: `benchmarks/suites/<suite>.yaml`
    declares them per thread count and the profile names the L3 domains.
