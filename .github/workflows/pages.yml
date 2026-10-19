@@ -1,0 +1,40 @@
+name: pages
+
+# The recorded pages are Markdown, which a browser does not render; this publishes
+# the generated HTML view of the same data (the four-way comparison and the
+# landing page) so the campaign is browsable without checking the repository out.
+#
+# The campaign's work lives on `perf/upstream-regression-campaign` until it is
+# merged, so that branch deploys too; `main` is what a reader should quote once
+# the branch has landed.
+on:
+  push:
+    branches: [main, perf/upstream-regression-campaign]
+    paths: [result/**, .github/workflows/pages.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the landing page exists
+        run: test -f result/index.html || (echo "result/index.html is missing: run scripts/gen_comparison.py --index" && exit 1)
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: result
+      - id: deployment
+        uses: actions/deploy-pages@v4
