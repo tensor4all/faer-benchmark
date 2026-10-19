@@ -2,6 +2,32 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the large tier: 1024 and the boundary shapes, and why 1536+ is not here
+
+`faer-kernels-large` had no current record at all. The estimate (faer-benchmark#22) scaled the 512
+medians by `n^3` and put the whole declared suite at 29.5 h for the MKL arm and 59 h for OpenBLAS,
+with `linalg-big` (2048/3072/4096) taking 27.7 h of the MKL number.
+
+The estimate was right about the shape of the cost and wrong about where it sits. The first attempt,
+`linalg-large` with 1024 and 1536 together, spent **72 minutes in `verify-linalg-large-4t`** and had
+not finished that one thread count when it was stopped: verify checks an O(n^3) reconstruction or
+orthogonality per cell, and at 1536 that check is an order of magnitude over the timed part of the
+estimate. So the tier is recorded in the shape that fits:
+
+* **`20261019T102752Z-periodic-20261019-large1024-mkl`** - 3,672 rows, `linalg-large` at n = 1024,
+  `gemm-large` at 1024^3, and `linalg-boundary` at 255/257/511/513, 4T and 8T, three process sets.
+* **`20261019T130054Z-periodic-20261019-large1024-openblas`** - 4,896 rows, same shapes, two-engine
+  arm, six process sets.
+
+Each took about two hours, of which 40 minutes was verify. Both publish as `partial` pages at
+`a5e6b7d`: partial because 1536 and the 2048/3072/4096 squares are not in them, and that is the
+honest label.
+
+**1536 is verify-bound**, not timing-bound, and it joins the 2048/3072/4096 squares in the same open
+decision (#22), whose estimate now says so. The aborted `20261019T091625Z` directory is retained with
+its build record and no `run.yaml`: it is not evidence, and it is the measurement that produced the
+correction.
+
 ## 2026-10-19 — B1 taken: the twelve pre-comparator rows are recorded as what they are
 
 The choice between re-measuring the twelve `KEEP` performance rows as campaign pairs (a day, and some

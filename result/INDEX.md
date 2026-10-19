@@ -5,7 +5,7 @@ this file is what the generator produces.
 
 - Reference fork revision (`pins/t4a-faer.rev`): `a5e6b7d239466fb0d685edc20db6c4f3f3a71411`
 - Reference upstream revision (`pins/upstream-faer.rev`): `faer-v0.24.4`
-- Newest recorded run: `2026-10-19T13:00:41.576001Z`
+- Newest recorded run: `2026-10-19T16:05:22.621534Z`
 - Every page below is one `(suite, hardware profile, fork revision, upstream revision,
   vendor arm)` and carries its commits, its hardware and the vendor library it linked.
 
@@ -18,7 +18,7 @@ rather than being implied by the other arm's page.
 | suite | profile | vendor | fork/upstream | version | date | coverage | status | page |
 |---|---|---|---|---|---|---|---|---|
 | `faer-kernels-large` | `zen5-cpu` (optional) | `mkl` | `a5e6b7d23946/0539947ffb75` | 0.24.4 | 2026-10-19 | partial | current | [result/zen5-cpu/faer-kernels-large/a5e6b7d23946-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels-large/a5e6b7d23946-0539947ffb75-mkl-timing-v2.md) |
-| `faer-kernels-large` | `zen5-cpu` (optional) | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 14 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md) |
+| `faer-kernels-large` | `zen5-cpu` (optional) | `openblas` | `a5e6b7d23946/0539947ffb75` | 0.24.4 | 2026-10-19 | partial | current | [result/zen5-cpu/faer-kernels-large/a5e6b7d23946-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels-large/a5e6b7d23946-0539947ffb75-openblas-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `mkl` | `a5e6b7d23946/0539947ffb75` | 0.24.4 | 2026-10-19 | full | current | [result/zen5-cpu/faer-kernels/a5e6b7d23946-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/a5e6b7d23946-0539947ffb75-mkl-timing-v2.md) |
 | `faer-kernels` | `zen5-cpu` | `openblas` | `a5e6b7d23946/0539947ffb75` | 0.24.4 | 2026-10-19 | partial | current | [result/zen5-cpu/faer-kernels/a5e6b7d23946-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels/a5e6b7d23946-0539947ffb75-openblas-timing-v2.md) |
 
@@ -34,6 +34,7 @@ partial or declaration-changed page never displaces a full-coverage one.
 
 | suite | profile | vendor | fork/upstream | version | date | coverage | status | page |
 |---|---|---|---|---|---|---|---|---|
+| `faer-kernels-large` | `zen5-cpu` | `openblas` | `a5e6b7d23946/0539947ffb75` | 0.24.4 | 2026-10-19 | partial | current | [result/zen5-cpu/faer-kernels-large/a5e6b7d23946-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels-large/a5e6b7d23946-0539947ffb75-openblas-timing-v2.md) |
 | `faer-kernels-large` | `zen5-cpu` | `mkl` | `a5e6b7d23946/0539947ffb75` | 0.24.4 | 2026-10-19 | partial | current | [result/zen5-cpu/faer-kernels-large/a5e6b7d23946-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels-large/a5e6b7d23946-0539947ffb75-mkl-timing-v2.md) |
 | `faer-kernels-large` | `zen5-cpu` | `openblas` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 14 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-openblas-timing-v2.md) |
 | `faer-kernels-large` | `zen5-cpu` | `mkl` | `bfe4041cd991/0539947ffb75` | 0.24.4 | 2026-10-16 | partial | 14 behind | [result/zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels-large/bfe4041cd991-0539947ffb75-mkl-timing-v2.md) |
