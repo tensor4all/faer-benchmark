@@ -102,18 +102,39 @@ fork's row splits are exactly a threaded-kernel change.
 
 ## Guarding the host
 
-## What runs periodically, and what does not
+## What runs when: the gate and the publication are two different runs
 
-The periodic run is the full declared `faer-kernels` suite plus the **1024** tier of
-`faer-kernels-large`. That is the largest thing this machine records on a schedule: measured on
-2026-10-19, the small suite takes 2h21 (MKL) and 2h56 (OpenBLAS), and the 1024 tier takes 2h33 and
-3h04, so a complete periodic pass is about ten hours of wall time.
+The two suites answer different questions, so they run on different triggers.
 
-Anything above 1024 — the 1536 tier and the 2048/3072/4096 squares — runs **on demand only**, when a
-question needs it, and its page says it was recorded out of cadence. The reason is cost, and the
-estimate in `faer-benchmark#22` is what that decision is made on: 1536 alone is roughly 3.8x the
-work of 1024 per cell, and the 2048+ squares are 8x to 64x, which puts them at days of wall time
-rather than hours.
+| | `faer-kernels` (small) | `faer-kernels-large`, 1024 tier |
+| --- | --- | --- |
+| question | *has anything regressed* - the whole family list at every thread budget | *does the result hold at scale* - the first size whose working set leaves the cache |
+| shapes | squares 32-512, tall/wide up to `4096x256` | `1024`, `1024^3`, and the boundary shapes `255/257/511/513` |
+| thread budgets | 1T, 4T, 8T | 4T, 8T |
+| families | all 14 | the 10 factor/decompose families plus `gemm` |
+| working set | 2 MB at 512, resident in L2/L3 | 8 MB at 1024, which fills the Zen5c 8 MiB L3 domain, so bandwidth and reuse dominate |
+| cost, both arms | 5h17 (measured 2026-10-19) | 5h37 (measured 2026-10-19) |
+
+**A candidate pair is gated on the small suite only.** That is where the control rule and the
+per-cell tails live, and it is what a merge decision is made on.
+
+**A publication records both, at the same revision, back to back**: the small suite for the whole
+declared grid, then the 1024 tier. A publication is the event that moves the pin, and its pages are
+what a reader quotes. About eleven hours of wall time, which is the largest thing this machine does
+on a schedule.
+
+**The 1024 tier is also required when a diff touches the paths whose behaviour only shows at
+scale**: `faer/src/linalg/matmul/**` (kernels, packing, blocking), the panel and blocking code of
+`lu`, `qr`, `cholesky`, or anything that changes how work is split across threads. A diff that
+touches docs, a dependency, or a dtype-only fix does not need it. The candidate branch that made
+this split (`faer#18`, the row-major copy floor) is an example of a change that did *not*: above the
+floor it runs the baseline's code path, so the small grid was sufficient and the 1024 tier was not
+run for it.
+
+**Anything above 1024 — the 1536 tier and the 2048/3072/4096 squares — runs on demand only**, when a
+question needs it, and its page says it was recorded out of cadence. The estimate in
+`faer-benchmark#22` is what that decision is made on: 1536 is roughly 3.8x the work of 1024 per cell
+and the 2048+ squares 8x to 64x, which is days of wall time rather than hours.
 
 The frozen settings and preconditions for the current baseline are in
 [protocol-v2-baseline.md](protocol-v2-baseline.md).

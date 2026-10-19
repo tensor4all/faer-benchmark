@@ -94,12 +94,19 @@ The division of labour is therefore:
 | did this change do what it was written for? | the candidate pair on the target cells | ~1 h |
 | did it break the families it can reach? | the declared guard set in the same pair | included |
 | is the machine still the machine? | the unchanged row's median, in the same pair | included |
-| did anything regress anywhere else? | the **periodic full declared suite**, run manually at a frozen candidate and published | ~3.5 h both arms |
+| did anything regress anywhere else? | the **publication run**: the full declared small suite, then the 1024 tier, at one revision | ~11 h both arms |
 
-So a case that no candidate targets is left to the periodic run: it is not re-measured per merge, and
-its last published page stands until the periodic run replaces it. The periodic cadence is currently
-manual - run it after a batch of merges, or when a page is about to be quoted - and its result, not
-a per-merge argument, is what a "no regression across the suite" claim may cite.
+So a case that no candidate targets is left to the publication run: it is not re-measured per merge,
+and its last published page stands until the publication replaces it. The cadence is manual - run it
+after a batch of merges, or when a page is about to be quoted - and its result, not a per-merge
+argument, is what a "no regression across the suite" claim may cite.
+
+The publication is the only run that moves the pin. It records the small suite (the gate's own grid,
+1T/4T/8T, 14 families) and then the 1024 tier (4T/8T, 10 families plus `gemm`, where the working set
+leaves the cache), back to back at the same revision. The 1024 tier is *also* required for a candidate
+whose diff touches `matmul` kernels/packing/blocking, the panel or blocking code of `lu`/`qr`/`cholesky`,
+or the way work is split across threads - those are the paths whose behaviour only shows at scale.
+Anything above 1024 is on demand and its page says so; see `docs/timing-policy.md`.
 
 ## Current candidates
 
