@@ -169,9 +169,16 @@ hold, and the evidence for each is recorded in the campaign.
    families in the other memory order, neighbouring sizes, other thread budgets, and the unchanged
    `faer-upstream` row as the machine-state control - is measured in the same runs. The change is
    adopted only if no guard cell is slower beyond the recorded spread, and the control row reproduces
-   the baseline. If one control cell falls outside its recorded range but the median control ratio is
-   within 2%, the pair is repeated once, interleaved, and the median of the two pairs is used; a
-   second failure refuses the comparison and the change waits for a quieter host or a smaller change.
+   the baseline. The control reproduction is decided on the **median** of the unchanged row's per-cell
+   ratios, which must be within 2% of 1; every cell's own between-start range is printed beside it as
+   the tail it is, but a single moved cell does not refuse the comparison. The reason is measured, not
+   assumed: two runs of the *same* revision refuse a cell-by-cell rule 1/396 and 12/396 on the
+   zen5-cpu host, and across the saved pairs the unchanged row's per-cell ratios span 0.74-1.36 with
+   up to 8% of cells outside +-10% while every median sits within 0.2% of 1. The unchanged row moves
+   with the *linked binary*, because the two runs compile different trees, so a cell-by-cell rule
+   reports a layout effect as a moved machine and no candidate can pass it. A median outside 2% is a
+   global shift and still refuses; `scripts/candidate_compare.py` prints the median, the outlier
+   count and the ten largest ratios.
 
 Adoption itself is a documentation act on top of those measurements: the candidate revision is
 recorded as the adopted one in `PATCHSET.md` and the campaign worklog, with the target and guard

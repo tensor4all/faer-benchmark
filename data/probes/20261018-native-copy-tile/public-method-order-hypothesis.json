@@ -1,0 +1,136 @@
+{
+  "kind": "existing-data-only hypothesis check; no benchmark/rerun/build/source-change",
+  "input": "faer-benchmark/data/probes/20261018-native-copy-tile/public-outcome.json",
+  "input_sha256": "5fba3aff128c9212194aff06d1cc5d72b0c34893c2a5451e288125c05c98bf84",
+  "cell": {
+    "identity": {
+      "dtype": "c64",
+      "note": "",
+      "order": "c",
+      "m": "64",
+      "n": "1024",
+      "method": "cloned",
+      "threads": "1"
+    },
+    "target": false,
+    "starts": {
+      "A": [
+        {
+          "block": 0,
+          "total_ms": 0.256,
+          "samples_ms": [
+            0.258544,
+            0.24864499999999998,
+            0.256,
+            0.25354400000000005,
+            0.257161
+          ]
+        },
+        {
+          "block": 3,
+          "total_ms": 0.248816,
+          "samples_ms": [
+            0.248816,
+            0.255859,
+            0.250749,
+            0.248766,
+            0.24788300000000002
+          ]
+        },
+        {
+          "block": 5,
+          "total_ms": 0.253544,
+          "samples_ms": [
+            0.252392,
+            0.258824,
+            0.25354400000000005,
+            0.25643900000000003,
+            0.252833
+          ]
+        },
+        {
+          "block": 6,
+          "total_ms": 0.252061,
+          "samples_ms": [
+            0.25387499999999996,
+            0.25329399999999996,
+            0.252061,
+            0.24817399999999998,
+            0.25085999999999997
+          ]
+        }
+      ],
+      "B": [
+        {
+          "block": 1,
+          "total_ms": 0.24082,
+          "samples_ms": [
+            0.243556,
+            0.239768,
+            0.239688,
+            0.244819,
+            0.24081999999999998
+          ]
+        },
+        {
+          "block": 2,
+          "total_ms": 0.209161,
+          "samples_ms": [
+            0.213069,
+            0.206767,
+            0.209342,
+            0.20878,
+            0.20916099999999999
+          ]
+        },
+        {
+          "block": 4,
+          "total_ms": 0.206927,
+          "samples_ms": [
+            0.2086,
+            0.20624599999999998,
+            0.20828,
+            0.206927,
+            0.205324
+          ]
+        },
+        {
+          "block": 7,
+          "total_ms": 0.20872,
+          "samples_ms": [
+            0.212748,
+            0.207307,
+            0.207968,
+            0.20872,
+            0.20887999999999998
+          ]
+        }
+      ]
+    },
+    "median_of_start_medians_ms": {
+      "A": 0.2528025,
+      "B": 0.2089405
+    },
+    "ratio_B_A": 0.8264969689777594,
+    "B_median_outside_A_range_plusminus5pct": true
+  },
+  "process_method_orders": "per-side start0..3 = AB,BA,BA,AB; unchanged public Rust",
+  "comparison": {
+    "B_start0_AB_block1_samples": [
+      0.243556,
+      0.239768,
+      0.239688,
+      0.244819,
+      0.24081999999999998
+    ],
+    "B_start3_AB_block7_samples": [
+      0.212748,
+      0.207307,
+      0.207968,
+      0.20872,
+      0.20887999999999998
+    ]
+  },
+  "observation": "Both are AB order using identical B ELF. All five samples of the latter lie below all five of the former. Therefore the AB-versus-BA label alone is insufficient to specify the observed state. All40samples of the flagged cell included; all64cells/all2560samples remain in original outcome.",
+  "limits": "Not independent replicates/pvalues/control waiver or proof of allocator/alignment/cache/frequency/history/time-drift/cause. Samebody may interact with unobserved process state. Source/destination addresses were not recorded and cannot be recovered from exited processes. Existing size/body equality does not remove the flag. HOLD unchanged; no retry."
+}

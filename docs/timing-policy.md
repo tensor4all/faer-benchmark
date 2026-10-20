@@ -102,6 +102,40 @@ fork's row splits are exactly a threaded-kernel change.
 
 ## Guarding the host
 
+## What runs when: the gate and the publication are two different runs
+
+The two suites answer different questions, so they run on different triggers.
+
+| | `faer-kernels` (small) | `faer-kernels-large`, 1024 tier |
+| --- | --- | --- |
+| question | *has anything regressed* - the whole family list at every thread budget | *does the result hold at scale* - the first size whose working set leaves the cache |
+| shapes | squares 32-512, tall/wide up to `4096x256` | `1024`, `1024^3`, and the boundary shapes `255/257/511/513` |
+| thread budgets | 1T, 4T, 8T | 4T, 8T |
+| families | all 14 | the 10 factor/decompose families plus `gemm` |
+| working set | 2 MB at 512, resident in L2/L3 | 8 MB at 1024, which fills the Zen5c 8 MiB L3 domain, so bandwidth and reuse dominate |
+| cost, both arms | 5h17 (measured 2026-10-19) | 5h37 (measured 2026-10-19) |
+
+**A candidate pair is gated on the small suite only.** That is where the control rule and the
+per-cell tails live, and it is what a merge decision is made on.
+
+**A publication records both, at the same revision, back to back**: the small suite for the whole
+declared grid, then the 1024 tier. A publication is the event that moves the pin, and its pages are
+what a reader quotes. About eleven hours of wall time, which is the largest thing this machine does
+on a schedule.
+
+**The 1024 tier is also required when a diff touches the paths whose behaviour only shows at
+scale**: `faer/src/linalg/matmul/**` (kernels, packing, blocking), the panel and blocking code of
+`lu`, `qr`, `cholesky`, or anything that changes how work is split across threads. A diff that
+touches docs, a dependency, or a dtype-only fix does not need it. The candidate branch that made
+this split (`faer#18`, the row-major copy floor) is an example of a change that did *not*: above the
+floor it runs the baseline's code path, so the small grid was sufficient and the 1024 tier was not
+run for it.
+
+**Anything above 1024 — the 1536 tier and the 2048/3072/4096 squares — runs on demand only**, when a
+question needs it, and its page says it was recorded out of cadence. The estimate in
+`faer-benchmark#22` is what that decision is made on: 1536 is roughly 3.8x the work of 1024 per cell
+and the 2048+ squares 8x to 64x, which is days of wall time rather than hours.
+
 The frozen settings and preconditions for the current baseline are in
 [protocol-v2-baseline.md](protocol-v2-baseline.md).
 
@@ -118,9 +152,20 @@ unrelated workloads remain an operator precondition, and that includes the obser
 A cell's measured threads share one L3 domain; the agent, the recorder and the guard checker belong
 on the CPUs outside it. `record_run.py` derives both sets from the machine topology, refuses to
 start when its own affinity overlaps the measured set (SMT siblings included) or when a declared
-CPU set spans two L3 domains, and prints the derived free CPUs. The pin therefore fails the run
+CPU set spans two L3 domains, and prints the derived free CPUs. It also walks the ancestor chain: an
+ancestor that still owns a measured CPU and was using at least 1% of a core over a half-second
+sample is refused by name,
+because pinning the recorder cannot move the agent that launched it - that is how two runs of this
+campaign were spoiled. The pin therefore fails the run
 instead of publishing a contaminated number, and no CPU list is hardcoded per machine - the profile
 for each host carries its own sets.
+
+The refusal leaves no trace once it passes, so an admitted run also *states* the pin: the manifest's
+`threads.observer` carries the recording process's own `sched_getaffinity` and the CPUs that were
+free of every measured L3 domain (`affinity`, `free_cpus`, and the `source` of both), both derived
+from this host's topology. A run recorded before that field existed is still valid - the refusal
+that admitted it was the same rule - but its observer pin is not visible in its provenance, and the
+agent's own pin has to be re-established after a restart because affinity lives in the process.
 
 ## What a report may and may not claim
 

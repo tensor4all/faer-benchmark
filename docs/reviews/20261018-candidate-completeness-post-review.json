@@ -1,0 +1,69 @@
+{
+  "agentId": "sa_80a3f317-fef4-4b00-8e76-c3ebf63e34d5",
+  "agent": "reviewer-gpt",
+  "executionPlan": {
+    "version": "pi-subagents:execution-plan:v1",
+    "mode": "audit",
+    "agent": {
+      "name": "reviewer-gpt",
+      "source": "user",
+      "capabilitiesKnown": false
+    },
+    "capabilityFit": "unknown",
+    "missingCapabilities": [],
+    "requestedCapabilities": [],
+    "declaredCapabilities": [],
+    "requestedTools": [],
+    "effectiveTools": [
+      "read",
+      "grep",
+      "find",
+      "ls",
+      "mcp__codegraph__codegraph_explore"
+    ],
+    "missingTools": [],
+    "overgrantedTools": [],
+    "resultFormat": "text",
+    "sideEffectPolicy": "mutating",
+    "resultFormatSupported": "unknown",
+    "target": {
+      "cwd": "/tmp",
+      "boundary": "external",
+      "trust": {
+        "kind": "unsaved",
+        "projectTrusted": false
+      }
+    },
+    "workspaceMode": "shared",
+    "transport": "subprocess",
+    "model": "openai/gpt-6.1-sol:medium",
+    "thinkingLevel": "high",
+    "timeoutMs": 210000,
+    "unsupportedGuarantees": [],
+    "warnings": [
+      "agent-capabilities-unknown"
+    ],
+    "taskGeneration": 1,
+    "cancellationLineage": [],
+    "admission": {
+      "version": "pi-subagents:admission:v1",
+      "recommendation": "abstain-insufficient-evidence",
+      "reasonCodes": [
+        "requirements-incomplete"
+      ],
+      "benefitHypothesis": "none",
+      "auditOnly": true
+    },
+    "id": "06d58a5543a6312d88fac05903c10690b6f51f31aea8f3cfefbf42d8bda2c218"
+  },
+  "history": {
+    "runId": "run:sa_80a3f317-fef4-4b00-8e76-c3ebf63e34d5:e4e43deb-94c5-4882-8db4-88db3757f288",
+    "generation": 1,
+    "task": "Independent COMPLETE bounded POST on openai/gpt-6.1-sol. Read /tmp/candidate-completeness-post-bundle.md completely:86KB/1452lines, split3 chunks(offset1 limit500,offset501 limit500,offset1001 limit500) to avoid50KB truncation. Immutable toolkit9daa5bc (parent8484fb54) and harnessfca1fd7 (priorcad85a6). All4 changedPythonfiles FULL, exact production diffs, full timing_evidence validator, scoped validate_run, corrected plan and observed evidence embedded. No repo discovery, edits, builds/tests/measurements, read/grep only (licenses if useful /home/shinaoka/projects/tensor4all/{campaign-toolkit,faer-benchmark}/LICENSE). Scope: BOTH whole runs validated at actual CLI trust boundary before stats; fail-closed YAML/CSV/files/output; every token matches recorded identities including skips; independent equal selected RECORDED sets preserving unsupported entries and equal NONEMPTY TIMED sets per engine; full canonical identity vs old6-key projection rejects aliases/duplicates; exact declared start IDs>=2; no intersections or insufficient-start continues. Verify mandatory PRE scenario lu,gemm control lu skipped+gemm timed, fork bothtimed works; unknown token+gemm refuses. Preserve publicseries key/signatures, manifest-only result files/rejectedarchive exclusion, median/range\u00b15/geomean/candidateSD and slower-fork DESCRIPTIVE exit0. No newvalidationframework/threshold/API/deps. Toolkit63pass, harness9pass (6 real CLI tests valid syntheticv2/tempGit, no validator/comparison mocks/no localfaer checkout), real5 negativesrefuse, full396/f64explicit198positive, original LU pairs still1/12 controlfailures offline; main-supplied checks not reviewer execution. Nativefloor correctnessPOST separate and no timing/adoption. Ordinary worker exhaustedbudget incomplete; main finished source/tests (don't treatworker asreview). Read ponytail and ponytail-review skills; give COMPLETE status after entire bounded scope, substantiated findings w/severity/source lines, delete list, per-file provenance, unchecked limits. Do not speculate new policies or waive evidence. If mandatory issue cite concrete reproducer route. Source clean tracked, push/pin intentionally pending this report.",
+    "output": "## Files reviewed\n\nComplete source, as embedded in `/tmp/candidate-completeness-post-bundle.md`:\n- `campaign-toolkit/campaign_toolkit/candidate.py` \u2014 lines 1\u2013233.\n- `campaign-toolkit/tests/test_candidate.py` \u2014 lines 1\u2013245.\n- `faer-benchmark/scripts/candidate_compare.py` \u2014 lines 1\u2013110.\n- `faer-benchmark/scripts/test_candidate_compare.py` \u2014 lines 1\u2013182.\n- `campaign-toolkit/campaign_toolkit/timing_evidence.py` \u2014 lines 1\u2013139.\n- `campaign-toolkit/campaign_toolkit/validate_run.py` \u2014 scoped excerpts, lines 64\u201393 and 183\u2013259.\n\nAlso reviewed the **entire bounded bundle in the requested three chunks**, including corrected plan, exact production diffs, and supplied observations.\n\n## Status\n\n**COMPLETE: all requested bounded focus areas traced.**\n\nReviewed snapshots: toolkit `9daa5bc` against `8484fb54`; harness `fca1fd7` against `cad85a6`, as identified by the supplied bundle. No repository discovery, edits, commands, builds, tests, or measurements were performed.\n\n## Focus area verdicts\n\n1. **Whole-run validation at the actual CLI boundary: PASS.**  \n   Each run must pass `validate_run.validate()` before identity checks or comparison statistics (`scripts/candidate_compare.py:35\u201361`). Validation includes result-file/status checks, v2 timing evidence, and default Git checks (`validate_run.py:230\u2013242`). The timing validator checks the verification census, complete process groups, samples, status consistency, and rotation (`timing_evidence.py:79\u2013139`). An explicit subset does not bypass whole-run validation.\n\n2. **Fail-closed selection and recorded skips: PASS.**  \n   Recorded identities are retained before filtering out skipped rows (`candidate.py:120\u2013130`). Empty tokens and tokens unmatched on either side are rejected (`candidate.py:151\u2013167`). Thus legitimate skipped controls satisfy selector existence without contributing fabricated timings.  \n   The mandatory `lu,gemm` scenario and unknown-token-plus-valid-token refusal are exercised through the real CLI (`scripts/test_candidate_compare.py:143\u2013152`) and directly in toolkit tests (`tests/test_candidate.py:113\u2013127,140\u2013150`).\n\n3. **Independent equal recorded sets and nonempty timed sets: PASS.**  \n   Selected recorded sets must match, including skips; timed sets must separately match and be nonempty (`candidate.py:168\u2013178`). These checks run independently for the selected control and fork engines (`candidate.py:192\u2013201,216\u2013222`). There is no requirement that control and fork support sets equal one another.\n\n4. **Full identity, aliases, duplicates, and exact starts: PASS.**  \n   Full identity includes regime, dimensions, batch, engine, threads, and note (`timing_evidence.py:11\u201316`). Projection aliases and duplicate cell/repeat records are rejected (`candidate.py:118\u2013126`), and selected full identities must match across runs (`candidate.py:179\u2013182`). Both sides must declare the same integer start count of at least two, and every timed cell must contain exactly the declared `run0\u2026runN` IDs (`candidate.py:147\u2013150,183\u2013188`). The old intersections and insufficient-start `continue` paths are removed in the supplied exact diff.\n\n5. **Compatibility and descriptive statistics: PASS.**  \n   Public `series()` retains its signature and six-part key (`candidate.py:118\u2013119,134\u2013136`). Reads remain restricted to manifest-listed result files (`candidate.py:110\u2013113`); rejected-archive exclusion remains tested (`tests/test_candidate.py:94\u2013102`). Control medians and range\u00b15%, fork geometric ratios, and candidate sample SD remain unchanged (`candidate.py:206\u2013211,224\u2013232`). Slower fork results remain descriptive and return zero after the gates pass (`scripts/candidate_compare.py:72\u201383`), with a real CLI assertion (`scripts/test_candidate_compare.py:122\u2013132`).\n\n6. **Parsing/I/O refusal and end-to-end tests: PASS.**  \n   The CLI catches the specified I/O, key/value, CSV, YAML, and subprocess errors and returns one (`scripts/candidate_compare.py:102\u2013106`). Tests cover CSV parser failure, malformed/empty/missing YAML, output-write failure, and missing evidence on either side despite subset selection (`scripts/test_candidate_compare.py:154\u2013178`). The six CLI tests invoke an actual subprocess and use synthetic v2 evidence plus temporary Git\u2014not validator/comparison mocks or a local faer checkout (`scripts/test_candidate_compare.py:26\u2013118`).\n\n7. **Scope and minimal implementation: PASS.**  \n   The change reuses the existing validator and timing identity/sample helpers, with one shared private pairing path (`scripts/candidate_compare.py:21,37\u201338`; `candidate.py:120,130,139\u2013189`). No new dependency, validation framework, threshold, or public toolkit signature is introduced.\n\n## Findings\n\n**No substantiated Critical, Important, or Minor findings in the reviewed bounded scope. No must-fix issue identified.**\n\n### Delete list\n\nNone justified. The recorded/timed distinction and shared pairing helper enforce separate required invariants; removing either would weaken the repair. **Lean already; net: 0 lines proposed.**\n\n### Per-file provenance\n\n| Changed file | Reviewed derivation |\n|---|---|\n| `campaign_toolkit/candidate.py` | Extracts the existing manifest/CSV reader, adds full-identity bookkeeping and shared pairing checks, preserves statistical formulas. |\n| `tests/test_candidate.py` | Retains existing coverage and adds synthetic completeness, skip, identity, duplicate, and selection cases. |\n| `scripts/candidate_compare.py` | Reuses existing whole-run validation and preserves measured-code, identity, control, and reporting paths. |\n| `scripts/test_candidate_compare.py` | Generates temporary synthetic evidence and measured Git trees; invokes the real CLI. |\n\nThe bundle identifies these as project-owned changes with no foreign implementation (`/tmp/candidate-completeness-post-bundle.md:2`). The supplied license paths both returned `ENOENT`; license text and repository-wide provenance were therefore **not independently verified**.\n\n## Summary\n\nThe bounded implementation satisfies the corrected completeness contract without changing statistical or adoption policy.\n\nThe **63 toolkit passes, nine harness passes, five real negative refusals, 396/198-cell positives, and preserved original LU failures of 1/12 cells are main-supplied observations**, not reviewer executions (`/tmp/candidate-completeness-post-bundle.md:92\u2013111`). The incomplete worker checkpoint is not counted as review approval.\n\nUnchecked: raw result/log contents beyond the embedded summaries, independent Git/SHA and clean-status verification, remote reachability/pin updates, and native-floor correctness. Native-floor POST remains separate; this report grants **no timing, performance, or adoption approval**.",
+    "startedAt": 1792335283946,
+    "completedAt": 1792335415118,
+    "exitCode": 0,
+    "truncated": true
+  }
+}

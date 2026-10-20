@@ -1,0 +1,50 @@
+diff --git a/faer/src/linalg/matmul/internal/mod.rs b/faer/src/linalg/matmul/internal/mod.rs
+index ef84d6b..ac93370 100644
+--- a/faer/src/linalg/matmul/internal/mod.rs
++++ b/faer/src/linalg/matmul/internal/mod.rs
+@@ -379,0 +380,45 @@ pub fn spicy_matmul<I: Index, T: ComplexField>(
++
++#[cfg(test)]
++mod tests {
++	use super::*;
++
++	#[test]
++	fn empty_strict_triangle_preserves_parent_guards() {
++		let a = Mat::from_fn(2, 1, |i, _| 2.0_f64 + i as f64);
++		let b = Mat::from_fn(1, 2, |_, j| 4.0_f64 + j as f64);
++		for block in [
++			BlockStructure::StrictTriangularLower,
++			BlockStructure::UnitTriangularLower,
++			BlockStructure::StrictTriangularUpper,
++			BlockStructure::UnitTriangularUpper,
++		] {
++			let mut c = Mat::from_fn(2, 2, |_, _| 7.0_f64);
++			let expected = c.clone();
++			spicy_matmul::<usize, f64>(
++				c.as_mut().submatrix_mut(0, 0, 1, 1),
++				block, None, None, Accum::Replace,
++				a.as_ref().submatrix(0, 0, 1, 1), Conj::No,
++				b.as_ref().submatrix(0, 0, 1, 1), Conj::No,
++				None, 1.0, Par::Seq, MemStack::new(&mut []),
++			);
++			std::assert_eq!(c, expected);
++		}
++	}
++
++	#[test]
++	fn strict_triangle_preserves_nonempty_parent_guards() {
++		let a = Mat::from_fn(4, 1, |i, _| 2.0_f64 + i as f64);
++		let b = Mat::from_fn(1, 4, |_, j| 4.0_f64 + j as f64);
++		let mut c = Mat::from_fn(4, 4, |_, _| 7.0_f64);
++		spicy_matmul::<usize, f64>(
++			c.as_mut().submatrix_mut(0, 0, 3, 3),
++			BlockStructure::StrictTriangularLower, None, None, Accum::Replace,
++			a.as_ref().submatrix(0, 0, 3, 1), Conj::No,
++			b.as_ref().submatrix(0, 0, 1, 3), Conj::No,
++			None, 1.0, Par::Seq, MemStack::new(&mut []),
++		);
++		for j in 0..4 {
++			std::assert_eq!(c[(3, j)], 7.0);
++		}
++	}
++}

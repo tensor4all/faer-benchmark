@@ -5,9 +5,44 @@
 # move it before recording, not after.
 #
 # Revision history: `22f23cf` from repository creation (2026-10-13, the merge of
-# tensor4all/faer#7) until the first recording was prepared; the revision below since
-# then, which additionally carries tensor4all/faer#13 (the row-split gate for the block
-# Householder apply), #14 (the blocked LU's trailing-update floor) and the records from
-# #15 / #17. The fork's own `faer/Cargo.toml` carries package `t4a-faer`, version 0.24.4.
-bfe4041cd9918815e3b3f766ac0332b792badb7d
-
+# tensor4all/faer#7) until the first recording was prepared; `bfe4041` after that,
+# which carries tensor4all/faer#13 (the row-split gate for the block Householder
+# apply), #14 (the blocked LU's trailing-update floor) and the records from #15 / #17;
+# `5578ccc` from 2026-10-18, the merge of the adopted row-major QR/LU work
+# (measured at `fe41bbd`, merged at `1d75476`); and now `2240b07`, the merge of the
+# two optimizations adopted on 2026-10-18 - `0627828` (the block Householder apply's
+# column split takes the whole thread budget) and `2000dd9` (the native gemm thread
+# budget is decided in flops). Both were measured at those revisions and the merge
+# carries their measured trees (`git diff 2000dd9 2240b07 -- faer/src faer-traits/src
+# faer-macros/src Cargo.toml Cargo.lock` is empty), so the measurements were not
+# repeated. The fork's own `faer/Cargo.toml` carries package `t4a-faer` 0.24.4.
+#
+# The four `-timing-v2` pages recorded on 2026-10-15/16 linked the crates.io
+# `t4a-faer 0.24.5` and are not evidence about any revision; see
+# `docs/reviews/20261016-linked-crate-provenance.md`. Every recording from `5578ccc`
+# on linked the checkout (the build script refuses a graph that does not).
+# `2870062` from 2026-10-19, the merge of `0c71ca2` (the blocked partial-pivoting
+# LU's recursion floor counts work in flops, not elements) on top of `b7715c5`
+# (the empty-extent / K0 correctness fix, merged for correctness with no declared
+# benchmark path). The floor change was measured as `2870062` against `b7715c5` on
+# the `lu`/`solve`/`full_piv_lu`/`cholesky`/`gemm` grid at 1/4/8T, both orders and
+# dtypes; the merge is a fast-forward, so the merged tree is the measured tree.
+# `a5e6b7d` from 2026-10-19, the merge of the kernel fix: `t4a-private-gemm-x86 0.1.24`
+# (256-bit masked-store offset clamped, generated assembly symbols prefixed `t4a_` so the
+# campaign's harness can link it next to upstream's `private-gemm-x86`). Recorded as the
+# full declared `faer-kernels` suite on both arms - MKL `20261019T025721Z` (15,156 rows,
+# full) and OpenBLAS `20261019T052233Z` (20,016 rows, the two-engine arm) - so this is the
+# first revision whose pages come from a post-merge periodic run rather than an adoption pair.
+# `50c2b98` from 2026-10-19, the merge of the row-major copy floor (`faer#23`), moved
+# without re-recording because the only declared cells whose code path changes are
+# `linalg-small/32` for lu, full_piv_lu, solve, qr_factor, qr, svd_values and svd_thin:
+# the floor is 4096 elements, so 64^2 = 4096 and everything above it take the copy
+# exactly as at `a5e6b7d`, and tall/wide are far above it. Those 32-square cells were
+# measured as a pair (`20261019T163156Z-base-rm-floor-r2` against
+# `20261019T170716Z-cand-rm-floor-4k`, 288 cells at 4T/8T, control 0.9976 with one cell
+# outside): 29 faster, 1 slower, and the slower one is a `householder_apply` cell the
+# change cannot reach. The published `a5e6b7d` pages therefore understate the 32-square
+# cells by 1.4-1.8x on `qr_factor` and are exact everywhere else; the next publication
+# replaces them. 1T at 32 was not re-measured: at 1T the copy never paid, and the change
+# removes it.
+50c2b989484f063f4e1b132adc333715391d8b73

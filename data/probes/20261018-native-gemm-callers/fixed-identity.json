@@ -1,0 +1,55 @@
+{
+  "performance_measurement": false,
+  "integrated": false,
+  "baseline": "7364be5ce22d950343c10d82b99e9fc79d537cd2",
+  "branch": "fix/native-gemm-empty-extents",
+  "production_file_and_tests_sha256": "961b9ace1acf8bd1179f7395d736b38980a32843e4bd823706bbd92e51b3bf46",
+  "default_features": [
+    "std",
+    "rayon",
+    "sparse-linalg",
+    "rand",
+    "npy"
+  ],
+  "cpu_flags": {
+    "avx2": true,
+    "fma": true,
+    "avx512f": true
+  },
+  "observer_test_affinity": [
+    0,
+    1,
+    2,
+    3,
+    12,
+    13,
+    14,
+    15
+  ],
+  "backend_budget": "Par::Seq in focused fixtures; no forced-generic run claimed",
+  "focused": {
+    "passed": 4,
+    "failed": 0
+  },
+  "library": {
+    "passed": 214,
+    "failed": 0,
+    "ignored": 2
+  },
+  "no_rayon": {
+    "passed": true,
+    "warnings": 13,
+    "warnings_in_changed_module": 0
+  },
+  "checks": [
+    "cargo test -p t4a-faer --lib strict_triangle -- --nocapture",
+    "cargo test -p t4a-faer --lib",
+    "cargo check -p t4a-faer --no-default-features --features std,linalg"
+  ],
+  "notes": "Focused/full library rerun after test-only finite-output guard;4 and214 pass/2 ignore. No-Rayon production unchanged. Bounded independent POST COMPLETE with no mandatory correctness fix; no performance or integration acceptance.",
+  "candidate_commit": "af8273f5a76f0965d6aedd769ac20b663a0c5d50",
+  "production_unchanged_from_post_snapshot_2e221c7": true,
+  "post_review_agent_id": "sa_42abaf44-5a87-418a-b4f2-9e55a8a3ff4c",
+  "post_review_complete": true,
+  "documentation_head": "b7715c53ba75946d68a97d5655f481b198332447"
+}

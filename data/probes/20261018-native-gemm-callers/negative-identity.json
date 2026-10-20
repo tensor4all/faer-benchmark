@@ -1,0 +1,18 @@
+{
+  "baseline": "7364be5ce22d950343c10d82b99e9fc79d537cd2",
+  "upstream_source": "0539947ffb757a739d7e703a7d2fa0c792a909c1",
+  "production_file": "faer/src/linalg/matmul/internal/mod.rs",
+  "production_source_sha256": "d5de7bbddd14be60c359001a1403c61ad03951467bcb06f7cb68d701e33d98c1",
+  "production_file_identical_to_upstream": true,
+  "upstream_test_executed": false,
+  "production_changes": false,
+  "negative_exit": 101,
+  "tests": "cargo test -p t4a-faer --lib strict_triangle -- --nocapture",
+  "cwd": "/tmp/faer-native-gemm-audit",
+  "CARGO_TARGET_DIR": "/home/shinaoka/projects/tensor4all/faer/target",
+  "backend_budget": "Par::Seq in both tests; correctness only, not performance measurement",
+  "results": {
+    "empty_1x1": "diagonal changed7->8 despite no stored entries",
+    "nonempty_3x3": "allocated parent guard row changed7->20 outside destination view"
+  }
+}

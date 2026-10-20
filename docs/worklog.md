@@ -2,6 +2,698 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-19 — the large tier: 1024 and the boundary shapes, and why 1536+ is not here
+
+`faer-kernels-large` had no current record at all. The estimate (faer-benchmark#22) scaled the 512
+medians by `n^3` and put the whole declared suite at 29.5 h for the MKL arm and 59 h for OpenBLAS,
+with `linalg-big` (2048/3072/4096) taking 27.7 h of the MKL number.
+
+The estimate was right about the shape of the cost and wrong about where it sits. The first attempt,
+`linalg-large` with 1024 and 1536 together, spent **72 minutes in `verify-linalg-large-4t`** and had
+not finished that one thread count when it was stopped: verify checks an O(n^3) reconstruction or
+orthogonality per cell, and at 1536 that check is an order of magnitude over the timed part of the
+estimate. So the tier is recorded in the shape that fits:
+
+* **`20261019T102752Z-periodic-20261019-large1024-mkl`** - 3,672 rows, `linalg-large` at n = 1024,
+  `gemm-large` at 1024^3, and `linalg-boundary` at 255/257/511/513, 4T and 8T, three process sets.
+* **`20261019T130054Z-periodic-20261019-large1024-openblas`** - 4,896 rows, same shapes, two-engine
+  arm, six process sets.
+
+Each took about two hours, of which 40 minutes was verify. Both publish as `partial` pages at
+`a5e6b7d`: partial because 1536 and the 2048/3072/4096 squares are not in them, and that is the
+honest label.
+
+**1536 is verify-bound**, not timing-bound, and it joins the 2048/3072/4096 squares in the same open
+decision (#22), whose estimate now says so. The aborted `20261019T091625Z` directory is retained with
+its build record and no `run.yaml`: it is not evidence, and it is the measurement that produced the
+correction.
+
+## 2026-10-19 — B1 taken: the twelve pre-comparator rows are recorded as what they are
+
+The choice between re-measuring the twelve `KEEP` performance rows as campaign pairs (a day, and some
+would not pass the current gate) and labelling them was taken as **B1, cost zero**. `PATCHSET.md` now
+carries an "Evidence class of the adopted changes" section: two rows went through the v2 comparator
+(one passing control, one whose control failed on the binary-layout effect measured separately), the
+rest are *pre-protocol adoptions* from isolated drivers, and the three correctness rows have tests and
+no timing claim. A page may not cite a pre-protocol row as a gated result.
+
+The same commit settles the six candidates that were neither adopted nor dropped: the copy tile
+`60de2ee` stays on **HOLD** because its own control question is unanswered (the ELF-identity argument
+is demoted to a static observation, so the unchanged control that moved 17% still has no explanation),
+and `7cd372f`, `f013756`, `7f713a1`, `ad9f2ef` and `d6358ca` are **DROPPED** with the gate that
+refused each. The ledger's legend gains `HOLD` so the distinction is visible rather than implied.
+
+Record: `tensor4all/faer` PR #22, merged 2026-10-19. Closes faer-benchmark #20 and #21.
+
+## 2026-10-20 — the publication at `50c2b98`, and a browsable site
+
+The pin moved to `50c2b98` (the row-major copy floor, `faer#23`) with the argument that only
+`linalg-small/32` changes code path - the floor is 4096 elements, so 64^2 and above take the copy
+exactly as before - and that those cells had been measured as a pair. That argument is fine for
+deciding to move, but the published numbers at 32 were the *slower* baseline ones, so the pages were
+re-recorded rather than left to understate the code.
+
+Both arms were recorded at `50c2b98`: MKL `20261020T011108Z` (15,156 rows, full) and OpenBLAS
+`20261020T033243Z` (20,016 rows, the two-engine arm). The first MKL attempt
+(`20261019T224849Z`) was refused at the end with "measured source changed during recording" because
+this repository was committed to while it timed - the site work landed in the middle of the run. It
+is kept with its 72 CSVs and 24 verification files and no `run.yaml`; the arm was recorded again.
+
+**The site.** `scripts/gen_comparison.py` joins the two arms on the cell key and writes one HTML
+table per population - fork, upstream, OpenBLAS and MKL side by side with the baseline-over-fork
+ratio - carrying the revisions, the hardware profile, the vendor identities and the timing policy in
+the header. It is a view over the recorded data, not a new measurement: a cell an arm did not carry
+is a dash, and the per-arm Markdown pages and their manifests stay authoritative for the control
+statement and the verification record. `.github/workflows/pages.yml` publishes `result/` to
+`http://tensor4all.org/faer-benchmark/`, with a landing page that links the Markdown pages to the
+rendering GitHub gives them (Pages would serve them as text).
+
+## 2026-10-19 — the periodic run at `a5e6b7d`: the first pages from a post-merge recording
+
+The full declared `faer-kernels` suite was recorded at the merged main, both arms, sequentially:
+MKL `20261019T025721Z` (15,156 rows, `full`) and OpenBLAS `20261019T052233Z` (20,016 rows, the
+two-engine arm). Three process sets for the three-row arm and six for the two-row arm, the frozen
+policy, the observer pinned off the measured domain and checked by the recorder before the build.
+
+Two things went wrong on the way and both were caught before a number was published:
+
+* the recorder refused the first attempt because `herdr` (a terminal daemon at 4% of a core) still
+  owned the measured CPUs - the new ancestor check, refusing before the build rather than after a
+  spoiled run;
+* the OpenBLAS arm was refused with ">=2 calls, >=2 process sets and complete engine-order rotation
+  cycles": two engines need a multiple of two process sets, so `--aa 3` is not a legal arm and
+  `--aa 6` is. The earlier OpenBLAS recording used six for the same reason.
+
+The MKL arm ran 2h20m with six guard rejections and the OpenBLAS arm 2h20m after a 17-minute verify,
+with eleven; every rejected attempt is retained under its run directory and the accepted CSV is the
+one the guard admitted. The pin moves to `a5e6b7d` and the index now reads from it: the MKL page is
+`full`, the OpenBLAS page is `partial` because that arm has no upstream row, and both are `current`.
+
+`faer-kernels-large` was deliberately out of scope for this session; the cost estimate and the
+2048/3072/4096 squares are issue #22.
+
+## 2026-10-19 — the CI failure was a kernel bug on AVX2-only machines, and it is fixed
+
+`main` went red on `testing-stable-ubuntu-latest` at `2870062` in
+`linalg::matmul::internal::tests::strict_triangle_maps_preserve_stored_entries_and_parent_guards`,
+the guard test that shipped with the empty-extent/K0 fix. It was not a flaky test and not the LU
+commit: the store epilogue of `private-gemm-x86`'s 256-bit kernels selected a shifted entry of
+`mask.data` and clamped only the top of the range, so a vector row entirely past the diagonal read a
+mask from before the table and stored a full vector into entries the destination structure says are
+not written. The 512-bit kernels build their masks from k-register arithmetic, which is why the same
+code is correct on an AVX-512 host and wrong on an AVX2-only runner - and why the failure appeared on
+one CI run and not the eleven before it.
+
+Reproduced by disabling the AVX-512 dispatch (`feat = Avx256`) locally, then at the kernel's own API
+in `tensor4all/t4a-private-gemm-x86` (a fork of `sarah-quinones/gemm-x64-v2`): c64, m = n = 3,
+k = 2, `DstKind::Upper`, one thread writes `(2, 0)` on the 256-bit path and leaves it on the
+512-bit one. A sweep of {f64, c64} x {upper, lower} x m, n in 1..=9 x k in 1..=3 stores 486 entries
+outside the triangle before the clamp and 0 after it.
+
+Fixed in the fork by clamping the mask index at zero as well, published as
+`t4a-private-gemm-x86 0.1.23` (the library keeps the name `private_gemm_x86`), and `main` now
+depends on it: `4ad6c01`, "Merge pull request #19". The guard tests pass with the AVX-512 dispatch
+disabled and enabled, and the lib suite is 214 passed / 2 ignored either way; all CI jobs on the PR
+passed, including the one that had failed. Upstream report: `sarah-quinones/gemm-x64-v2#5`. The
+first fix PR (#6) was closed without a comment and without a commit upstream, so the diagnosis was
+resubmitted as #7, which touches `build.rs` and the test only — the package rename, the CI workflow
+and the dev-dependency cleanup of #6 are not in it. Until upstream takes it, the dependency stays on
+`t4a-private-gemm-x86`, whose main, tags `v0.1.23`/`v0.1.24` and green CI now match what crates.io
+serves.
+
+**Effect on this campaign's evidence.** `faer/Cargo.toml` and `Cargo.lock` are measured paths, so the
+adoption pair recorded at `2870062` describes `2870062`, not `4ad6c01`. Nothing measured changes in
+principle - `spicy_matmul` reaches dense LDLT and sparse Cholesky, neither of which is a declared
+cell - but the next recording must be taken at the new revision rather than reusing these numbers,
+and the pin stays at `2870062` until that run exists.
+
+## 2026-10-19 — the site moves to the adopted revision
+
+The pin moved to `2870062` with the adoption, so the site had to move with it. `result/INDEX.md`
+was regenerated: the reference revision is `2870062`, and the `2240b07` pages are now **3 behind**
+rather than current. The adoption pair's candidate run was published as
+`result/zen5-cpu/faer-kernels/2870062a7ee6-0539947ffb75-mkl-timing-v2.md`, marked `partial` - it
+covers `lu`, `solve`, `full_piv_lu`, `cholesky` and `gemm` at 1/4/8T, not the declared suite - and it
+never displaces the full-coverage page at `2240b07`. It is the page that carries the cells the
+adoption was decided on: `solve/n256` c64 is now 1.06x and 1.18x faster than `faer-upstream` where
+the `2240b07` page had it 1.35x and 1.37x slower.
+
+The full declared suite at `2870062`, both arms, is still the periodic run and has not been started.
+
+## 2026-10-19 — the agent's pin is checked, and the merge gate stops pretending to be a full test
+
+**The pin is now checked deterministically, before the build.** Two runs were spoiled because the
+harness process kept the whole machine in its affinity and used CPU 4 while the cells were timed;
+pinning the recorder cannot move it, because affinity is per process and is not inherited backwards.
+`require_observer_off_measured_cpus` now walks the ancestor chain and refuses when a process that still
+owns a measured L3 CPU was using at least 1% of a core over a half-second sample, naming each
+offender with pid, comm, affinity and rate, and printing the `taskset -pc <free> <pid>` that fixes it. A transient wrapper
+shell is not an offender; a worker is. The recorder also writes the resulting pin into
+`threads.observer`, so the manifest shows what was allowed. Toolkit
+`69c1c139ae1f139cd3a3d00d2fee4a2b34eff3b4`, suite 67 tests OK, `requirements.txt` moved to it.
+
+**A merge proves its cells, not the suite.** `docs/merge-procedure.md` now states the division
+explicitly: the candidate pair answers "did the change do what it was written for" and "did it break
+what it can reach" and "is the machine still the machine", at about an hour; "did anything regress
+anywhere else" is answered only by the periodic full declared suite at a frozen candidate, about 3.5
+hours for both arms, and that run - not a per-merge argument - is what a suite-wide claim may cite. A
+case no candidate targets is left to the periodic run; its last published page stands until then.
+The cadence is manual for now: after a batch of merges, or before a page is quoted.
+
+The reason is the distribution: every number carries a between-start spread, so certifying the whole
+declared grid per merge would cost hours and still be a distributional claim, while the cells the
+merge actually touches are exactly the ones a candidate pair measures cheaply. The checklist also
+records the four preconditions in order (agent pinned, measured sets read from the suite, nothing
+else running, the pin recorded), so the step that was forgotten is the first one written down.
+
+## 2026-10-19 — the LU floor's unit fixed and adopted; both merge candidates merged
+
+**Measured, adopted, merged.** `0c71ca2` counts the blocked partial-pivoting LU recursion's work
+floor in flops instead of elements (a `c64` element is four real MACs, so the floor sat four times
+too high for it), rebased onto `b7715c5` and merged into `main` as `2870062`. The pair is
+`20261018T225051Z-lu-unit-floor-baseline` (`b7715c5`) against
+`20261018T231847Z-lu-unit-floor-candidate` (`2870062`), MKL arm, 396 cells, 4,428 rows each, three
+rotated process sets, one lock, nothing else built while timing ran.
+
+The unchanged `faer-upstream` row reproduced: median ratio **0.999717**, two cells outside their own
+between-start range and reported as the tail the gate no longer refuses on. `faer-fork` against the
+baseline: 30 faster, 6 slower beyond 5%, the rest inside the recorded spread. The target cells are
+the `c64 n256` LU/solve group, fork/upstream before -> after: `lu` C 4T **1.260 -> 0.935**, C 8T
+**1.260 -> 0.885**, F 8T **1.370 -> 0.952**, `solve` C 4T **1.350 -> 0.935**, C 8T **1.370 -> 0.893**.
+The regression the 2026-10-18 page flagged is gone and the fork is 6-11% ahead there. The floor's
+own wins are retained: `f64` `lu` at 64/96/128 stays at 0.49-0.75 of upstream. Of the six "slower"
+cells, four have essentially identical medians (`lu/1024x64` 8T 0.4846 -> 0.4841 with a ratio of
+1.396: a rotation artefact, not a time), and the remaining two are `cholesky`/`gemm` cells this
+change cannot reach, at +5-9% on 16-231 us rows.
+
+`git diff 0c71ca2 2870062 -- faer/src faer-traits/src faer-macros/src Cargo.toml Cargo.lock` is
+empty and the merge was a fast-forward, so the merged tree is the measured tree and nothing was
+measured twice. `cargo test -p t4a-faer --lib` at the branch: 210 passed / 2 ignored, the same count
+as the main it was based on. Pin moved to `2870062`; `main` and `origin/main` are both there.
+
+**The correctness fix merged first, without a pair.** `2e221c7` + `af8273f` (empty native extents,
+K0/Replace) merged `main` -> `b7715c5` and pushed. It needs no benchmark because its changed code,
+`sparse_matmul`'s strict/unit shrink and zero-depth replacement, is reached by dense LDLT and the two
+sparse Cholesky update sites, and no declared benchmark row executes those - the `cholesky` family
+takes the `is_llt` branch, which is a different call. That is a reachability statement, not a
+performance claim. Tests at the branch: 214 passed / 2 ignored.
+
+**Two runs were spoiled before these, by the agent itself.** The harness process (`node`, ~24% of a
+core) was landing on CPU 4 with the whole machine in its affinity, so the idle guard rejected
+`linalg-small` runs twice; the agent is now pinned to the observer CPUs `0-3,12-15`, which is the
+pin `AGENTS.md` says is lost on restart. Both spoiled run directories are retained under
+`data/results/.../20261018T215638Z-*` and `20261018T222317Z-*` with their rejected-attempt archives,
+and carry no `run.yaml`: they are not evidence and not a baseline.
+
+## 2026-10-19 — the observer pin is recorded; the adopted pairs re-checked
+
+**Provenance instead of an invisible precondition.** An admitted run's manifest said nothing about
+the observing side's CPUs: `require_observer_off_measured_cpus` refuses an observer inside the
+measured L3 domain, but once it passes there is no trace of what the pin was, and a restarted agent
+silently loses its own affinity. The recorder now writes `threads.observer` with `affinity` (the
+recording process's `sched_getaffinity`), `free_cpus` (every CPU outside the measured L3 domains)
+and the `source` of both, derived from the host topology and hardcoded nowhere. Toolkit
+`8fbf10f8bffeba0c9f10f874c3782e27e3586a7c` on `feat/observer-affinity-provenance`, suite 64 tests
+OK, `requirements.txt` moved to that revision. The field is optional in the schema, so earlier
+manifests remain valid; their observer is not visible in provenance.
+
+Confirmed on this host: CPUs 0-3 (+12-15) share 16 MiB and are the Zen5 cluster; 4-11 (+16-23)
+share 8 MiB and are the Zen5c cluster. The declared sets `4` / `4-7` / `4-11` therefore measure on
+Zen5c, and the observer belongs on 0-3,12-15. `/proc/interrupts` currently counts zero on 4-11 and
+irqbalance is inactive; the guard's 3 s / 5% window cannot see sub-millisecond interference on a
+3-350 us cell, which stays a hypothesis about the small-cell tail, not an established cause.
+
+**The two changes adopted through the campaign comparator, re-checked against its own gate**
+(`candidate.control_check`, unchanged upstream row, no new measurement):
+
+| adopted change | pair | control gate |
+| --- | --- | --- |
+| QR block-apply column split `0627828` | `5578ccc` -> `0627828` | **PASS**, 0/96, median 0.9995 |
+| Native GEMM flop floor `2000dd9` | `0627828` -> `2000dd9` | **FAIL**, 1/60, median 1.0000 |
+
+The failing cell is `gemm c64 f 64x64x64` 4T in the *unchanged upstream* row: 0.0448 ms
+[0.0438, 0.0451] -> 0.0364 (0.81). The ratio range over those 60 control cells is 0.741-1.355, so
+the grid's control row is far wider than the gate assumes even though its median is exactly 1.000.
+This is the same confound the LU pairs hit, on a change that was adopted anyway; it is not evidence
+that the GEMM floor is wrong, and it is not waived by the adoption.
+
+**Consequence for the plan.** The twelve remaining `KEEP` perf rows predate the v2 comparator:
+their evidence is isolated drivers (paired, best of 4-21), not a campaign pair. Re-confirming all
+of them would be a day of measurement; accepting them as pre-protocol adoptions with an explicit
+evidence class costs nothing and claims less. That choice, and the gate redefinition it depends on,
+are the two open decisions.
+
+## 2026-10-19 — the 92 slower cells, their cause, and the two corrections they forced
+
+The fork `2240b07` against upstream `0539947` on the MKL arm is 399 faster / 92 slower /
+865 inside the band. Reading the 92 by their evidence class, not by their magnitude:
+
+- **23 `householder_apply`**: every one carries `!` (between-start range over 5%), so the
+  run's own spread is as large as the difference. No `householder_apply` regression is
+  established by this page.
+- **30 of the 92** are below 20 us and marked dispatch-dominated: `cholesky` 11 of its
+  12, `full_piv_lu` 5 of its 13, and parts of `lu`/`solve` at `n32`. For `cholesky` this
+  is decisive: the fork's `cholesky` source is byte-identical to upstream
+  (`git diff 0539947 7364be5 -- faer/src/linalg/cholesky` is empty), so its 12 cells
+  cannot be a cholesky regression.
+- **The clean remainder** is `lu`/`solve` at `c64 n256` (1.26-1.51, both orders, 4T/8T)
+  and the small `f64` `lu`/`solve` cells at 1T in C order (1.10-1.17).
+
+**Cause, in the fork's own code.** `28bc13b` floored the blocked LU recursion's panel
+solve and trailing product with `A11.nrows() * A11.ncols() > par_threshold` (128*128).
+Two things follow. Upstream `0539947` reads `par_threshold` in
+`lu/partial_pivoting/factor.rs` at exactly one place, gating the **swap stage**, and
+passes the caller's `par` to both products unconditionally -- so the floor is the fork's
+own, and it redefined a public knob. And the floor counts **elements** while its
+crossover was swept on `f64`, so a `c64` element carries four times the arithmetic and
+the floor sat four times too high: at `n256` the `128x128` trailing update stayed
+sequential where `f64` threads the same area. That is the sign flip the page shows --
+`c64 n256` at 1.26-1.51 slower, `f64` 64/96/128 at 0.49-0.66 faster, same code.
+
+The second mechanism is the adopted GEMM floor (`2000dd9`), which replaced upstream's
+`M*N*K >= 4096 * size_of::<T>()` (f64: 32,768) with work in flops
+(`M*N*K * {2|8} >= 2 * 48*48*256`, f64: 589,824, eighteen times higher). Between those
+sizes the fork is sequential where upstream threaded, which is where the small-shape
+4T/8T cells come from; it is also why the same shapes win at 1T and in `gemm`. This is a
+trade, not a defect. The third is the row-major QR/LU copy path (`044f947`, `d132011`),
+which is why 62 of the 92 are C order and why the clean 1T cells are all C order.
+
+**Decision on the §4 blocker.** Not either offered option: the contract stays, the unit
+of the floor changes to flops, which is the principle `2000dd9` already adopted.
+`f64` decisions are identical, only the complex crossover moves, and the comparison
+saturates so `par_threshold = usize::MAX` still yields a sequential LU -- which is what
+made the trailing-only plan a contract change and this one not. Committed as `9dc0f0c`
+on `fix/lu-work-floor-units`; gate `210 passed / 2 ignored`, the same count as main.
+**Not measured, not adopted**; the pair that would adopt it still has to pass the
+unchanged-upstream control gate that refused 1/396 and 12/396 on the `a537746` pairs.
+Record: `docs/reviews/20261018-lu-work-floor-units-decision.md`.
+
+**ELF comparisons demoted.** Three performance conclusions had been resting on identical
+machine code of saved ELFs (§3's copy aliases, §5's four dense functions, and part of
+the ABBA probe). They are static observations, not performance evidence: the copy
+diagnostic's own unchanged control had identical ELFs and then left its band by 17%, the
+compared binaries come from different build contexts, and four normalized functions do
+not constrain a program's schedule. Record: `docs/reviews/20261018-elf-comparison-demotion.md`.
+
+**Open.** The control-gate instability is now the top blocker, not any candidate: two
+complete pairs on identical source moved an unchanged upstream cell with median control
+ratios of 0.99975 and 0.99899. A fix is a measurement question, and the existing
+same-source (rename-only, then swapped) control is the design that can answer it.
+
+## 2026-10-18 — isolated upstream still shifts; no adoption/contract waiver
+
+Diagnostic recording harness311c2fb45b50e14eb09a15fd929eb81bce343341, compiled harness
+651807301c4fd0d485a66038346388dffe289073; same A=b7715c53ba75946d68a97d5655f481b198332447 /
+B=7f713a1401f18546d1ef0c134df982be80626b2e, upstream0539947ffb757a739d7e703a7d2fa0c792a909c1,
+MKL2026.1, toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5. All96 cells×8 ABBABAAB
+blocks/768 records complete,4starts/binary,18verify+72timing+6info, median5/250,
+explicit1/4/8T, dynamic same watchedL3/observer/power policies; sources/binaries
+unchanged. No other provider operations constructed/executed; setters/loading
+remain. Two post-rejects retained12rows each (CPU5cachepeer8%/10%), three admission
+delays; all samples and inconclusive data retained. No outer retry or large tier.
+
+Seven/96 isolated descriptive bands fail (2Chol/1GEMM/4tri), not formal adoption.
+Upstream c64Ftriangular256/1T medianB/A=.89646 with all4 B starts below A-min-5%;
+c64CCholesky32/4T=.93955. Other-provider execution history alone is insufficient;
+not a proof of allocation/caller/layout cause or host drift exclusion. Full96-cell
+raw/summary and exact576-record canonical references in native-budget directory.
+Canonical stage1 STILLREFUSED/NOTADOPTED; no stage2/final/threshold waiver.
+
+Bounded dense code inspection:4matching symbols,2normalizedsame,2changed230/634
+lines, sizes3444→3437/3368→3342. RIP references normalized; no per-engine/whole-
+program or cause proof. Do not call the equivalent dense refactor code-identical.
+Next distinct minimal proposal: preserve dense SOURCE body, floor only structured
+entries, require4densebody static equality before any timing. PRE running; not
+implemented. Existing all-regression goal remains active, not reduced to96cells.
+
+Driver PRE COMPLETE3minor wording fixed; POST COMPLETE2IMPORTANT fixed (info
+capture/status/guards, optimized Python refusal). Real dummy subprocess success/
+exit3 evidence and old-O-exits0/new-O-refuses check pass; no reviewer execution or
+rereview claimed. Same hostedCI39145818271 rerun allsteps green after OWN reviewed
+LUfeature34d7150 made reachable, no validator relaxation or timing repeat.
+
+## 2026-10-18 — canonical native stage1 complete, control-refused, no adoption
+
+A=b7715c53ba75946d68a97d5655f481b198332447 / B=7f713a1401f18546d1ef0c134df982be80626b2e,
+upstream0539947ffb757a739d7e703a7d2fa0c792a909c1, compiled harness651807301c4fd0d485a66038346388dffe289073,
+toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5, MKL2026.1. Eight serial existing
+recorder runs completed15:28–16:13 UTC; exact648 full identities/statuses/start/
+side×3, all3888 timing-CSV rows including skips retained. All verification,
+manifest, observed1/4/8 budgets, clean source and binary checks passed. No source
+edit/build/checkout overlapped recording. Binary hashes in outcome/README.
+
+Official comparator: Cholesky6/60 controls fail, GEMM1/48 fail, triangular4/48
+fail; HH72/72 reproduce. INCONCLUSIVE / NOT ADOPTED, no conditional stage2, no
+main merge/final campaign. Cholesky targets descriptively .529–.999, not acceptance.
+Accepted A c64C256/8T first5.143332ms versus .822805/.849886 retained; geomean
+skew explicitly disclosed. Dense GEMM four geomean>1.05 cells, three medians above
+baseline process-max+5%; all data/guards remain. No explanation waives them.
+
+Three rejected attempts retain stdout/CSV/full guard: A-HH verification peer18
+10.3% busy, B-tri verification peer21 11.9%, B-HH timing peer16 10.3%. Measured
+CPUs4 /4-7 /4-11, watched4-11,16-23, observer0-3,12-15; boost0/performance/EPP/
+max2GHz. Normal declared bounded retries only. Initial untimed missing-platform-
+crate preflight and locked-cache recovery retained separately, lock unchanged.
+
+`data/probes/20261018-native-gemm-budget/{runtime-stage1,summarize_stage1.py}`
+checks full counter equality/starts/raw5 samples/worker/source/binary identity and
+retains full228-cell controls and descriptive fork rows. Four SIMD Cholesky leaves
+match normalized instructions/sizes but move+16 modulo64; reference targets not
+audited, engine attribution/whole-program equivalence/alignment cause not proven.
+
+Reviewed code and refusal documentation archived on OWN fork feature
+`perf/native-gemm-work-floor` at5ab54a67d05fcb28c9afa907435844e420e98d6c, remote SHA
+verified. Reviewed source hashes still match7f713a1. This makes raw-run source
+ancestors reachable; no PR/release/upstream report or library pin change.
+
+Work continues, not a global stop: independent PRE running for bounded upstream-
+only96-cell ABBABAAB diagnostic, same immutable binaries, no flags/environment/
+worker policy changes. Only ask whether shifts persist without other providers'
+operations; no replacement gate, adoption, outlier removal or new LU pair. Full
+canonical refused data stay immutable. Other root causes and final full suites
+remain outstanding.
+
+## 2026-10-18 — comparator POST complete and reachable dependency delivered
+
+Bounded gpt-6.1-sol POST COMPLETE on toolkit9daa5bc / harnessfca1fd7: all requested
+areas, no findings/deletions. Full MD/verbatim JSON archived. Reviewer traced
+full4 files, timing validator and scoped existing run validator; no test execution,
+raw-log/SHA verification or performance approval. Given LICENSE paths absent, no
+independent license-text audit. Worker checkpoint remains explicitly incomplete.
+
+Toolkit9daa5bc69a13b36c2a31680e20dbb53e2e42c9d5 pushed to existing
+`fix/rejected-attempt-retention`; remote SHA verified, requirements pin updated.
+No release/main merge. Already-passing63 toolkit tests/9 harness tests not rerun
+without an affecting code change. Remaining toolkit CI-local declarations,
+all-module compile and full-package Ruff pass. Harness declarations, all39
+recorded manifests and generated-index check pass; historical declaration-drift
+notes still skip declaration-derived checks for old runs, not evidence of correct
+Cargo linkage or new performance acceptance. Coherent production diff self-reviewed;
+no source correction after independent POST.
+
+Native direct-recorder argv now frozen as4 groups/side/stage, projection matches
+existing full648/2688-record grids including retained unsupported cases/variants.
+Host topology derived from sysfs; all11 agent threads pinned outside measured L3,
+boost0/performance/EPP-performance/max2GHz observed. Native source objects fetched
+locally with full SHAs (short-SHA fetch failed, then corrected), no checkout or
+build/timing yet. Prepare fresh A=b7715c5/B=7f713a1 with existing full checkout;
+no source or harness/tool identity changes between pair parts, no final-only tiers.
+No goal completion or candidate adoption; stage1/conditional stage2 and remaining
+regressions/final all-suite campaign still required.
+
+## 2026-10-18 — native POST complete, comparator tests recovered and passing
+
+Native candidate7f713a1 bounded gpt-6.1-sol POST is COMPLETE for all requested
+areas, no findings/deletions. Source hashes still match; no corrective code or
+repeated Cargo tests. Full report archived under `docs/reviews/20261018-native-gemm-budget-post-review.*`.
+No performance, worker-utilization, adoption or integration approval; timing still
+not begun and final-only square tiers still untouched.
+
+Comparator ordinary worker hit28-turn budget with failing/unfinished tests and
+no CLI fixture. Its INCOMPLETE checkpoint is explicit, not review evidence. Main
+finished pairing and tests: shared recorded identities include legitimate skips,
+nonempty equal timed sets/complete start IDs independent per engine, aliases and
+duplicate repeats refuse rather than overwrite. CLI reuses whole-run validator
+on BOTH sides, with YAML/CSV/file/output error refusals; explicit subsets remain
+legal and fork slowdown stays descriptive. No second schema framework or stats
+change. Toolkit code is local9daa5bc; POST/delivery/pin update remain pending.
+
+Toolkit63 tests pass, harness unittest9 pass including6 fully-valid synthetic-v2
+CLI tests/temp Git without validator mocks or local faer checkout requirement.
+Ruff/compile/diff checks pass. Real5 negatives now refuse; real positives396/198
+full/f64 cells pass; original tracked source data/hash unchanged. Offline original
+LU pair rechecks still fail exactly1/12 controls over396 cells—no new timings or
+third pair. Evidence `data/probes/20261018-candidate-coverage-audit/`; record notes
+the additive CSV exception guard was tested after the real5-case after capture.
+
+No goal completion: comparator POST then reachable-source pin, fresh native A/B
+builds/recording prerequisites, staged guard/target decisions and remaining root
+causes, final freeze and both entire suites/vendor arms are still required.
+
+## 2026-10-18 — complete PREs, isolated shared-floor implementation
+
+Both bounded gpt-6.1-sol PRE reports are complete and archived as Markdown plus
+verbatim JSON under `docs/reviews/20261018-{native-gemm-budget,candidate-completeness}-pre-review.*`.
+Native plan has no mandatory finding. Comparator PRE correctly identified that
+selector existence must include legitimately skipped recorded cells, not timed
+series alone; source filter/counterexample confirm it, corrected plan and worker
+request require explicit mixed-support lu,gemm regression plus nonexistent-token
+refusal. Statistics and adoption criteria do not change. Implementation is split
+by disjoint ownership: main Rust worktree, worker comparator/toolkit/CLI tests.
+
+Isolated native candidate7f713a1 (base b7715c5, separately reviewed correctness
+repair) reuses one private dtype-MAC floor at all3 native entrances, exact
+post-shift dimensions; internal legacy32³ gate remains fallback-only. No LU gate,
+copy/HH candidate, new threshold/API/unsafe/scratch/dependency. Initial focused2
+pass; after extreme-cutoff algebra extension final library217pass/2existingignore;
+no-Rayon std,linalg check passes with13 existing warnings on unchanged declarations.
+Kache33,981/33,981 valid. Logs/exact patch/source hashes in
+`data/probes/20261018-native-gemm-budget/`. Bounded POST running on immutable
+snapshot. No timing, adoption or integration; tests are not performance evidence.
+
+Exact staged inventories exported offline from the original full-MKL census,
+checked against independent requested axes, with variants/skips retained: stage1
+648 records/start (fork228/upstream228/MKL108 timed,84 vendor skips); conditional
+broad stage2 all14 families2688 records/start, including unsupported records.
+Raw CSV grids and metadata hashes are frozen before timing; exact invocation and
+fresh build/source/thread/topology checks still required. Stage1 only filters;
+formal adoption requires complete validated manifests and unchanged controls/
+guards. Square2048/3072/4096 stay final-only. Expanded goal remains incomplete.
+
+Historical fact corrections, not new measurements: faer5229e0b and campaign8319a10
+recover original phase stdout. Correct baseline/candidate table mixing,4% not11%
+512²/1T SVD gain, DBDSQR intermediate/INFO2 fallback, QR calls vs regions and
+missing panel count, rectangle MAC/FLOP arithmetic; retract unproven wake-up,
+timer-precision and discarded-vector-work causal claims. See
+`data/probes/20261018-historical-phase-audit/`; missing historical binary/graph/
+pool evidence remains disclosed, not reconstructed by assertion.
+
+## 2026-10-18 — native correctness boundary closed locally, performance work resumes
+
+Branch `fix/native-gemm-empty-extents`, code af8273f/docs b7715c5, separately fixes
+native strict/unit post-shift extents and K=0/Replace stored-region initialization.
+No new unsafe/API/threshold/scratch. Original negative tests, source identities,
+all follow-up logs and final patch are under
+`data/probes/20261018-native-gemm-callers/`. Focused4 pass, library214 pass/2 ignore;
+std/linalg no-Rayon compilation passes (13 warnings in untouched files). A final
+finite-output assertion strengthens the scalar oracle; focused/full checks were
+rerun, production unchanged. All five current callers are inclusive lower or
+rectangular/Add; this correctness repair does not explain the measured gaps.
+
+Two bounded PREs and a bounded POST on gpt-6.1-sol are COMPLETE, no mandatory
+correctness fix. Reports live in `docs/reviews/20261018-native-gemm-empty-*.md`
+(POST also saved verbatim as JSON). POST reviewed2e221c7; final production matches,
+with only a test-only assertion added. No independent execution, backend audit,
+f32/c32/u32/right-conjugation/parallel/forced-generic coverage is claimed.
+The six optional redundant old guards stay unchanged to avoid unrelated churn.
+The bounded numeric-copy POST also completed with no mandatory correctness fix:
+`docs/reviews/20261018-owned-copy-post-review.{md,json}`. Custom zero/Clone/drop
+costs remain a limit, not a generic speedup or user-approved tradeoff.
+
+Neither review is performance/merge approval. Both source branches remain local
+and unintegrated. HH remains declined with incomplete POST; prior four incomplete
+attempts are explicitly recorded, not retroactively counted. Stale original
+single-family task entries were retired in favor of the expanded all-regression
+task list, not marked complete. LU failed pairs stay refused; no third pair,
+threshold waiver, source combination, final freeze or large-tier run. Resume the
+three-native-entry budget/caller investigation under the unchanged protocol.
+
+## 2026-10-18 — focused Householder merge held, investigation continues
+
+The fixed-binary stage1 diagnostic forad9f2ef completed all144 timed full
+fork/upstream identities and three starts/binary/cell, with all exact-grid,
+verification/source/power/thread checks. Full results and the reproducible
+analysis live in `data/probes/20261018-householder-partial-merge/` (9044b41).
+Tall targets improved, but f64 F64² block/8T deteriorated by12.24% rotation-
+geometric, beyond the baseline range expanded by5%. NOT ADOPTED; downstream
+QR/SVD/eigh stage2 NOT run. Algorithmically unchanged small paths do not imply
+unchanged code generation or worker state. All72 upstream descriptive range
+checks are in band; they cannot waive the fork guard failure or make a diagnostic
+an adoption comparison.
+
+The repaired wrapper retained a real post-rejected A4T attempt completely:
+stdout,60-row CSV and CPU guard log (CPU8/cache peer8% busy). Three pre-execution
+idle admissions were also delayed (CPU4,18,19), with details retained. The
+predeclared bounded wrapper continued, not a selective manual rerun. Measured
+CPUs4/4–7/4–11, watched L3/SMT4–11,16–23, observer0–3,12–15; recorded after dynamic
+topology checks. No build, tracked source edit or other owned measurement overlapped recording.
+
+The broader goal is still active: decline/diagnose this source, do not stop all
+investigation because one candidate failed. Shared native GEMM has three call
+sites (dense, triangular and indexed/diagonal internal); the prior flop floor
+only covered the dense one. Caller audit and focused correctness investigation
+continue before another implementation. No source combination, candidate freeze
+or final all-suite rerun has happened. Large2048/3072/4096 stay final-only.
+
+## 2026-10-18 — upstream cleanup, still in progress
+
+The new objective is all technically removable, reproducible upstream regressions,
+not vendor-only gaps. Only focused checks during development; 2048/3072/4096 are
+**final-only**, after the combined candidate is frozen. No full-suite rerun yet.
+
+The minimal LU-budget candidate remains branch-only. Both complete pairs failed
+unchanged-upstream controls (1/396 then12/396); all four runs are retained under
+`data/probes/20261018-upstream-lu-pair-repeat/`. No third identical pair, relaxed
+band or discarded slow start, and no adoption from these inconclusive pairs.
+
+A new upstream-only fixed-binary diagnostic uses32–128 at1T/4T, with order
+A B B A B A A B, not another candidate pair. In
+`data/probes/20261018-upstream-binary-abba/`, f64 Cholesky32 C follows the linked
+binary (1T B/A1.078) while c64 follows the opposite direction (0.957). All four
+SIMD leaves have the same normalized instructions and+16-byte entry shifts.
+Numeric RIP operands match; the partial-load/store table, its544 relocation
+entries and helper-code region match. A referenced Equator vtable has shifted
+code pointers; its exact pointer comparison is deliberately retained as unequal.
+This narrows the possibilities but does not prove alignment causality or whole-
+program equivalence. Accepted samples, guard logs, hashes, effective pool census
+and bounded static checks are retained. One4T attempt was rejected after running;
+legacy pinned.sh overwrote its CSV on retry, so those rejected samples are lost.
+The loss is explicit in the probe README; there were no1T guard rejections, but
+this is not complete adoption evidence. The corrective wrapper now archives
+rejected stdout/declared CSV/CPU guard details before any retry and stops safely
+on archive failure. Toolkit8484fb54 supplies each effective CSV explicitly;
+requirements.txt pins that remotely reachable feature-branch revision. Bounded
+PRE/POST review and verification are recorded in
+`docs/reviews/20261018-rejected-attempt-retention-review.md`. Numeric timing,
+thresholds, retry budgets and canonical result_files selection are unchanged.
+
+A fixed-reference host-check proposal received a completed bounded PRE-review:
+`docs/reviews/20261018-fixed-reference-control-pre-review.md`. It is meaningful
+as a diagnostic, not sufficient for target/guard acceptance. The existing gate
+is unchanged. Comparison-helper success also requires a separate audit of exact
+cell coverage/start counts; an empty/intersected selection is not proof.
+
+Separately, the1T owned-copy probe in `data/probes/20261018-owned-copy/` compares
+current canonical `to_owned` with elementwise `cloned`, allocating and destroying
+each result inside the clock. Four balanced starts show small C-order copies
+32/64/96 are materially slower on the zeros+Option-staged path, while simply
+reverting to elementwise copying loses on larger/conflict-prone layouts. This
+supports investigating the staging overhead, NOT a shape96 cutoff or blanket
+revert. No copy implementation change is adopted from a copy-only probe.
+
+## 2026-10-18 (later) — the declared suite, both arms, at the merged revision
+
+The full declared `faer-kernels` suite was recorded once at `2240b07` (the merge of
+the two adopted changes), MKL arm first and OpenBLAS arm second, sequentially, with
+the frozen policy (250 ms priming, 5 calls, three/six process rotations for the
+three-row/two-row arm, boost off, observer off the measured L3, whole-domain idle
+guard). MKL: `20261018T022054Z-final-full-mkl`, 15,156 rows, coverage `full`.
+OpenBLAS: `20261018T044649Z-final-full-openblas`, 6,672 rows, the two declared rows
+(`faer-fork`, `lapack-openblas`). Nothing was re-measured: the merged revision's
+measured-path trees are identical to the candidate revisions.
+
+**The adopted changes, at the merged revision against the `5578ccc` baseline**
+(same cells, f64, rotation-averaged ratio below 1 is faster): `qr_factor` 512^2
+8T **0.870 / 0.864** (C/F), 256^2 8T **0.894 / 0.889**; `qr` 512^2 8T **0.864 /
+0.855**, 256^2 8T **0.854 / 0.834**; 4T 0.96-0.97; 1T 0.99-1.03. `svd_values`
+0.995-1.005 and `svd_thin` 0.965-1.012 (it calls the apply to form U/V). The
+`faer-upstream` row reproduced the baseline (0.97-1.04). The small `64^2`/`128^2`
+`qr_factor` cells move by 3-5% in both directions, which is their own spread (the
+page calls them dispatch-dominated).
+
+**Against the two vendors, 512^2 f64 F order, eight threads** (ms, and the page's own
+direction):
+
+| family | fork | upstream | MKL | OpenBLAS |
+| --- | --- | --- | --- | --- |
+| `qr_factor` | 4.52 / 4.49 | 10.00 | 2.20 (2.06x slower) | 6.81 (1.52x faster) |
+| `qr` | 8.27 / 8.26 | 14.77 | 10.34 (1.25x faster) | 15.49 (1.88x faster) |
+| `svd_thin` | 58.3 / 58.4 | 59.9 | 47.97 (1.21x slower) | 79.7 (1.36x faster) |
+| `svd_values` | 48.3 / 48.8 | 48.6 | 22.40 (2.16x slower) | 46.6 (in band) |
+| `lu` | 4.14 / 4.12 | 4.76 | 1.23 (3.36x slower) | 1.77 (2.33x slower) |
+| `cholesky` | 1.07 / 1.06 | 1.20 | 0.96 (1.11x slower) | 1.21 (1.14x faster) |
+| `eigh` | 23.8 / 23.7 | 24.5 | 14.87 (1.60x slower) | 22.66 (1.05x slower) |
+
+The composite `qr` (factor + compact Q, what a caller uses) is now faster than both
+vendors at this cell; the bare `qr_factor` is behind MKL's `dgeqrf` (2.06x) and
+ahead of OpenBLAS's. `svd_values` is a MKL-only gap now (OpenBLAS at parity): the
+bidiagonalization, not the merge, as `faer/docs/worklogs/2026-10-18-svd-values-only.md`
+shows. `lu`/`solve` (2.3-3.4x) and `eigh` remain the largest vendor gaps; they are
+the declared out-of-scope families of this iteration (guards only).
+
+**Versus upstream over the whole suite** (MKL arm, the only arm with an upstream
+row): the fork is faster in 399 cells, slower in 92, and inside the between-start
+band in the other 865. Flagged slower cells group as `solve`19,
+`householder_apply`23, `lu`22, `full_piv_lu`13, `triangular_solve`3 and
+`cholesky`12; none are flagged in `qr_factor`, `qr`, `svd_values`, `svd_thin`,
+`gemm` or `eigh`. **Correction:** these counts do not establish when each gap
+arose or prove those families were unaffected. Householder itself changed, and
+shared GEMM/copy/Householder paths reach other families. A single historical
+probe cannot establish pre-existence or unchanged timing for all92 cells.
+Later fixed-binary triage shows some gaps on both sides of the new GEMM floor,
+not that every earlier change is innocent; see
+`data/probes/20261018-upstream-regression-triage/`. The flagged cells remain a
+worklist, not proof that every observed difference is an algorithmic regression.
+The OpenBLAS arm has no upstream row (its two declared rows are `faer-fork`,
+`lapack-openblas`), so its561/305 faster/slower count is against OpenBLAS,
+not upstream.
+
+**Vendor gaps that remain and are measured, not explained**: `gemm` at `128^3` and
+`192^3` (f64 F 8T: fork 0.113/0.154 ms, MKL 0.032/0.074, OpenBLAS 0.027/0.081) is
+2-4x behind both vendors and the same kernel is fastest at `512^3` (1.20 against
+1.52 / 1.31) - a mid-size kernel-efficiency question, not the small-shape fixed cost
+the flop floor addressed.
+
+**Still not covered**: `faer-kernels-large` (1024/1536 and the adoption tiers). Its
+published pages are the invalid 2026-10-15 ones; the 1024 shapes in the invalid
+historical page are not evidence and were not re-recorded here.
+
+## 2026-10-18 — a provenance-correct baseline, three bounded investigations, two adopted changes
+
+The four `-timing-v2` pages of 2026-10-15/16 are not evidence about any revision: they
+linked the crates.io `t4a-faer 0.24.5` for the `faer-fork` row (see
+`reviews/20261016-linked-crate-provenance.md`). The first recording from a pin that
+the build script's patch-resolution guard accepts was taken here at fork `5578ccc`
+(the merged row-major QR/LU work), upstream `faer-v0.24.4`, MKL 2026.1, f64,
+`qr_factor`/`qr`/`svd_values`/`svd_thin` at 64/128/256/512, 1T/4T/8T, C and F
+(`data/results/.../20261018T000948Z-baseline-v2-diagnostic-mkl`). Its manifest names
+the checkout paths and commits, the MKL version, the boost-off power state, and the
+guards. The pin now sits on `2240b07`.
+
+What the baseline says (rotation-averaged ratios, fork/MKL, at 512 and eight threads):
+`qr_factor` 0.43 (fork 2.3x slower), `qr` 1.09 (parity), `svd_values` 0.46 (2.2x
+slower), `svd_thin` 0.79 (1.27x slower); at one thread the fork is *faster* than MKL
+on `qr_factor` (1.68) and roughly at parity on both SVDs. The QR gap is parallel
+scaling, not the kernel; the values-only SVD gap is not the bidiagonal-SVD merge.
+
+Three investigations were run in parallel with that recording, each with its own
+isolated driver (`faer-benchmark/probes/`, untracked diagnostics linked by path):
+
+- **SVD values-only** (issue item 1). Phase split at `5578ccc`: at 512/8T the
+  bidiagonalization is 71% of `svd_values` (34.3 ms of 48.1) and the bidiagonal SVD
+  29%. `divide_and_conquer` still builds the discarded singular vectors for a
+  values-only call, but routing values-only to the implicit QR iteration at every
+  size was 13% slower at 512/8T (the campaign's budget) and is **rejected**; the
+  bidiagonalization is the remaining term. Worklog:
+  `faer/docs/worklogs/2026-10-18-svd-values-only.md`.
+- **QR factor** (item 2). Phase split at `5578ccc`: panel 3-5%, compact-WY upgrade
+  10-25%, trailing block apply 60-85%. The apply's column split was capped at four
+  tasks with nested inner threads; with the rows not split it now takes the whole
+  budget. Campaign `0627828` against `5578ccc`: `qr_factor` 512^2 8T **0.881/0.879**
+  (C/F), 256^2 **0.916/0.910**, `qr` 512^2 **0.862/0.856**, 256^2 **0.862/0.849**;
+  4T/1T inside noise; `svd_values`/`svd_thin` and the tall `4096x256`/`1024x64`
+  guards inside their recorded spread. A second candidate (per-thread compact-WY
+  upgrade floor) was faster on the target but moved `householder_apply/1024x64` 8T
+  by +18% (three starts, both forms) and is **rejected**; a build with only the
+  split change reproduces the baseline on that cell. Worklog:
+  `faer/docs/worklogs/2026-10-18-qr-block-apply-splits.md`.
+- **Small-matrix GEMM** (item 3). f64 `32^3` measured 2.31 us serial and 12.0 us at
+  eight threads; the caller's budget reached `private_gemm_x86`, which threads
+  whatever it is handed (the generic `gemm` crate has a work floor, that kernel does
+  not). The budget is now handed over only above the `gemm` crate's floor expressed
+  in flops. Campaign `2000dd9` against `0627828`: f64 `32^3` **0.233/0.178** C,
+  **0.222/0.163** F; f64 `64^3` 0.702-0.869; f64 `128^3` 8T 0.88-0.90; every c64
+  cell unchanged. Worklog: `faer/docs/worklogs/2026-10-18-small-gemm-thread-floor.md`.
+
+Both adopted changes are merged at `2240b07`, whose measured paths are identical to
+the measured revisions (`git diff 2000dd9 2240b07 -- faer/src faer-traits/src
+faer-macros/src Cargo.toml Cargo.lock` is empty), so nothing was measured twice.
+`cargo test -p t4a-faer --lib` 210 passed / 2 ignored at the merged revision.
+
+**Not done yet**: the declared full suite has not been re-run on this pin. The
+`faer-kernels-large` tiers (1024/1536, 2048/4096) are not covered by the limited
+grids above and their published pages are still the invalid 2026-10-15 ones.
+
 ## 2026-10-15 — representative v2 controls: scheduled variation, a row-position effect, and the cost floor
 
 Optimization is still frozen. The three bounded POST reviews completed; the two
@@ -829,3 +1521,154 @@ absence of the trees that would date it.
   identity calls for, and it needs a field the run schema does not have.
 - The `1024` shapes, `f32`/`c32`, BLIS, sparse, iterative and GPU arms are later
   declarations, not machinery built now.
+
+### Structured-only native floor, dense source preserved (pre-build freeze)
+
+Distinctcandidate7cd372f/baseb7715c5; library archive520fafe pushed/verified, not
+main/adopted. Dense-module suffix exactbaseline, retained3files exactreviewed7f.
+Focused2/library217pass2ignored/noRayon13existingwarnings; kache33975valid. Broad
+PRE/POST incomplete retained; actual-delta PRE/POST COMPLETE gpt-6.1-sol, no
+findings, explicitly inherits prior unchanged3-file POST, not newfulllegacy
+audit/execution/performance approval. Source-only report in reviews/native-
+structured-floor and data/probes/20261018-native-structured-floor/.
+
+Frozen fresh full-checkout builder argv/two refs, unchanged648/2688fullcensuses,
+staticfilter and existing recorder loop committed before build/pair. Staticfilter
+QC sameA passes, old7f holds2of4normalizedbodies; only disassembly, not timing.
+Actualembeddedpre-filter/hashrefusal checked6normal/optimizedPython cases on
+dummybytes, no kernel/build/recording. Ruff/compile/bashsyntax/diff checks pass;
+rawlogs/diffs retained (derivedcandidate.diff zero-context, not whitespace-edited).
+Newcandidatebuild/staticcomparison/timing pending. Only4densebodiessize+normalized
+equality permits unchangedstage1, failureHOLD/no flag/alignmentfiddling. Equality
+is notreference/caller/wholeprogram proof/adoption; prior7f refusals and96cell
+diagnostic shifts remain. All controls/guards/rotations/skips/full rejected
+retention unchanged; stage2 conditional, square2048/3072/4096final-only. No
+finalfreeze, fullcampaign, main/pin change or goal completion.
+
+### Structured-only floor static HOLD; distinct same-source compile diagnostic
+
+2920cfb freshA/b771 andB/7cd builder invocations succeeded; actualpaths/budgets/
+MKL2026.1 and profile/compiler/config/dependencyfingerprint/flags match. All4dense
+functions differ in sizes+normalizedinstructions (1248/1226/1317/1249diff lines),
+A2decf425..., B1dd5fbf3...; no timing/fbenchverify/stage1/stage2, no flag/alignment
+fiddling/retry. Static/dependency audit is partialcompilerprovenance, not cause/
+reference/caller/whole-program equivalence. Code sourcecorrectness review remains
+valid, performancecandidateHELD/NOTADOPTED, no main/pin change. Data in native-
+structured-floor/{builds,static-dense,build-provenance-audit.json}. Raw retained.
+
+Next predeclared same-source-plan.json is compile-only A=b771/C=af8273; measured
+Rust/traits/manifest/lock trees equal and whole diff docs/PATCHSET only. Same
+containing harnesscommit/toolkit/builder/profile/flags, serial full-checkouts,
+Aexistingtarget/Cabsenttarget: build/cache/path contexts not separately isolated.
+Compare all4 bodies once with unchangedanalyzer. No kernel/verify/timing, no
+performance/control-contract change; cannot override7cdHOLD or count as LU pair.
+
+Same-sourcecompilecontrol completed: sourceA/b771 andC/af8273 Rust/traits/root+
+cratemanifests/lockexact, wholeGitdelta docs/PATCHSET only; fixeddf383e8/tool9daa,
+normalbuilderflags, serialwarm/coldtargets. ALL4densebodies/sizes match and ELF
+SHA256both2decf425...identical. No kernel/verify/timing/performanceapproval or
+override7cdHOLD; singlebuildcontrolnotuniversalreproducibility/causalproof. Raw
+same-source-{builds,dense,outcome.json} retained. HostedCI39153055104 allsteps
+success/skipped. Distinct direct2-entry expression simplification plan written,
+PRErunning; no newcandidatecode untilreview. Denseowningfilewouldremain ENTIRELY
+baseline, no helper/pragma/flags/alignmentposition trialloops. All gatesunchanged.
+
+### Direct two-entry candidate source freeze, no timing yet
+
+Codef013756/baseb771, archive98cefa7 pushed/remoteverified after COMPLETEgpt6.1sol
+PRE/POST (coherent3files, no mustfix). Fullreports/verbatimJSON retained. Entire
+denseowningmod.rs exactbaselineSHA bc37...;2directexistingfloor expressions only,
+no helper/attributes/flags/position tuning/newthreshold/API/unsafe/scratch/dep.
+Fallbackold32³gateoriginalouterdims preserved. Focusednumeric1/library216pass
+2ignored/noRayon13existingwarnings/targetedformat/diffpass; kache33980valid.
+No productionhelperdecisiontestexists, numericoraclenotbudget/utilization/f32
+structuredgenericcoverage; sourceinspection and oldmathprooflimits explicit.
+
+Exact648/2688fullgrids/argv/tworefs/tool9daa frozen. Existingdriverguard byteexact
+prior6normal/-O-checks; newRELonly. Preflight fromsuite+sysfs measured4/4-7/4-11,
+watch4-11,16-23,observer0-3,12-15/all11pi1492359threadsoutside/boost0; preparation
+notruntimeproof, recorderrechecks. FreshfullcheckoutA/Bbuilder thenALL4densesize/
+normalizedbodyequality BEFOREtiming, mismatchHOLD/no tweaking. No old7cdwaiver,
+formalcontrols/guards/stage2requirementsunchanged; no finalfreeze/main/pinchange.
+
+Metadata correction from delayedcompletion: oldbroadstructuredPRE stopped at
+16-tool-calllimit, nottimeout; humanREADME/libraryworklog corrected, verbatim
+checkpointunchanged. ItsPOST did time out150s. BothremainINCOMPLETE/notapproval.
+
+### Directentry fresh static HOLD; explicit development-gate decision pending
+
+Fresh74a1a8b A/b771/B/f013 bothbuilds successful. ALL4dense sizes andnormalized
+bodies differ, same1248/1226/1317/1249diff counts as7cd. A2dec..., Bfa3f9f44...;
+HOLD/NOTADOPTED/no fbenchverify/timing/stage1/stage2. Sourcearchivee187984 pushed/
+remoteverified, codef013unchanged/reviewed/216tests. No retry/flags/alignment/
+position tweaks. ENTIREdensefilebaseline didnot retain compiledbody.7cd/f013all4
+sizes+normalizedbodies match, butELFimages differ; no reference/wholeprogram or
+causal/provider proof. Staticcallform differences retained, not provedmechanism.
+
+Offlineonly diagnostic partitions ofALL96existingUP-onlycells×4starts/binary,
+ALL3balanced2vs2partitions×bothdirections retained: Aflagcounts7,7,6,6,4,8;
+B7,6,6,8,6,8. TWOstartsperhalf, notformalAA3orindependentreps/pvalues/control
+waiver/cause. Noerase7betweenbinaryflags orclaimnoisefullyexplains; originalraw
+5samples untouched. Allrows/inputSHA in native-inline-floor/.
+
+Any changefrom extraPRE-TIMINGexact4bodyequality tostaticdiagnostic-record+existing
+FULLformalcontrols/GEMMguards needs explicituserdecision andupdatedoperational
+plan/reviews/checks beforeexecution. Nothingchangedyet, no permissioninferred.
+Originalformalcomparator/targetspread/control/guard/statisticalrules, exactgrids/
+skips/starts/samples, largefinal-only, finalfreeze/main/pin remainunchanged.
+
+### Exact builtin-copy source candidate, no performance yet
+
+Separate60de2ee/base7364 (runtime2240), archive26950b6 ownpush/remoteverifiedafter
+COMPLETEgpt6.1sol PRE andcoherent2-filePOST/no mustfix. Exact4builtinTypeId via
+existingnonstatic helper/no 'static/newunsafe/flags/zero/default/publicbound.
+Seededvalue tileemptybeforefirstsrc, fulloriginalOptionfallback preserved for
+customClone/drop/heap/reference/alternateComplexImpl. Originalwrapper/callers/
+allotherproduction preserved; docsqualifyfallbackvsbuiltin. No Slotframework.
+
+Focused2/library212pass2existingignored/noRayon13existingwarnings/targetednewformat/
+diffchecks pass; kache33983valid. Native4dtypecomponentbitsNaNpayload/+/-0/Inf/
+bothlayouts/reversedsourceANDdst/parentguards/empty/tails/rectangles/Seqowned4/8
+poolcensus (notutilization). RealdispatcherClone-onlyCountedwith BORROWEDatomic
+counters/ownedVec exactnclones/noldDrops/postdestroycounts/heapindependence; no
+dummycustomComplexField fixture. Suppliedchecks not reviewerexecution.
+
+No publiccloned()/conjugatedroute/allocation-timezero removal orForderLU
+schedulingfixclaimed. No d635adoption/controlshiftwaiver. Samefourmatchingdense
+sizes/normalizedbodygate appliesbeforeANYperfverify/timingincludingpublicprobe;
+mismatchHOLD/no retweaks. Native-floorf013gateunchanged/decisionnotassumed.
+Static-only fullcheckoutexistingbuilderMklrelease/tool9daa/argv frozen first.
+ParallelDRAFT3624records/start inventory independently all14families/7targetor
+conservativecopychainfamiliesALLmainshapes +guards, HHvariants/skips retained;
+notoldnarrow2688intersection, notrecordargv/runtimeproof/adoption. No clock
+controller infrastructure builtbeforestaticqualifies. Final/main/pin unchanged.
+FefarchiveCI39156019409green/fullstepsreceipt retained.
+
+### Builtin-copy qualified static gate; public diagnostic freeze
+
+Source60de2ee/base7364 libraryPRE/POSTcomplete, archive1164bdb. FreshFBEbuilder
+499da6e/tool9daa: ALL4densesizes/normalizedbodiesequal0diff, noRIP/caller/whole
+programequivalence inferred. UnchangedpublicRustprobe separatelybuiltA/Bfull
+checkoutwithactualfaer+traitspackagepathmetadata andELFhashes. OperationalPRE/POST
+complete; POSTthreeImportantverified/fixed/maincorrectivecheckspass, notfresh
+reviewerofthecorrection. public-config/commands/scripts andrawbuild/static/review
+evidencefrozenbeforeanyclock; publicdiagnostic8starts512rows/2560rawsamples,
+explicitworker1/Seq, allcontrols/rejections/source/topology/power checks. No
+actualtimingyetatfreeze, noadoption/mainpin/contract/f013gatechange. Root499CIrun
+39159359591successreceipt saved. Independentreadonlyfullpivotingsourceaudit
+showsremainingfactorfilebyteequalUPafterremoving18rowmajoradaptationlines;
+ownedhighlevelpathbypassesit/default256andthinupdatesSeqevennominal4/8T.
+Sourceboundsnotruntimecounts/causeproof; no newfix ormeasurementfromthataudit.
+
+### Publiccopydiagnostic recorded once, HOLD for unchanged-control shift
+
+SourceA7364/B60de/compiled499da6e/recordingf79812e/tool9daa/upstreamreference053,
+no vendorinstandaloneprobe. 8acceptedstarts/512rows/all2560samples, zero rejects;
+allruntimeguards/pool1/Seqpassed. data/probes/20261018-native-copy-tile/ hasall
+CSV/stdout/stderr/argv/terminal/final/before-after/identity/completion/hashes and
+all64cells+48controls+16targets, no quietsubset. Unchangedc64/C64x1024/cloned
+controlflag movesfaster; candidateNOTADOPTED, formal3624gridremainsdraft.
+ExistingELFonlyalias-completesymbolanalysis findsbothclonedmeasurebodies/four
+clonedwrapperssame sizes/normalizedinstructions, no cause/references/caller/
+allocatorproof; preliminarycollapsedaliasmapretained+explicitlysuperseded. No
+retiming/build/source/placementfitting/controlwaiver. Fullfinalcampaignunbegun.
