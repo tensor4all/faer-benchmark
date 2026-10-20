@@ -219,6 +219,36 @@ def _is_at_pin(page, pin):
     return bool(pin) and page.name.startswith(pin[:12])
 
 
+def chart_section(root, repo_ref):
+    """The throughput SVGs, embedded: they are what a reader comes for, and a link to a
+    Markdown page that a browser serves as text is not a figure."""
+    config_path = root.parent / 'benchmarks' / 'throughput.yaml'
+    charts = sorted(root.rglob('throughput-*-v2.svg'))
+    if not charts or not config_path.exists():
+        return ''
+    config = yaml.safe_load(config_path.read_text())
+    labels = {f: spec.get('label', '') for f, spec in config.get('families', {}).items()}
+    remote = subprocess.run(['git', 'remote', 'get-url', 'origin'], capture_output=True,
+                            text=True).stdout.strip()
+    blob = remote.removesuffix('.git').replace('git@github.com:', 'https://github.com/')
+    figures = []
+    for svg in charts:
+        family = svg.stem.removeprefix('throughput-').removesuffix('-v2')
+        rel = svg.relative_to(root)
+        table = svg.with_suffix('.md').relative_to(root)
+        figures.append(
+            f'<figure><a href="{html.escape(str(rel))}"><img src="{html.escape(str(rel))}" '
+            f'alt="{html.escape(family)} throughput chart" loading="lazy"></a>'
+            f'<figcaption><strong>{html.escape(family)}</strong> - {html.escape(labels.get(family, ""))}'
+            f' <a href="{blob}/blob/{repo_ref}/{table}">(data)</a></figcaption></figure>')
+    return ('<h2>Throughput: nominal GFLOP/s against n</h2>\n'
+            '<p class="note">One algorithm operation count per family, so a line is comparable '
+            'across sizes within its own chart and not across charts. Panels are 1T, 4T and 8T; '
+            'the fork is the solid blue line, upstream dashed, MKL green, OpenBLAS red. Click a '
+            'chart for the full size.</p>\n'
+            f'<div class="charts">{"".join(figures)}</div>')
+
+
 def write_index(index_path, comparison, cells, repo_ref='main'):
     root = index_path.parent
     # A Markdown page served as text is not readable in a browser, so those link to the
@@ -257,6 +287,7 @@ code{{background:#f2f2f2;padding:0 .2rem}}</style></head><body>
 plus the joined four-way view. Generated from the campaign's recorded data; do not edit by hand.</p>
 <p><strong><a href="{html.escape(str(comparison.relative_to(root)))}">The joined comparison</a></strong> - the same
 recording seen against upstream, OpenBLAS and MKL in one table ({cells} cells).</p>
+{chart_section(root, repo_ref)}
 <h2>Pages</h2><ul>{''.join(items)}</ul>
 </body></html>
 """)
