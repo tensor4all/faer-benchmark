@@ -45,6 +45,29 @@ refused each. The ledger's legend gains `HOLD` so the distinction is visible rat
 
 Record: `tensor4all/faer` PR #22, merged 2026-10-19. Closes faer-benchmark #20 and #21.
 
+## 2026-10-20 — the publication at `50c2b98`, and a browsable site
+
+The pin moved to `50c2b98` (the row-major copy floor, `faer#23`) with the argument that only
+`linalg-small/32` changes code path - the floor is 4096 elements, so 64^2 and above take the copy
+exactly as before - and that those cells had been measured as a pair. That argument is fine for
+deciding to move, but the published numbers at 32 were the *slower* baseline ones, so the pages were
+re-recorded rather than left to understate the code.
+
+Both arms were recorded at `50c2b98`: MKL `20261020T011108Z` (15,156 rows, full) and OpenBLAS
+`20261020T033243Z` (20,016 rows, the two-engine arm). The first MKL attempt
+(`20261019T224849Z`) was refused at the end with "measured source changed during recording" because
+this repository was committed to while it timed - the site work landed in the middle of the run. It
+is kept with its 72 CSVs and 24 verification files and no `run.yaml`; the arm was recorded again.
+
+**The site.** `scripts/gen_comparison.py` joins the two arms on the cell key and writes one HTML
+table per population - fork, upstream, OpenBLAS and MKL side by side with the baseline-over-fork
+ratio - carrying the revisions, the hardware profile, the vendor identities and the timing policy in
+the header. It is a view over the recorded data, not a new measurement: a cell an arm did not carry
+is a dash, and the per-arm Markdown pages and their manifests stay authoritative for the control
+statement and the verification record. `.github/workflows/pages.yml` publishes `result/` to
+`http://tensor4all.org/faer-benchmark/`, with a landing page that links the Markdown pages to the
+rendering GitHub gives them (Pages would serve them as text).
+
 ## 2026-10-19 — the periodic run at `a5e6b7d`: the first pages from a post-merge recording
 
 The full declared `faer-kernels` suite was recorded at the merged main, both arms, sequentially:
