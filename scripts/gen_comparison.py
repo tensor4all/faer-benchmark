@@ -103,6 +103,7 @@ def main(argv=None):
     ap.add_argument('--out', required=True)
     ap.add_argument('--index', help='also write a landing page listing every page under this directory')
     ap.add_argument('--control-mkl', help='an earlier MKL arm to state the unchanged row against')
+    ap.add_argument('--repo-ref', default='main', help='the branch the site is published from (default main)')
     args = ap.parse_args(argv)
 
     mkl, mkl_cells = load(args.mkl)
@@ -207,31 +208,46 @@ against <code>lapack-openblas</code>. Median baseline/fork ratio (above 1.00 mea
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text('\n'.join(parts))
     if args.index:
-        write_index(pathlib.Path(args.index), out, len(rows))
+        write_index(pathlib.Path(args.index), out, len(rows), args.repo_ref)
     print(f'wrote {out} from {len(rows)} cells '
           f'({len(mkl_pairs)} with an upstream row, {len(ob_pairs)} with an OpenBLAS row)')
     return 0
 
 
-def write_index(index_path, comparison, cells):
+def _is_at_pin(page, pin):
+    """A page's filename starts with the fork revision it measured."""
+    return bool(pin) and page.name.startswith(pin[:12])
+
+
+def write_index(index_path, comparison, cells, repo_ref='main'):
     root = index_path.parent
     # A Markdown page served as text is not readable in a browser, so those link to the
-    # rendering GitHub does, at the commit this artifact came from. The HTML pages link
-    # relatively because they are what the site serves.
-    head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+    # rendering GitHub does. The ref is the published branch, not a fixed commit: this page
+    # is part of the site and has to keep pointing at what the site serves, otherwise every
+    # merge leaves it describing the previous one.
     remote = subprocess.run(['git', 'remote', 'get-url', 'origin'], capture_output=True, text=True).stdout.strip()
     blob = remote.removesuffix('.git').replace('git@github.com:', 'https://github.com/')
+    try:
+        pin = [line.strip() for line in
+               (root.parent / 'pins' / 't4a-faer.rev').read_text().splitlines()
+               if line.strip() and not line.startswith('#')][-1]
+    except (OSError, IndexError):
+        pin = ''
     pages = (sorted(root.rglob('*-timing-v2.md')) + sorted(root.rglob('*comparison.html'))
              + sorted(root.rglob('throughput/README.md')))
+    # pages at the pin first, then the history, each newest-looking first
+    pages.sort(key=lambda p: (not _is_at_pin(p, pin), -p.stat().st_mtime))
     items = []
     for page in pages:
         rel = page.relative_to(root)
-        if page.suffix == '.md' and head and 'github.com' in blob:
-            href = f'{blob}/blob/{head}/{page.relative_to(root.parent)}'
+        at_pin = _is_at_pin(page, pin)
+        if page.suffix == '.md' and 'github.com' in blob:
+            href = f'{blob}/blob/{repo_ref}/{page.relative_to(root.parent)}'
             note = ' <span class="muted">(Markdown, rendered by GitHub)</span>'
         else:
             href, note = str(rel), ''
-        items.append(f'<li><a href="{html.escape(href)}">{html.escape(str(rel))}</a>{note}</li>')
+        mark = '' if at_pin or page.suffix == '.html' else ' <span class="muted">(superseded)</span>'
+        items.append(f'<li><a href="{html.escape(href)}">{html.escape(str(rel))}</a>{note}{mark}</li>')
     index_path.write_text(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>faer benchmark results</title>
 <style>body{{font:14px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem}}
