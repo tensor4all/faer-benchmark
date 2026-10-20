@@ -128,6 +128,19 @@ def main(argv=None):
     med_up = statistics.median([r[3] / r[1] for r in mkl_pairs]) if mkl_pairs else None
     med_ob = statistics.median([r[6] / r[2] for r in ob_pairs]) if ob_pairs else None
 
+    control_html = ''
+    if ctrl:
+        control_html = (
+            '<p class="note"><strong>Control.</strong> <code>faer-upstream</code> is the same '
+            'commit in both recordings, so it measures the machine rather than the change: '
+            f'between <code>{mkl["upstream"]["commit"][:12]}</code> on the previous arm and this one, '
+            f'over {ctrl["cells"]} cells its median ratio is <strong>{fmt(ctrl["median"])}</strong> '
+            f'and <strong>{ctrl["outside"]}</strong> cells fall outside their between-start range. '
+            'The campaign\'s rule reads the median (within 2% means the machine reproduced) and '
+            'reports the tail rather than refusing on it: a range taken from three process sets is '
+            'narrow, so a tail of this size at these timings is expected, and it is the median that '
+            'says the two recordings are comparable.</p>')
+
     revision = mkl['library']['commit']
     title = f"{mkl['suite_id']} on {mkl['target_profile']} - fork against upstream, OpenBLAS and MKL"
     parts = [f"""<!doctype html>
@@ -160,7 +173,7 @@ so above 1.00 the fork is faster; the cells outside 0.95-1.05 are tinted.</p>
  <li>recorded: <code>{mkl['timestamp']}</code> (MKL arm) and <code>{ob['timestamp']}</code> (OpenBLAS arm)</li>
  <li>harness <code>{mkl['harness']['commit'][:12]}</code>, toolkit <code>{mkl['toolkit']['commit'][:12]}</code></li>
 </ul>
-{f'<p class="note"><strong>Control.</strong> <code>faer-upstream</code> is the same commit in both recordings, so it measures the machine rather than the change: between <code>{mkl["upstream"]["commit"][:12]}</code> on the previous arm and this one, over {ctrl["cells"]} cells its median ratio is <strong>{fmt(ctrl["median"])}</strong> and <strong>{ctrl["outside"]}</strong> cells fall outside their between-start range. The campaign's rule reads the median (within 2% means the machine reproduced) and reports the tail rather than refusing on it: a range taken from three process sets is narrow, so a tail of this size at these timings is expected, and it is the median that says the two recordings are comparable.</p>' if ctrl else ''}
+{control_html}
 <p class="note">This page is a join, not a control comparison: the control statement (the unchanged
 row's ratio against a baseline run) lives in each arm's own page, and the verification record in its
 manifest. A dash means that arm did not carry the cell.</p>

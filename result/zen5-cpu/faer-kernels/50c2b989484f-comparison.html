@@ -28,7 +28,7 @@ so above 1.00 the fork is faster; the cells outside 0.95-1.05 are tinted.</p>
  <li>recorded: <code>2026-10-20T03:27:39.611355Z</code> (MKL arm) and <code>2026-10-20T06:24:44.817807Z</code> (OpenBLAS arm)</li>
  <li>harness <code>4899a0ba93ac</code>, toolkit <code>95caeefa9ae7</code></li>
 </ul>
-<p class="note"><strong>Control.</strong> <code>faer-upstream</code> is the same commit in both recordings, so it measures the machine rather than the change: between <code>0539947ffb75</code> on the previous arm and this one, over 1356 cells its median ratio is <strong>0.9997</strong> and <strong>619</strong> cells fall outside their between-start range. A median within 2% with a small tail means the machine reproduced; a large median means the two recordings are not comparable.</p>
+<p class="note"><strong>Control.</strong> <code>faer-upstream</code> is the same commit in both recordings, so it measures the machine rather than the change: between <code>0539947ffb75</code> on the previous arm and this one, over 1356 cells its median ratio is <strong>0.9997</strong> and <strong>619</strong> cells fall outside their between-start range. The campaign's rule reads the median (within 2% means the machine reproduced) and reports the tail rather than refusing on it: a range taken from three process sets is narrow, so a tail of this size at these timings is expected, and it is the median that says the two recordings are comparable.</p>
 <p class="note">This page is a join, not a control comparison: the control statement (the unchanged
 row's ratio against a baseline run) lives in each arm's own page, and the verification record in its
 manifest. A dash means that arm did not carry the cell.</p>
