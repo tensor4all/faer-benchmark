@@ -98,3 +98,19 @@ that can move a number invalidates the evidence exactly as a library change does
 commit is recorded per run and repeated in every page header. The currency computation in
 `result/INDEX.md` covers the two pinned libraries; a harness change does not move a pin, so the
 manifest and the page header are where it is visible.
+
+## Before you commit
+
+This clone carries a pre-commit hook (`.githooks/pre-commit`; install it once with
+`git config core.hooksPath .githooks`). It refuses four things that have each cost this campaign
+real time:
+
+1. a commit while `target/campaign.lock` is held by a measurement - the recorder would otherwise
+   refuse the run at the end, after hours of timing, with "measured source changed during recording";
+2. a Python file that does not parse (the file's form and the running interpreter are not the same
+   question);
+3. a workflow that is not valid YAML (an unquoted colon inside a `run:` scalar only shows up as a
+   failed run on GitHub);
+4. a pin whose hash no local checkout can resolve - write pins with
+   `$(git -C <repo> rev-parse HEAD)`, never by hand.
+
