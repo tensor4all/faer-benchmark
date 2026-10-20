@@ -19,6 +19,44 @@ import yaml
 KEY = ('regime', 'family', 'dtype', 'order', 'm', 'n', 'k', 'batch', 'threads', 'note')
 
 
+def load_sets(run_dir):
+    """Per-cell, per-process-set values of one arm, for the control's between-start range."""
+    run = pathlib.Path(run_dir)
+    cells = {}
+    for path in sorted(glob.glob(str(run / 'run*.csv'))):
+        for row in csv.DictReader(open(path)):
+            if row.get('status') != 'ok' or row.get('total_ms') in (None, ''):
+                continue
+            cells.setdefault(tuple(row[k] for k in KEY), {}).setdefault(row['row'], []).append(
+                float(row['total_ms']))
+    return cells
+
+
+def control(previous_mkl, current_mkl):
+    """The unchanged row between two recordings: median ratio and cells outside their range.
+
+    `faer-upstream` is built from the same commit in both, so it is the machine-state
+    control the campaign's merge rule uses; this is the same statement for a publication.
+    """
+    before, after = load_sets(previous_mkl), load_sets(current_mkl)
+    ratios, outside, n = [], 0, 0
+    for key, rows in after.items():
+        cur = rows.get('faer-upstream')
+        old = before.get(key, {}).get('faer-upstream')
+        if not cur or not old:
+            continue
+        prev, now = statistics.median(old), statistics.median(cur)
+        if not prev:
+            continue
+        n += 1
+        ratios.append(now / prev)
+        if not (min(old) <= now <= max(old)):
+            outside += 1
+    if not n:
+        return None
+    return {'cells': n, 'median': statistics.median(ratios), 'outside': outside}
+
+
 def load(run_dir):
     run = pathlib.Path(run_dir)
     manifest = yaml.safe_load(open(run / 'run.yaml'))
@@ -64,9 +102,11 @@ def main(argv=None):
     ap.add_argument('--openblas', required=True, help='run directory of the two-engine arm')
     ap.add_argument('--out', required=True)
     ap.add_argument('--index', help='also write a landing page listing every page under this directory')
+    ap.add_argument('--control-mkl', help='an earlier MKL arm to state the unchanged row against')
     args = ap.parse_args(argv)
 
     mkl, mkl_cells = load(args.mkl)
+    ctrl = control(args.control_mkl, args.mkl) if args.control_mkl else None
     ob, ob_cells = load(args.openblas)
     if mkl['library']['commit'] != ob['library']['commit']:
         sys.exit('ERROR: the two arms are not the same measured revision')
@@ -120,6 +160,7 @@ so above 1.00 the fork is faster; the cells outside 0.95-1.05 are tinted.</p>
  <li>recorded: <code>{mkl['timestamp']}</code> (MKL arm) and <code>{ob['timestamp']}</code> (OpenBLAS arm)</li>
  <li>harness <code>{mkl['harness']['commit'][:12]}</code>, toolkit <code>{mkl['toolkit']['commit'][:12]}</code></li>
 </ul>
+{f'<p class="note"><strong>Control.</strong> <code>faer-upstream</code> is the same commit in both recordings, so it measures the machine rather than the change: between <code>{mkl["upstream"]["commit"][:12]}</code> on the previous arm and this one, over {ctrl["cells"]} cells its median ratio is <strong>{fmt(ctrl["median"])}</strong> and <strong>{ctrl["outside"]}</strong> cells fall outside their between-start range. The campaign's rule reads the median (within 2% means the machine reproduced) and reports the tail rather than refusing on it: a range taken from three process sets is narrow, so a tail of this size at these timings is expected, and it is the median that says the two recordings are comparable.</p>' if ctrl else ''}
 <p class="note">This page is a join, not a control comparison: the control statement (the unchanged
 row's ratio against a baseline run) lives in each arm's own page, and the verification record in its
 manifest. A dash means that arm did not carry the cell.</p>
