@@ -221,7 +221,8 @@ def write_index(index_path, comparison, cells):
     head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
     remote = subprocess.run(['git', 'remote', 'get-url', 'origin'], capture_output=True, text=True).stdout.strip()
     blob = remote.removesuffix('.git').replace('git@github.com:', 'https://github.com/')
-    pages = sorted(root.rglob('*-timing-v2.md')) + sorted(root.rglob('*comparison.html'))
+    pages = (sorted(root.rglob('*-timing-v2.md')) + sorted(root.rglob('*comparison.html'))
+             + sorted(root.rglob('throughput/README.md')))
     items = []
     for page in pages:
         rel = page.relative_to(root)
