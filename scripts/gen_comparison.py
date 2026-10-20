@@ -214,84 +214,22 @@ against <code>lapack-openblas</code>. Median baseline/fork ratio (above 1.00 mea
     return 0
 
 
-def _is_at_pin(page, pin):
-    """A page's filename starts with the fork revision it measured."""
-    return bool(pin) and page.name.startswith(pin[:12])
-
-
-def chart_section(root, repo_ref):
-    """The throughput SVGs, embedded: they are what a reader comes for, and a link to a
-    Markdown page that a browser serves as text is not a figure."""
-    config_path = root.parent / 'benchmarks' / 'throughput.yaml'
-    charts = sorted(root.rglob('throughput-*-v2.svg'))
-    if not charts or not config_path.exists():
-        return ''
-    config = yaml.safe_load(config_path.read_text())
-    labels = {f: spec.get('label', '') for f, spec in config.get('families', {}).items()}
-    remote = subprocess.run(['git', 'remote', 'get-url', 'origin'], capture_output=True,
-                            text=True).stdout.strip()
-    blob = remote.removesuffix('.git').replace('git@github.com:', 'https://github.com/')
-    figures = []
-    for svg in charts:
-        family = svg.stem.removeprefix('throughput-').removesuffix('-v2')
-        rel = svg.relative_to(root)
-        table = svg.with_suffix('.md').relative_to(root)
-        figures.append(
-            f'<figure><a href="{html.escape(str(rel))}"><img src="{html.escape(str(rel))}" '
-            f'alt="{html.escape(family)} throughput chart" loading="lazy"></a>'
-            f'<figcaption><strong>{html.escape(family)}</strong> - {html.escape(labels.get(family, ""))}'
-            f' <a href="{blob}/blob/{repo_ref}/{table}">(data)</a></figcaption></figure>')
-    return ('<h2>Throughput: nominal GFLOP/s against n</h2>\n'
-            '<p class="note">One algorithm operation count per family, so a line is comparable '
-            'across sizes within its own chart and not across charts. Panels are 1T, 4T and 8T; '
-            'the fork is the solid blue line, upstream dashed, MKL green, OpenBLAS red. Click a '
-            'chart for the full size.</p>\n'
-            f'<div class="charts">{"".join(figures)}</div>')
-
-
 def write_index(index_path, comparison, cells, repo_ref='main'):
-    root = index_path.parent
-    # A Markdown page served as text is not readable in a browser, so those link to the
-    # rendering GitHub does. The ref is the published branch, not a fixed commit: this page
-    # is part of the site and has to keep pointing at what the site serves, otherwise every
-    # merge leaves it describing the previous one.
-    remote = subprocess.run(['git', 'remote', 'get-url', 'origin'], capture_output=True, text=True).stdout.strip()
-    blob = remote.removesuffix('.git').replace('git@github.com:', 'https://github.com/')
-    try:
-        pin = [line.strip() for line in
-               (root.parent / 'pins' / 't4a-faer.rev').read_text().splitlines()
-               if line.strip() and not line.startswith('#')][-1]
-    except (OSError, IndexError):
-        pin = ''
-    pages = (sorted(root.rglob('*-timing-v2.md')) + sorted(root.rglob('*comparison.html'))
-             + sorted(root.rglob('throughput/README.md')))
-    # pages at the pin first, then the history, each newest-looking first
-    pages.sort(key=lambda p: (not _is_at_pin(p, pin), -p.stat().st_mtime))
-    items = []
-    for page in pages:
-        rel = page.relative_to(root)
-        at_pin = _is_at_pin(page, pin)
-        if page.suffix == '.md' and 'github.com' in blob:
-            href = f'{blob}/blob/{repo_ref}/{page.relative_to(root.parent)}'
-            note = ' <span class="muted">(Markdown, rendered by GitHub)</span>'
-        else:
-            href, note = str(rel), ''
-        mark = '' if at_pin or page.suffix == '.html' else ' <span class="muted">(superseded)</span>'
-        items.append(f'<li><a href="{html.escape(href)}">{html.escape(str(rel))}</a>{note}{mark}</li>')
-    index_path.write_text(f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>faer benchmark results</title>
-<style>body{{font:14px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem}}
-code{{background:#f2f2f2;padding:0 .2rem}}</style></head><body>
-<h1>faer benchmark results</h1>
-<p>One page per <code>(suite, hardware profile, fork revision, upstream revision, vendor arm)</code>,
-plus the joined four-way view. Generated from the campaign's recorded data; do not edit by hand.</p>
-<p><strong><a href="{html.escape(str(comparison.relative_to(root)))}">The joined comparison</a></strong> - the same
-recording seen against upstream, OpenBLAS and MKL in one table ({cells} cells).</p>
-{chart_section(root, repo_ref)}
-<h2>Pages</h2><ul>{''.join(items)}</ul>
-</body></html>
-""")
-    print(f'wrote {index_path}')
+    """Use the shared landing-page generator, with the comparison as its extra section."""
+    from campaign_toolkit import site
+    root = index_path.parent.parent                 # result/<index.html> -> campaign root
+    rel = comparison.relative_to(index_path.parent)
+    extra = ('<h2>The four-way view</h2>\n'
+             f'<p><a href="{rel}">The same recording against upstream, OpenBLAS and MKL in one '
+             f'table ({cells} cells)</a>, with the unchanged row\'s control in its header.</p>')
+    return site.write_site(index_path.parent, pins=['pins/t4a-faer.rev'], repo_ref=repo_ref,
+                           title='faer benchmark results',
+                           intro=('One page per (suite, hardware profile, fork revision, upstream '
+                                  'revision, vendor arm), generated from the recorded data, plus the '
+                                  'joined four-way view and the throughput charts. The pages at the '
+                                  'pinned revision come first.'),
+                           extra_html=extra, root=root)
+
 
 
 if __name__ == '__main__':
