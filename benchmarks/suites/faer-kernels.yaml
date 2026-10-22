@@ -90,7 +90,7 @@ workloads:
     - "`householder_apply` measures block apply and the one-block sequence form as two distinct rows, labelled with basis width min(m,n) and target width n. QR fixture preparation is outside timing. Independently varied basis/target widths and multi-panel sequences are not covered."
     - "Allocation performed inside the measured call stays inside the clock. The fork's two row splits allocate their partial buffers inside the public call, and the public scratch function does not expose them; the campaign reports that as it is instead of changing faer's API to make the boundary look cleaner."
     - "`cholesky`, `eigh`, `solve` and `triangular_solve` are measured on square shapes only: the matrix they factor or solve with is square by definition (self-adjoint for the first two, a triangular factor for the last). `lu` and `full_piv_lu` are not gated that way -- they take the declared rectangular shapes too, with `min(m, n)` pivots and a trapezoidal `L` or `U`, which is what `dgetrf` does as well -- so a rectangular LU cell is measured in both orders beside its square one."
-    - "`f32`/`c32`, the large regime's 1024 shapes, BLIS, sparse, iterative and GPU arms are later declarations, not machinery built now."
+    - "`f32`/`c32` are declared and measured as of `docs/harness-dtype-axis.md`; the vendor arm has a route for `gemm` in those two dtypes and reports the LAPACK families as skipped for them. The large regime's 1024 shapes, BLIS, sparse, iterative and GPU arms are later declarations, not machinery built now."
     - "A vendor arm records the library it linked. Only OpenBLAS reports the kernel its runtime dispatched to; MKL names no kernel and no processor count, so its manifest leaves both empty rather than inferring them."
 
 # One entry per engine name the harness emits. A result page explains every
@@ -167,7 +167,10 @@ engines_doc:
 runs:
   - threads: [1, 4, 8]
     cpu_sets: ["4", "4-7", "4-11"]
-    dtypes: [f64, c64]
+    # All four native dtypes: `f32`/`c32` reach the same kernels and the harness can
+    # measure them since `docs/harness-dtype-axis.md`. The optimization loop selects the
+    # 64 and 32 cells explicitly; a full run measures the whole grid for every dtype.
+    dtypes: [f64, c64, f32, c32]
     # C (row-major) and F (column-major) for every case, as a declared axis: faer's
     # gemm and its Householder paths dispatch differently on layout, and the fork's
     # row-split gates were chosen on F-order shapes. The order is part of the cell
