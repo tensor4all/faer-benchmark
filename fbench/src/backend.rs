@@ -99,14 +99,19 @@ macro_rules! define_backend {
                 match dtype {
                     Dtype::F64 => ops_typed::<f64>(family, case, order),
                     Dtype::C64 => ops_typed::<Complex64>(family, case, order),
+                    Dtype::F32 => ops_typed::<f32>(family, case, order),
+                    Dtype::C32 => ops_typed::<num_complex::Complex32>(family, case, order),
                 }
             }
 
-            fn ops_typed<T: Scalar + ComplexField<Real = f64>>(
+            fn ops_typed<T: Scalar + ComplexField>(
                 family: &str,
                 case: Case,
                 order: Order,
-            ) -> Result<Vec<Op>, String> {
+            ) -> Result<Vec<Op>, String>
+            where
+                T::Real: Scalar,
+            {
                 let m = case.m;
                 let n = case.n;
                 let batch = case.batch;
@@ -678,16 +683,19 @@ macro_rules! define_backend {
 
             // ----------------------------------------------------- svd_values
 
-            fn svd_values_op<T: Scalar + ComplexField<Real = f64>>(
+            fn svd_values_op<T: Scalar + ComplexField>(
                 m: usize,
                 n: usize,
                 batch: usize,
                 order: Order,
-            ) -> Result<Op, String> {
+            ) -> Result<Op, String>
+            where
+                T::Real: Scalar,
+            {
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 29));
-                struct S<T> {
+                struct S<T: ComplexField> {
                     a0: Vec<T>,
-                    outputs: Vec<Vec<f64>>,
+                    outputs: Vec<Vec<T::Real>>,
                     m: usize,
                     n: usize,
                     batch: usize,
@@ -722,14 +730,23 @@ macro_rules! define_backend {
                             let r = sv.len();
                             let eps = tol_of::<T>(s.n.max(s.m));
                             for i in 0..r {
-                                if !sv[i].is_finite() || sv[i] < -eps {
-                                    return Err(format!("singular value {i} is negative: {}", sv[i]));
+                                let value = <T::Real as Scalar>::abs(sv[i]);
+                                if !value.is_finite() || value < -eps {
+                                    return Err(format!("singular value {i} is negative: {value}"));
                                 }
-                                if i + 1 < r && sv[i] < sv[i + 1] - eps {
+                                if i + 1 < r
+                                    && value < <T::Real as Scalar>::abs(sv[i + 1]) - eps
+                                {
                                     return Err("singular values are not sorted".to_owned());
                                 }
                             }
-                            let sum: f64 = sv.iter().map(|x| x * x).sum();
+                            let sum: f64 = sv
+                                .iter()
+                                .map(|x| {
+                                    let v = <T::Real as Scalar>::abs(*x);
+                                    v * v
+                                })
+                                .sum();
                             let scale = frob(a0);
                             within::<T>(
                                 (sum.sqrt() - scale).abs(),

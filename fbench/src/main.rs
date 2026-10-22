@@ -259,6 +259,8 @@ fn parse(args: &[String]) -> Result<Args, String> {
                     .map(|d| match d {
                         "f64" => Ok(Dtype::F64),
                         "c64" => Ok(Dtype::C64),
+                        "f32" => Ok(Dtype::F32),
+                        "c32" => Ok(Dtype::C32),
                         other => Err(format!("unknown dtype {other:?}")),
                     })
                     .collect::<Result<_, _>>()?;
@@ -304,7 +306,12 @@ fn parse(args: &[String]) -> Result<Args, String> {
         }
         i += 1;
     }
-    if a.threads.is_none() || a.shapes.is_empty() {
+    if a.shapes.is_empty() {
+        // No `--n` means the default benchmark: the 64 cell of every family. `RawShape::case`
+        // turns `64` into `64x64x64` for `gemm`, so one raw shape covers both shapes.
+        a.shapes = vec![RawShape::parse("64").expect("64 is a shape")];
+    }
+    if a.threads.is_none() {
         return Err(USAGE.to_owned());
     }
     if a.threads == Some(0) {

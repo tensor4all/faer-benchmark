@@ -6,13 +6,19 @@
 //! Correctness is always a residual (or a norm identity) computed with this
 //! reference math, never a comparison between two providers.
 
-use num_complex::Complex64;
+use num_complex::{Complex32, Complex64};
 
 /// The scalar types the harness measures.
+///
+/// All four are faer's own native dtypes. The vendor arm has a route for `gemm` in
+/// every one of them and for the LAPACK drivers in `f64`/`c64` only, which the
+/// vendor adapter reports as a skip rather than a number.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Dtype {
     F64,
     C64,
+    F32,
+    C32,
 }
 
 impl Dtype {
@@ -21,6 +27,8 @@ impl Dtype {
         match self {
             Dtype::F64 => "f64",
             Dtype::C64 => "c64",
+            Dtype::F32 => "f32",
+            Dtype::C32 => "c32",
         }
     }
 }
@@ -64,6 +72,11 @@ impl Case {
 /// A scalar the reference math and both providers support.
 pub trait Scalar: Copy + 'static {
     const IS_COMPLEX: bool;
+    /// The residual floor of this dtype, per case size. `f64` carries the value the
+    /// campaign was recorded with; the `f32` pair carries a provisional one that the
+    /// verification census has to confirm, not one derived from a proven bound.
+    const TOL_REAL: f64;
+    const TOL_CPLX: f64;
     fn zero() -> Self;
     fn one() -> Self;
     fn from_f64(x: f64) -> Self;
@@ -79,6 +92,8 @@ pub trait Scalar: Copy + 'static {
 
 impl Scalar for f64 {
     const IS_COMPLEX: bool = false;
+    const TOL_REAL: f64 = 1e-10;
+    const TOL_CPLX: f64 = 1e-9;
     fn zero() -> Self {
         0.0
     }
@@ -113,6 +128,8 @@ impl Scalar for f64 {
 
 impl Scalar for Complex64 {
     const IS_COMPLEX: bool = true;
+    const TOL_REAL: f64 = 1e-10;
+    const TOL_CPLX: f64 = 1e-9;
     fn zero() -> Self {
         Complex64::new(0.0, 0.0)
     }
@@ -145,6 +162,78 @@ impl Scalar for Complex64 {
     }
 }
 
+impl Scalar for f32 {
+    const IS_COMPLEX: bool = false;
+    const TOL_REAL: f64 = 1e-6;
+    const TOL_CPLX: f64 = 1e-5;
+    fn zero() -> Self {
+        0.0
+    }
+    fn one() -> Self {
+        1.0
+    }
+    fn from_f64(x: f64) -> Self {
+        x as f32
+    }
+    fn from_parts(re: f64, _im: f64) -> Self {
+        re as f32
+    }
+    fn add(self, other: Self) -> Self {
+        self + other
+    }
+    fn sub(self, other: Self) -> Self {
+        self - other
+    }
+    fn mul(self, other: Self) -> Self {
+        self * other
+    }
+    fn add_assign(&mut self, other: Self) {
+        *self += other;
+    }
+    fn conj(self) -> Self {
+        self
+    }
+    fn abs(self) -> f64 {
+        f64::from(f32::abs(self))
+    }
+}
+
+impl Scalar for Complex32 {
+    const IS_COMPLEX: bool = true;
+    const TOL_REAL: f64 = 1e-6;
+    const TOL_CPLX: f64 = 1e-5;
+    fn zero() -> Self {
+        Complex32::new(0.0, 0.0)
+    }
+    fn one() -> Self {
+        Complex32::new(1.0, 0.0)
+    }
+    fn from_f64(x: f64) -> Self {
+        Complex32::new(x as f32, 0.0)
+    }
+    fn from_parts(re: f64, im: f64) -> Self {
+        Complex32::new(re as f32, im as f32)
+    }
+    fn add(self, other: Self) -> Self {
+        self + other
+    }
+    fn sub(self, other: Self) -> Self {
+        self - other
+    }
+    fn mul(self, other: Self) -> Self {
+        self * other
+    }
+    fn add_assign(&mut self, other: Self) {
+        *self += other;
+    }
+    fn conj(self) -> Self {
+        Complex32::conj(&self)
+    }
+    fn abs(self) -> f64 {
+        f64::from(Complex32::norm(self))
+    }
+}
+
 /// The linear index of `(i, j)` in an `m x n` matrix stored in `order`.
 #[inline]
 pub fn idx(i: usize, j: usize, m: usize, n: usize, order: Order) -> usize {
@@ -156,7 +245,7 @@ pub fn idx(i: usize, j: usize, m: usize, n: usize, order: Order) -> usize {
 
 /// The tolerance for a case of size `n`: a small multiple of the dtype floor.
 pub fn tol_of<T: Scalar>(n: usize) -> f64 {
-    let base = if T::IS_COMPLEX { 1e-9 } else { 1e-10 };
+    let base = if T::IS_COMPLEX { T::TOL_CPLX } else { T::TOL_REAL };
     base * (n.max(1) as f64)
 }
 

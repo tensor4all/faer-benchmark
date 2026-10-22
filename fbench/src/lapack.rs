@@ -32,6 +32,38 @@ mod imp {
     const CBLAS_NO_TRANS: i32 = 111;
 
     unsafe extern "C" {
+        fn cblas_sgemm(
+            layout: i32,
+            transa: i32,
+            transb: i32,
+            m: i32,
+            n: i32,
+            k: i32,
+            alpha: f32,
+            a: *const f32,
+            lda: i32,
+            b: *const f32,
+            ldb: i32,
+            beta: f32,
+            c: *mut f32,
+            ldc: i32,
+        );
+        fn cblas_cgemm(
+            layout: i32,
+            transa: i32,
+            transb: i32,
+            m: i32,
+            n: i32,
+            k: i32,
+            alpha: *const c_void,
+            a: *const c_void,
+            lda: i32,
+            b: *const c_void,
+            ldb: i32,
+            beta: *const c_void,
+            c: *mut c_void,
+            ldc: i32,
+        );
         fn cblas_dgemm(
             layout: i32,
             transa: i32,
@@ -198,8 +230,11 @@ mod imp {
         ) -> i32;
     }
 
-    /// The vendor calls, generic over the two scalar types.
-    trait LapackScalar: Scalar {
+    /// The one vendor call every declared dtype has a route for. It is a capability of
+    /// its own because `cblas_?gemm` exists for all four dtypes while the LAPACK
+    /// drivers below exist, in this harness, for `f64`/`c64` only: a dtype that has the
+    /// former must not be made to carry dummy implementations of the latter.
+    trait LapackGemm: Scalar {
         #[allow(clippy::too_many_arguments)]
         fn gemm(
             layout: i32,
@@ -213,6 +248,10 @@ mod imp {
             ldb: i32,
             ldc: i32,
         );
+    }
+
+    /// The vendor's LAPACK drivers.
+    trait LapackScalar: LapackGemm {
         fn geqrf(
             layout: i32,
             m: usize,
@@ -275,7 +314,7 @@ mod imp {
         ) -> i32;
     }
 
-    impl LapackScalar for f64 {
+    impl LapackGemm for f64 {
         fn gemm(
             layout: i32,
             m: usize,
@@ -309,6 +348,9 @@ mod imp {
                 );
             }
         }
+    }
+
+    impl LapackScalar for f64 {
         fn geqrf(layout: i32, m: usize, n: usize, a: &mut [f64], lda: i32, tau: &mut [f64]) -> i32 {
             unsafe {
                 LAPACKE_dgeqrf(
@@ -454,7 +496,7 @@ mod imp {
         }
     }
 
-    impl LapackScalar for Complex64 {
+    impl LapackGemm for Complex64 {
         fn gemm(
             layout: i32,
             m: usize,
@@ -489,6 +531,82 @@ mod imp {
                 );
             }
         }
+    }
+
+    impl LapackGemm for f32 {
+        fn gemm(
+            layout: i32,
+            m: usize,
+            n: usize,
+            k: usize,
+            a: &[f32],
+            b: &[f32],
+            c: &mut [f32],
+            lda: i32,
+            ldb: i32,
+            ldc: i32,
+        ) {
+            // SAFETY: the buffers hold `m*k`, `k*n` and `m*n` elements with the
+            // leading dimensions passed, and CBLAS does not retain them.
+            unsafe {
+                cblas_sgemm(
+                    layout,
+                    CBLAS_NO_TRANS,
+                    CBLAS_NO_TRANS,
+                    m as i32,
+                    n as i32,
+                    k as i32,
+                    1.0,
+                    a.as_ptr(),
+                    lda,
+                    b.as_ptr(),
+                    ldb,
+                    0.0,
+                    c.as_mut_ptr(),
+                    ldc,
+                );
+            }
+        }
+    }
+
+    impl LapackGemm for num_complex::Complex32 {
+        fn gemm(
+            layout: i32,
+            m: usize,
+            n: usize,
+            k: usize,
+            a: &[num_complex::Complex32],
+            b: &[num_complex::Complex32],
+            c: &mut [num_complex::Complex32],
+            lda: i32,
+            ldb: i32,
+            ldc: i32,
+        ) {
+            let alpha = num_complex::Complex32::new(1.0, 0.0);
+            let beta = num_complex::Complex32::new(0.0, 0.0);
+            // SAFETY: as above; `Complex32` is the flat `{re, im}` layout the C ABI takes.
+            unsafe {
+                cblas_cgemm(
+                    layout,
+                    CBLAS_NO_TRANS,
+                    CBLAS_NO_TRANS,
+                    m as i32,
+                    n as i32,
+                    k as i32,
+                    (&alpha as *const num_complex::Complex32).cast::<c_void>(),
+                    a.as_ptr().cast::<c_void>(),
+                    lda,
+                    b.as_ptr().cast::<c_void>(),
+                    ldb,
+                    (&beta as *const num_complex::Complex32).cast::<c_void>(),
+                    c.as_mut_ptr().cast::<c_void>(),
+                    ldc,
+                );
+            }
+        }
+    }
+
+    impl LapackScalar for Complex64 {
         fn geqrf(
             layout: i32,
             m: usize,
@@ -692,10 +810,36 @@ mod imp {
         }
     }
 
+    /// The vendor rows for the two `f32` dtypes: `?gemm` exists for both, the LAPACK
+    /// drivers do not (in this harness), so every other family is a skip with the reason
+    /// in it rather than a number or a dummy driver.
+    fn ops_gemm_only<T: LapackGemm>(
+        dtype: Dtype,
+        family: &str,
+        case: Case,
+        order: Order,
+    ) -> Result<Vec<Op>, String> {
+        match family {
+            "gemm" => Ok(vec![gemm_op::<T>(
+                case.m,
+                case.k.unwrap_or(case.m),
+                case.n,
+                case.batch,
+                order,
+            )?]),
+            other => Err(format!(
+                "{other} has no {} LAPACK route in this harness yet; the vendor row is skipped",
+                dtype.label()
+            )),
+        }
+    }
+
     pub fn ops(dtype: Dtype, family: &str, case: Case, order: Order) -> Result<Vec<Op>, String> {
         match dtype {
             Dtype::F64 => ops_typed::<f64>(family, case, order),
             Dtype::C64 => ops_typed::<Complex64>(family, case, order),
+            Dtype::F32 => ops_gemm_only::<f32>(dtype, family, case, order),
+            Dtype::C32 => ops_gemm_only::<num_complex::Complex32>(dtype, family, case, order),
         }
     }
 
@@ -732,7 +876,7 @@ mod imp {
         }
     }
 
-    fn gemm_op<T: LapackScalar>(
+    fn gemm_op<T: LapackGemm>(
         m: usize,
         k: usize,
         n: usize,
