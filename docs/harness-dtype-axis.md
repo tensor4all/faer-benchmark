@@ -55,10 +55,12 @@ below it and any movement there is a real change in the un-threaded path rather 
 - The census has to be read, not just its banner: an operation that cannot be built is a successful
   skip, and the banner prints either way. The check is that the `ok` cells per dtype match the families
   the harness claims, with only the declared skips (`eig`, `upgrade_factor` for the faer arms) missing.
-- The tolerance is per dtype and only the base moves: `1e-10`/`1e-9` (real/complex) × n stays for
-  `f64`/`c64`; `f32`/`c32` get `1e-6`/`1e-5` × n with the existing `max(frob, 1)` scaling on top, i.e.
-  hundreds of binary32 eps rather than ten. Those constants are provisional: no family was shown to
-  need them, and a family that fails the census is the evidence that would settle them.
+- The tolerance is one constant per dtype (`Scalar::TOL`), scaled by the case size for the `f64` pair
+  exactly as before and **flat** for the `f32` pair. Scaling at f32 is what a percent-level spectrum
+  error would hide behind at the tall sizes the suite declares, so the f32 floor is `1e-5` at every
+  size, still applied over the existing `max(frob, 1)` scale. That floor is provisional in the honest
+  sense: no family needed anything looser, and the census plus a deliberately corrupted output is what
+  would settle it.
 - The default-shape change must not touch the recorder: the shapes it passes are explicit, and the
   proof is that a recorded run's `run.yaml` and `run_spec` are byte-identical in shape terms to one
   taken before the change.

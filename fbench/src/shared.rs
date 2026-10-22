@@ -72,11 +72,14 @@ impl Case {
 /// A scalar the reference math and both providers support.
 pub trait Scalar: Copy + 'static {
     const IS_COMPLEX: bool;
-    /// The residual floor of this dtype, per case size. `f64` carries the value the
-    /// campaign was recorded with; the `f32` pair carries a provisional one that the
-    /// verification census has to confirm, not one derived from a proven bound.
-    const TOL_REAL: f64;
-    const TOL_CPLX: f64;
+    /// The residual floor of this dtype, relative to the case's scale.
+    ///
+    /// `f64`'s value is the one the campaign was recorded with and is scaled by the case
+    /// size. The `f32` pair is not: at f32 an `n`-scaled floor would admit a percent-level
+    /// error in a spectrum at the tall sizes the suite declares, so it is flat.
+    const TOL: f64;
+    /// Whether the floor is multiplied by the case size.
+    const TOL_SCALES_WITH_N: bool;
     fn zero() -> Self;
     fn one() -> Self;
     fn from_f64(x: f64) -> Self;
@@ -92,8 +95,8 @@ pub trait Scalar: Copy + 'static {
 
 impl Scalar for f64 {
     const IS_COMPLEX: bool = false;
-    const TOL_REAL: f64 = 1e-10;
-    const TOL_CPLX: f64 = 1e-9;
+    const TOL: f64 = 1e-10;
+    const TOL_SCALES_WITH_N: bool = true;
     fn zero() -> Self {
         0.0
     }
@@ -128,8 +131,8 @@ impl Scalar for f64 {
 
 impl Scalar for Complex64 {
     const IS_COMPLEX: bool = true;
-    const TOL_REAL: f64 = 1e-10;
-    const TOL_CPLX: f64 = 1e-9;
+    const TOL: f64 = 1e-9;
+    const TOL_SCALES_WITH_N: bool = true;
     fn zero() -> Self {
         Complex64::new(0.0, 0.0)
     }
@@ -164,8 +167,8 @@ impl Scalar for Complex64 {
 
 impl Scalar for f32 {
     const IS_COMPLEX: bool = false;
-    const TOL_REAL: f64 = 1e-6;
-    const TOL_CPLX: f64 = 1e-5;
+    const TOL: f64 = 1e-5;
+    const TOL_SCALES_WITH_N: bool = false;
     fn zero() -> Self {
         0.0
     }
@@ -200,8 +203,8 @@ impl Scalar for f32 {
 
 impl Scalar for Complex32 {
     const IS_COMPLEX: bool = true;
-    const TOL_REAL: f64 = 1e-6;
-    const TOL_CPLX: f64 = 1e-5;
+    const TOL: f64 = 1e-5;
+    const TOL_SCALES_WITH_N: bool = false;
     fn zero() -> Self {
         Complex32::new(0.0, 0.0)
     }
@@ -245,8 +248,11 @@ pub fn idx(i: usize, j: usize, m: usize, n: usize, order: Order) -> usize {
 
 /// The tolerance for a case of size `n`: a small multiple of the dtype floor.
 pub fn tol_of<T: Scalar>(n: usize) -> f64 {
-    let base = if T::IS_COMPLEX { T::TOL_CPLX } else { T::TOL_REAL };
-    base * (n.max(1) as f64)
+    if T::TOL_SCALES_WITH_N {
+        T::TOL * (n.max(1) as f64)
+    } else {
+        T::TOL
+    }
 }
 
 /// `*dst += value`, spelled through [`Scalar`] so it is not ambiguous with the

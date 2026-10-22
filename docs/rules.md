@@ -22,18 +22,20 @@ build then verify then time, and a published page only from a validated run.
 ## Optimization loop: target 64, guard 32
 
 An optimization iteration measures the **64** cell of every family and confirms **32** is unmoved,
-then stops. That pair is the iteration, not the adoption: adoption still runs the arm below
+then stops. Both are in the command below; the 32 row is the guard, not an option. That pair is the iteration, not the adoption: adoption still runs the arm below
 (affected families at every declared shape, collateral controls, the comparator).
 
 ```sh
 python3 scripts/record_run.py zen5-cpu faer-kernels ... \
-    --shapes 64,64x64x64 --dtypes f64,c64,f32,c32 --threads 4,8 --label loop-<rev>
+    --shapes 64,64x64x64,32,32x32x32 --dtypes f64,c64,f32,c32 --threads 4,8 --label loop-<rev>
 ```
 
 `fbench` itself defaults to that grid when `--n` is omitted, and `--dtype` accepts all four native
-dtypes as of `02f5ae8` (`docs/harness-dtype-axis.md`). The rationale is measured: the floor that
-decides whether a product is threaded is 1.18 Mflops, so `32^3` (131 ki) and `64^3` (524 ki) sit below
-it, and any movement there is a real change in the un-threaded path rather than a scaling story.
+dtypes as of `02f5ae8` (`docs/harness-dtype-axis.md`). The rationale is measured, per dtype: the floor that decides whether a product is threaded is 1.18
+Mflops, so `32^3` (131 ki real, 525 ki complex) and `64^3` (524 ki real, 2.10 Mflop complex) are below
+it for the real pair and the 32 cell is below it for all four, which is what makes the 32 row a guard
+on the un-threaded path rather than a scaling story. The 64 cell is the smallest one the kernel
+decomposes for real inputs.
 
 ## Acceptance (about an hour)
 

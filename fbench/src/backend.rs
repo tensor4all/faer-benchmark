@@ -25,6 +25,7 @@ macro_rules! define_backend {
             use $krate::linalg::solvers::{
                 DenseSolveCore, FullPivLu, Llt, PartialPivLu, Qr, SelfAdjointEigen, Solve, Svd,
             };
+            use $krate::traits::math_utils::from_f64;
             use $krate::traits::ComplexField;
             use $krate::{get_global_parallelism, Accum, Conj, MatMut, MatRef, Par, Side};
 
@@ -729,14 +730,16 @@ macro_rules! define_backend {
                             let sv = &s.outputs[bi];
                             let r = sv.len();
                             let eps = tol_of::<T>(s.n.max(s.m));
+                            let neg_eps = from_f64::<T::Real>(-eps);
+                            let eps_r = from_f64::<T::Real>(eps);
                             for i in 0..r {
+                                // Signed, so a sign-flipped spectrum is caught here rather than
+                                // passing the ordering and norm checks below.
                                 let value = <T::Real as Scalar>::abs(sv[i]);
-                                if !value.is_finite() || value < -eps {
+                                if !value.is_finite() || sv[i] < neg_eps {
                                     return Err(format!("singular value {i} is negative: {value}"));
                                 }
-                                if i + 1 < r
-                                    && value < <T::Real as Scalar>::abs(sv[i + 1]) - eps
-                                {
+                                if i + 1 < r && sv[i] < sv[i + 1] - eps_r {
                                     return Err("singular values are not sorted".to_owned());
                                 }
                             }
