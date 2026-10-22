@@ -19,6 +19,22 @@ the observing side pinned off the measured L3 domains (refused otherwise), an id
 every CPU sharing the measured cache (3 s window, 5% busy, 8 admission retries), one campaign lock,
 build then verify then time, and a published page only from a validated run.
 
+## Optimization loop: target 64, guard 32
+
+An optimization iteration measures the **64** cell of every family and confirms **32** is unmoved,
+then stops. That pair is the iteration, not the adoption: adoption still runs the arm below
+(affected families at every declared shape, collateral controls, the comparator).
+
+```sh
+python3 scripts/record_run.py zen5-cpu faer-kernels ... \
+    --shapes 64,64x64x64 --dtypes f64,c64,f32,c32 --threads 4,8 --label loop-<rev>
+```
+
+`fbench` itself defaults to that grid when `--n` is omitted, and `--dtype` accepts all four native
+dtypes as of `02f5ae8` (`docs/harness-dtype-axis.md`). The rationale is measured: the floor that
+decides whether a product is threaded is 1.18 Mflops, so `32^3` (131 ki) and `64^3` (524 ki) sit below
+it, and any movement there is a real change in the un-threaded path rather than a scaling story.
+
 ## Acceptance (about an hour)
 
 ```sh
