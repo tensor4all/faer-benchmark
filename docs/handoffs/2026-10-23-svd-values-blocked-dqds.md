@@ -1,6 +1,6 @@
 # ハンドオフ：blocked bidiag と dqds shift（2026-10-23、`2026-10-23-svd-values-dqds.md` の続き）
 
-この記録は引継ぎ用。**目標は大部分達成・採用（KEEP）判断は維持者待ち。** 起動中の計測・ビルドはない。両リポジトリとも tree clean、**未 push・PR 未作成**。
+この記録は引継ぎ用。**目標は大部分達成・採用（KEEP）判断は維持者待ち。** 起動中の計測・ビルドはない。両リポジトリとも tree clean、**未 push・PR 未作成**。§5 以降が後半（padded lda、caller 側ロック、最終計測）。
 
 ## 1. やったこと
 
@@ -40,3 +40,29 @@
 - **1024x64 の 8T**（1.86）：tall 経路のスレッド化オーバーヘッド、本ユニットの外。
 - 計測作法：recorder 起動前に Claude 本体と他エージェント（今回 `codex`）を `taskset -apc 0-3,12-15` で観測側へ。recorder は計測中に測定対象 checkout・harness・toolkit の HEAD と clean を検査するので、**計測中はどのリポジトリにもコミット・編集しない**（今回 faer へのコミットで引っかかりかけ、HEAD を detach して回避した）。
 - `probes/gemv-threads`（gemv 単体の 1〜8T 計測）と `probes/svd-phases`（段分解）は untracked の診断。
+
+## 5. 後半：8T の残差の特定と、ロックの持ち主（faer `5b2b5f9`〜`148d1c3`、harness `a605778`〜）
+
+- **仮説検証**（`probes/gemv-threads`）：短い積は 50 GB/s で帯域律速（呼び出しオーバーヘッド説は棄却）、ロック下の領域コストは 1.75 µs（同期説は小）、**2 の冪の leading dimension による L1 セット衝突が当たり**：bidiag 8T は n=500 で 14.6、520 で 15.8、512 で 18.6 ms、512 を lda 520 で 15.3。
+- `5b2b5f9`：SVD の作業コピーの stride が 1 KiB の倍数なら列ごとに 64 B パディング（`work_rows`）。`svd_values` 512 8T 25.6 → 22.1 ms（MKL 22.3）。
+- `01e741c`：**ロックは caller の持ち物**（維持者判断）。bidiag からロックを外し、`faer::spindle` を再エクスポート、crate docs `# parallelism`・`Par::Rayon`・README で「スレッド予算を渡す caller は `with_lock` を保持せよ」と宣伝。
+- harness `a605778`：fbench は faer 両行の計測ループ全体を `spindle::with_lock(threads)` で包む（`docs/rules.md` の契約）。これより前の run は後の run と比較不可、pin baseline は `20261023T112343Z-caller-lock-baseline` として取り直した。
+- `1850d9e`：ロック保持下の最初の候補（`20261023T120538Z`）で tall 形状が悪化（4096x256 8T で MKL 比 1.83）。原因は fork が 10/18 に採用した block apply 分割の生 rayon `par_chunks_mut`（保持中のワーカーがプールを占有して飢える）。`spindle::for_each` に揃えて解消。
+
+## 6. 最終計測（`20261023T125347Z-blocked-dqds-caller-lock-2`、faer `1850d9e`、pin baseline `20261023T112343Z` 比、同一ハーネス）
+
+control 1.0027、384 セル、**266 faster / 0 slower**。`svd_values` 中央値：
+
+| | 32 | 64 | 128 | 256 | 512 | 1024x64 | 4096x256 |
+|---|---|---|---|---|---|---|---|
+| 1T | 0.63 | **0.60** | 0.57 | 0.60 | 0.67 | 0.90 | 0.92 |
+| 8T | 0.63 | 0.61 | 0.67 | 0.67 | **0.61** | 0.70 | **0.57** |
+
+MKL 対比（同一 run、F order）：f64 512 は 1T 0.85／4T 0.91／8T 0.97、4096x256 は 0.83／0.93／1.11、64 は 1.17（0.298 対 0.255 ms）。c64 は 1T 全サイズで faer が速く（0.60〜0.99）、8T でも 512 と tall 両形状で速い。
+
+## 7. 残り
+
+- **64 の f64**（事前宣言ターゲット）：values 段は MKL 同等、残差は非ブロック bidiag 0.17 ms。床を下げても改善せず。非ブロック loop の行処理（strided な norm・反射子・`z2` の rhs）への連続バッファ適用が候補。
+- **8T の 256 と tall**（1.06〜1.25）：パネルの直列部分と tall 経路自身の領域。
+- **tenferro 側**：`CpuExecutionContext` がセッション／region 単位で `faer::spindle::with_lock` を取るユニット（R-performance-11/14）。faer と同じ spindle インスタンスであること（再エクスポート経由）。
+- **罠**：faer-benchmark で素の `cargo test/check` を走らせると `Cargo.lock` が registry の `t4a-faer 0.24.8` に再解決される。ビルドは `scripts/build_for_faer_rev.sh` 経由のみ、lock の差分は無フィルタで読む（今回 1 回踏んで 2 時間の計測を一度やり直した）。
