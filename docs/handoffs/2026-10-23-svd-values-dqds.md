@@ -37,7 +37,7 @@
 
 ## 3. 次にやる A / B（C は保留）
 
-### A. bidiag のブロック化（dlabrd 相当）— **前提は測定で裏づけ済み**
+### A. bidiag のブロック化（dlabrd 相当）— **設計はレビュー2回済み、実装前**
 
 `faer/src/linalg/svd/bidiag.rs` は**非ブロック**：`BidiagParams` は `par_threshold` だけ、trailing update は `matmul(y2, A21ᴴ, A22)` / `matmul(z2, A22, A12ᴴ)` という **matvec 形**。LAPACK の `dgebrd` は `dlabrd`（パネル）＋**GEMM** trailing update。
 
@@ -61,11 +61,19 @@
 
 **ただしこの見積りは楽観側**：MKL の `?gebrd` も blocked（公開 API の測定で 1T 39.8 ms / 8T 15.6 ms）であり、上の構成要素から期待される 12 ms より 3× 遅い。差は dlabrd が work 行列 X/Y に対して行う level-2 適用（1 パネルあたり 4 回）で説明される可能性があり、**この 2 つの数値の間が A の実際の効果**。実装して測る以外に決められない。
 
-実装上の指示（レビュー反映）：
-- **公開 knob を足さない**：block size は内部定数（最初は ib=32 相当）。
-- compact-WY の factor 構築は既存の householder ヘルパを再利用し、独自サブシステムを作らない。
-- `bidiag_in_place_scratch` の作業領域が Panel 分増える（契約変更）。丸めが変わるので hard-input テスト＋`fbench verify` 必須。
-- **最初に測る**：512 で 1T/8T の「パネル作業 vs trailing update」の実測、64/128 のガード。パネルが支配的なら A の前提を捨てる。
+**設計（`faer/docs/worklogs/2026-10-23-blocked-bidiag.md`、`dfb28dd` 時点）**。初版はレビューで根本的に否定され、LAPACK `dlabrd`/`dgebrd` の形に作り直した：
+
+1. **パネル漸化（deferred update）**：各 `i` で `A(i:m,i)` / `A(i,i+1:n)` を、既に溜めた correction 列との**短い積**（幅 i-1）で更新 → 列 reflector と行 reflector を生成 → `Y(i+1:n,i)`, `X(i+1:m,i)` を作る。スケールは **`tl.recip()` / `tr.recip()`**（faer は `H = I − v vᴴ / tau` で保持し、`Hl`/`Hr` には `tl`/`tr` 本体を入れる）。
+2. **trailing update は 1 パネル 1 回・level-3**：`A22 -= V·Yᵀ + X·Uᵀ`（`V = A(i+ib:m, i:i+ib)`, `U = A(i:i+ib, i+ib:n)`）を**素の `matmul` 2 回**で。`householder` の block helper は使わない（初版の誤り）。
+3. 右 reflector は A の**行**に入っているので、右側は `V.transpose(), Conj::Yes`（`bidiag.rs:483-485` と同じ）。左の transpose 適用も `Conj::Yes`。
+4. **ループ述語**：残り寸法 `min(m-p, n-p) > 128`（厳密）の間だけブロック。`min(m,n) <= 128` はブロックに入らない。床は scratch query にも反映。
+5. **末尾への入り方**：パネルの 2 積で trailing は既に更新済みなので、非ブロック末尾は**ローカル添字を新規に切り、pending な `y`/`z` 対を持たない**状態で開始（`bidiag.rs:87-103,111-116` の `k>0` 分岐をそのまま使うと二重更新になる）。以降は既存の per-step 演算そのまま、出力 factor の upgrade は最後に 1 回。
+6. **scratch**：`X (m×ib)` と `Y (n×ib)` がパネルと update の間ずっと生きる。`any_of` 共有は不可。2 つの積はどちらも `A22` に直接加算するので結果バッファ不要。既存の query（`svd_imp_scratch`、tall 経路の reduction）が大きくなった要求を伝播するので**呼び出し側の変更は不要**。
+7. **公開 knob を足さない**：`ib` は内部定数（初期 32）。
+
+**期待値の読み替え（レビュー2回目）**：ベンダの blocked `?gebrd` は 1T 39.8 ms / 8T 15.6 ms で、faer の非ブロックは 42.9 / 34.5。**パネル側 level-2 は level-3 更新と同程度**なので、**1T はほぼ動かない可能性が高く、効くのは 8T**。よって主ゲートは **`svd_values` 512 の 8T < 20 ms（現 49.1）**、1T は「悪化しない」ガード。
+
+**テスト（レビュー2回目）**：既存の bidiag テストは 4/8、SVD テストは 150 で `Par::Seq` なので、上の述語では2枚目のパネルを跨がない。**`min(m,n)=300` ＋ 長方形状**で、real/complex、`Par::Seq` と threaded（**threaded 側は `par_threshold = 0`**。既定 192*256 では 199² が床を割って逐次になる）。
 
 ### B. dqds の shift（dlaq4 相当）— **仮説として扱う**
 
