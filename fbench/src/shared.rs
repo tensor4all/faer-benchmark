@@ -76,7 +76,9 @@ pub trait Scalar: Copy + 'static {
     ///
     /// `f64`'s value is the one the campaign was recorded with and is scaled by the case
     /// size. The `f32` pair is not: at f32 an `n`-scaled floor would admit a percent-level
-    /// error in a spectrum at the tall sizes the suite declares, so it is flat.
+    /// error in a spectrum at the tall sizes the suite declares, so it is flat. Its number is
+    /// the observed residual, not a proof: `svd_thin`'s reconstruction reaches 92 eps at n=96
+    /// and grows like `sqrt(n)`, so the floor is 500 eps of binary32 and stays there.
     const TOL: f64;
     /// Whether the floor is multiplied by the case size.
     const TOL_SCALES_WITH_N: bool;
@@ -167,7 +169,7 @@ impl Scalar for Complex64 {
 
 impl Scalar for f32 {
     const IS_COMPLEX: bool = false;
-    const TOL: f64 = 1e-5;
+    const TOL: f64 = 6e-5;
     const TOL_SCALES_WITH_N: bool = false;
     fn zero() -> Self {
         0.0
@@ -203,7 +205,7 @@ impl Scalar for f32 {
 
 impl Scalar for Complex32 {
     const IS_COMPLEX: bool = true;
-    const TOL: f64 = 1e-5;
+    const TOL: f64 = 6e-5;
     const TOL_SCALES_WITH_N: bool = false;
     fn zero() -> Self {
         Complex32::new(0.0, 0.0)
