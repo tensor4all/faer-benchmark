@@ -66,3 +66,12 @@ MKL 対比（同一 run、F order）：f64 512 は 1T 0.85／4T 0.91／8T 0.97�
 - **8T の 256 と tall**（1.06〜1.25）：パネルの直列部分と tall 経路自身の領域。
 - **tenferro 側**：`CpuExecutionContext` がセッション／region 単位で `faer::spindle::with_lock` を取るユニット（R-performance-11/14）。faer と同じ spindle インスタンスであること（再エクスポート経由）。
 - **罠**：faer-benchmark で素の `cargo test/check` を走らせると `Cargo.lock` が registry の `t4a-faer 0.24.8` に再解決される。ビルドは `scripts/build_for_faer_rev.sh` 経由のみ、lock の差分は無フィルタで読む（今回 1 回踏んで 2 時間の計測を一度やり直した）。
+
+## 8. 64 と tall のユニット（faer `41161e9`〜`e09a641`、worklog `docs/worklogs/2026-10-23-svd-64-and-tall.md`）
+
+- **64**（`41161e9`）：非ブロック loop の行を連続バッファ化（gather 1 回・scatter 1 回）。`svd_values` 64 は 0.296 → **0.239 ms（MKL 0.255、事前宣言ターゲット達成）**、128 は 1.30 → 1.01（MKL 1.16）。subnormal な norm の逆数が inf になる経路を 50×50 の全 1 行列で踏み、`make_householder` と同じ扱い（norm が最小正規数未満なら正規化しない）で修正。
+- **tall**（`2351819`）：4096x256/8T の負けは QR パネル再帰の最深層。幅 8 以下の基底は `T` を内積で作る（depth-4 upgrade 2.0 → 0.27 ms）。浮いた分の大半は隣の apply（同じ small-M,N × large-K の gemm が 7 GB/s）に移り、4096x256/8T は横ばい、1024x64 と 512 は改善。
+- **計測**：`20261023T193712Z-row-buffer-narrow-basis`（`svd_values,svd_thin,qr_factor`）。SVD 系は同一ハーネス baseline 比で **363 faster / 0 slower**（control 1.0010）、`qr_factor` は pin の `qr_factor` baseline `20261023T190718Z-caller-lock-baseline-qr` 比で **174 / 0**（control 0.9947）。MKL 対比 f64 `svd_values`：64 0.94、512 0.85/0.90/0.95、4096x256 0.81/0.92/1.09、32 1.09。
+- **次ユニット**：(a) `matmul` に small-M,N × large-K の経路（内積タイル；upgrade と apply の両方、tall の残り 2.7 ms）、(b) 行数に応じた QR 再帰の葉幅（正方形と中規模には効き、tall には効かないと測定済み：512/8T 3.07 → 2.24、4096x256/8T 9.2 → 9.5〜11.1）、(c) 256 の bidiag が 8T でも直列（5.4 ms）。
+- **出所**：ベンダ・LAPACK のコードは不参照。アルゴリズムは公開文献（Dongarra–Hammarling–Sorensen 1989、Fernando–Parlett 1994、Parlett–Marques LAWN 155）、設計はプロファイルの内訳から。ベンダは公開 API の計測のみ。`bidiag.rs`／`dqds.rs` の冒頭に引用を明記（`e09a641`）。
+- **注意**：`probes/qr-phases` は前セッションの untracked プローブを同名で上書きしてしまった（ソース消失、バイナリのみ残存）。現在の `probes/qr-phases` は再帰深さ別の QR 計時。
