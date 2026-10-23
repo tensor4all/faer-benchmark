@@ -70,7 +70,7 @@ impl Case {
 }
 
 /// A scalar the reference math and both providers support.
-pub trait Scalar: Copy + 'static {
+pub trait Scalar: Copy + Send + 'static {
     const IS_COMPLEX: bool;
     /// The residual floor of this dtype, relative to the case's scale.
     ///

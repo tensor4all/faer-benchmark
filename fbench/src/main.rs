@@ -136,6 +136,28 @@ enum Statistic {
     Median,
 }
 
+/// The timed loop of one row.
+///
+/// The two faer rows run it with the spindle worker group held (`spindle::with_lock`) when the
+/// budget is more than one thread: that is how a caller with a thread budget is meant to call faer
+/// (the fork's crate docs, *parallelism*), and without it every parallel region inside the call is a
+/// plain rayon fork/join that wakes the workers and partitions the work afresh. The lock is taken
+/// once around priming, every repetition and the check, as a session would, so its setup is outside
+/// every clocked region. The vendor rows own their threading and are not touched.
+fn measure_row(
+    row: &str,
+    threads: usize,
+    ops: &mut op::Op,
+    prime_ms: u64,
+    reps: usize,
+) -> Result<Vec<f64>, String> {
+    if threads > 1 && (row == "faer-fork" || row == "faer-upstream") {
+        spindle::with_lock(threads, || timing::measure(ops, prime_ms, reps))
+    } else {
+        timing::measure(ops, prime_ms, reps)
+    }
+}
+
 fn summarize(samples: &[f64], statistic: Statistic) -> Option<f64> {
     if samples.is_empty() {
         return None;
@@ -571,7 +593,7 @@ fn main() -> ExitCode {
                             };
                             for mut ops in ops {
                                 if run {
-                                    match timing::measure(&mut ops, args.prime_ms, args.reps) {
+                                    match measure_row(row, threads, &mut ops, args.prime_ms, args.reps) {
                                         Ok(samples) => {
                                             let note = ops.note.clone();
                                             emit(

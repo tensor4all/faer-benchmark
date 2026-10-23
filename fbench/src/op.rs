@@ -7,48 +7,96 @@
 //! only `run`, prepare and restore outside the clock, and still verify the exact
 //! state the timed call left behind.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+/// The three steps of an operation over one state, type-erased. `Send` because the timing loop
+/// may run inside a held spindle worker group, whose entry requires it; every provider's state is
+/// plain buffers.
+trait Steps: Send {
+    fn prepare(&mut self) -> Result<(), String>;
+    fn run(&mut self) -> Result<(), String>;
+    fn check(&mut self) -> Result<(), String>;
+}
 
-/// One step of an operation: `Ok(())` or a message explaining the failure.
-pub type Step = Box<dyn FnMut() -> Result<(), String>>;
+struct Closures<S, P, R, C> {
+    state: S,
+    prepare: P,
+    run: R,
+    check: C,
+}
+
+impl<S, P, R, C> Steps for Closures<S, P, R, C>
+where
+    S: Send,
+    P: Fn(&mut S) -> Result<(), String> + Send,
+    R: Fn(&mut S) -> Result<(), String> + Send,
+    C: Fn(&mut S) -> Result<(), String> + Send,
+{
+    fn prepare(&mut self) -> Result<(), String> {
+        (self.prepare)(&mut self.state)
+    }
+    fn run(&mut self) -> Result<(), String> {
+        (self.run)(&mut self.state)
+    }
+    fn check(&mut self) -> Result<(), String> {
+        (self.check)(&mut self.state)
+    }
+}
 
 /// A provider operation for one case.
 pub struct Op {
     /// A truthful note recorded in the CSV (`block`, or why a route differs).
     pub note: String,
-    prepare: Step,
-    run: Step,
-    check: Step,
+    steps: Box<dyn Steps>,
 }
 
 impl Op {
+    /// The same operation with `run` replaced by a no-op: the test that proves every `check`
+    /// rejects a result that was never computed.
+    #[cfg(test)]
+    pub fn without_run(self) -> Op {
+        struct NoRun(Box<dyn Steps>);
+        impl Steps for NoRun {
+            fn prepare(&mut self) -> Result<(), String> {
+                self.0.prepare()
+            }
+            fn run(&mut self) -> Result<(), String> {
+                Ok(())
+            }
+            fn check(&mut self) -> Result<(), String> {
+                self.0.check()
+            }
+        }
+        Op {
+            note: self.note,
+            steps: Box::new(NoRun(self.steps)),
+        }
+    }
     pub fn prepare(&mut self) -> Result<(), String> {
-        (self.prepare)()
+        self.steps.prepare()
     }
     pub fn run(&mut self) -> Result<(), String> {
-        (self.run)()
+        self.steps.run()
     }
     pub fn check(&mut self) -> Result<(), String> {
-        (self.check)()
+        self.steps.check()
     }
 }
 
 /// Build an [`Op`] whose three closures share one state.
-pub fn op_from<S: 'static>(
+pub fn op_from<S: Send + 'static>(
     state: S,
     note: String,
-    prepare: impl Fn(&mut S) -> Result<(), String> + 'static,
-    run: impl Fn(&mut S) -> Result<(), String> + 'static,
-    check: impl Fn(&mut S) -> Result<(), String> + 'static,
+    prepare: impl Fn(&mut S) -> Result<(), String> + Send + 'static,
+    run: impl Fn(&mut S) -> Result<(), String> + Send + 'static,
+    check: impl Fn(&mut S) -> Result<(), String> + Send + 'static,
 ) -> Op {
-    let state = Rc::new(RefCell::new(state));
-    let (a, b, c) = (state.clone(), state.clone(), state);
     Op {
         note,
-        prepare: Box::new(move || prepare(&mut a.borrow_mut())),
-        run: Box::new(move || run(&mut b.borrow_mut())),
-        check: Box::new(move || check(&mut c.borrow_mut())),
+        steps: Box::new(Closures {
+            state,
+            prepare,
+            run,
+            check,
+        }),
     }
 }
 
@@ -105,7 +153,7 @@ mod tests {
                             op.prepare().unwrap();
                             op.run().unwrap();
                             op.check().unwrap();
-                            op.run = Box::new(|| Ok(()));
+                            let mut op = op.without_run();
                             op.prepare().unwrap();
                             op.run().unwrap();
                             // Missing retained output may fail with Err or bounds panic;

@@ -45,6 +45,11 @@ link-mkl = [
 [dependencies]
 faer_fork = { package = "t4a-faer", version = "0.24", default-features = false, features = ["std", "rayon"] }
 faer_upstream = { package = "faer", version = "0.24", default-features = false, features = ["std", "rayon"] }
+# The thread-pool helper both faer crates issue their parallel regions through, the same
+# crate instance as theirs (one 0.2.x resolves for all three): the harness holds the worker
+# group around a faer row's timed loop when the budget is more than one thread, the way a
+# caller with a thread budget is meant to call faer (`t4a-faer`'s crate docs, *parallelism*).
+spindle = "0.2.6"
 # The complex scalar type the two faer crates also re-export. Declared directly so
 # the provider-independent reference math in `src/shared.rs` does not have to name
 # one of the two faer crates.
