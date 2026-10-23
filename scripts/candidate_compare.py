@@ -28,6 +28,32 @@ MEASURED_PATHS = ('faer/src', 'faer/Cargo.toml', 'faer-traits/src', 'faer-traits
                   'Cargo.lock')
 
 
+# The harness paths the measured binary is built from. Two runs whose harness commits differ only
+# outside these (handoff notes, recorded data, reports) measured the same harness, and the comparison
+# is accepted on the tree hashes of these paths rather than refused on the commit.
+HARNESS_PATHS = ('fbench', 'Cargo.toml', 'Cargo.lock', 'pins', 'benchmarks',
+                 'scripts/build_for_faer_rev.sh')
+CAMPAIGN_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def harness_differences(baseline, candidate, differences):
+    """`differences` without the harness-commit line when the harness build inputs are identical."""
+    one = yaml.safe_load((baseline / 'run.yaml').read_text()).get('harness') or {}
+    two = yaml.safe_load((candidate / 'run.yaml').read_text()).get('harness') or {}
+    if one.get('commit') == two.get('commit') or not one.get('commit') or not two.get('commit'):
+        return differences
+    changed = candidate_module_same_code(one['commit'], two['commit'])
+    if changed:
+        return differences
+    print(f"harness commits {one['commit'][:12]} and {two['commit'][:12]} carry identical build "
+          f"inputs ({', '.join(HARNESS_PATHS)}); the difference is outside the measured harness")
+    return [d for d in differences if not d.startswith('harness commit:')]
+
+
+def candidate_module_same_code(before, after):
+    return candidate.same_measured_code(CAMPAIGN_ROOT, before, after, HARNESS_PATHS, git=git)
+
+
 def git(path, *args):
     return subprocess.run(['git', '-C', str(path), *args], check=True, capture_output=True,
                           text=True).stdout.strip()
@@ -51,7 +77,8 @@ def compare(args):
         return 1
     print(f'measured revision {measured[:12]} and merged revision {merged[:12]} carry identical '
           f'measured paths')
-    differences = candidate.identity_differences(args.baseline, args.candidate)
+    differences = harness_differences(args.baseline, args.candidate,
+                                      candidate.identity_differences(args.baseline, args.candidate))
     if differences:
         for line in differences:
             print(f'refused: {line}')
