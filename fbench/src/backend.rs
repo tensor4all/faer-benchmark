@@ -38,6 +38,18 @@ pub mod fork_par {
             ParCfg::Team => unreachable!("the team row needs feature team"),
         }
     }
+    /// The fork's global parallelism is the `Copy` type `GlobalPar` (a team cannot be global).
+    pub fn global_degree() -> usize {
+        faer_fork::get_global_parallelism().par().degree()
+    }
+    pub fn set_global(threads: usize) {
+        let par = if threads <= 1 {
+            faer_fork::GlobalPar::Seq
+        } else {
+            faer_fork::GlobalPar::rayon(threads)
+        };
+        faer_fork::set_global_parallelism(par);
+    }
     pub fn shape(c: ParCfg) -> ParShape {
         match c {
             ParCfg::Seq => ParShape::Seq,
@@ -64,6 +76,13 @@ pub mod upstream_par {
     pub fn shape(c: ParCfg) -> Par {
         mk(c)
     }
+    pub fn global_degree() -> usize {
+        faer_upstream::get_global_parallelism().degree()
+    }
+    pub fn set_global(threads: usize) {
+        let par = if threads <= 1 { Par::Seq } else { Par::rayon(threads) };
+        faer_upstream::set_global_parallelism(par);
+    }
 }
 
 macro_rules! define_backend {
@@ -85,14 +104,14 @@ macro_rules! define_backend {
             };
             use $krate::traits::math_utils::from_f64;
             use $krate::traits::ComplexField;
-            use $krate::{get_global_parallelism, Accum, Conj, MatMut, MatRef, Par, Side};
+            use $krate::{Accum, Conj, MatMut, MatRef, Par, Side};
 
             /// The parallelism the row asked for when an op is built.
             fn cfg_par() -> ParCfg {
                 if $team && TEAM_ROW.load(std::sync::atomic::Ordering::Relaxed) {
                     return ParCfg::Team;
                 }
-                match get_global_parallelism().degree() {
+                match parmod::global_degree() {
                     0 | 1 => ParCfg::Seq,
                     n => ParCfg::Rayon(n),
                 }
@@ -100,12 +119,7 @@ macro_rules! define_backend {
 
             /// Set this crate's own global parallelism from the row's budget.
             pub fn set_threads(threads: usize) {
-                let par = if threads <= 1 {
-                    Par::Seq
-                } else {
-                    Par::rayon(threads)
-                };
-                $krate::set_global_parallelism(par);
+                parmod::set_global(threads);
             }
 
             fn strides(m: usize, n: usize, order: Order) -> (isize, isize) {
