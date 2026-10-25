@@ -143,7 +143,17 @@ fn session(row: &str, threads: usize, reps: usize, engage: bool, out: &mut Vec<S
     } else {
         Par::rayon(threads)
     };
+    // FBENCH_SETTLE_MS=<ms>: leader sleeps this long before each sequence, so that a team's
+    // members (which spin for the 200 ms park delay after their last section or the team's
+    // construction) have parked when the sequence's CPU/wall window opens. Default 0: no settle.
+    let settle = std::env::var("FBENCH_SETTLE_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(std::time::Duration::from_millis);
     for mut seq in sequences() {
+        if let Some(d) = settle {
+            std::thread::sleep(d);
+        }
         // warm-up
         for _ in 0..3 {
             (seq.reset)();
