@@ -12,9 +12,65 @@
 //! A family that is not implemented returns `Err(note)`; the caller records it as
 //! `skipped`, never as a number.
 
+/// How a row runs its parallel regions, as a plain value. The fork's `Par` is not `Copy` (a team is
+/// exclusive authority), so an op keeps this and builds a `Par` for every call.
+#[derive(Clone, Copy, Debug)]
+pub enum ParCfg {
+    Seq,
+    Rayon(usize),
+    Team,
+}
+
+/// Set by the `faer-fork-team` row while its session is open: ops built then run on the team.
+pub static TEAM_ROW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// `ParCfg` into the fork's `Par` and `ParShape`.
+pub mod fork_par {
+    use super::ParCfg;
+    use faer_fork::{Par, ParShape};
+    pub fn mk(c: ParCfg) -> Par<'static> {
+        match c {
+            ParCfg::Seq => Par::Seq,
+            ParCfg::Rayon(n) => Par::rayon(n),
+            #[cfg(feature = "team")]
+            ParCfg::Team => crate::team_row::par(),
+            #[cfg(not(feature = "team"))]
+            ParCfg::Team => unreachable!("the team row needs feature team"),
+        }
+    }
+    pub fn shape(c: ParCfg) -> ParShape {
+        match c {
+            ParCfg::Seq => ParShape::Seq,
+            ParCfg::Rayon(n) => ParShape::rayon(n),
+            #[cfg(feature = "team")]
+            ParCfg::Team => ParShape::team(crate::team_row::threads()),
+            #[cfg(not(feature = "team"))]
+            ParCfg::Team => unreachable!("the team row needs feature team"),
+        }
+    }
+}
+
+/// `ParCfg` into upstream's `Par` (which is `Copy` and also what its workspace queries take).
+pub mod upstream_par {
+    use super::ParCfg;
+    use faer_upstream::Par;
+    pub fn mk(c: ParCfg) -> Par {
+        match c {
+            ParCfg::Seq => Par::Seq,
+            ParCfg::Rayon(n) => Par::rayon(n),
+            ParCfg::Team => unreachable!("upstream has no team"),
+        }
+    }
+    pub fn shape(c: ParCfg) -> Par {
+        mk(c)
+    }
+}
+
 macro_rules! define_backend {
-    ($modname:ident, $krate:ident) => {
+    ($modname:ident, $krate:ident, $parmod:ident, $team:expr) => {
         pub mod $modname {
+            use super::{ParCfg, TEAM_ROW};
+            use super::$parmod as parmod;
             use crate::op::{op_from, Op};
             use crate::shared::*;
             use num_complex::Complex64;
@@ -22,12 +78,25 @@ macro_rules! define_backend {
             use $krate::dyn_stack::{MemBuffer, MemStack, StackReq};
             use $krate::linalg::householder;
             use $krate::linalg::qr::no_pivoting::factor as qrf;
+            use $krate::linalg::lu::partial_pivoting::factor as plu;
+            use $krate::linalg::cholesky::llt::factor as llt_factor;
             use $krate::linalg::solvers::{
                 DenseSolveCore, FullPivLu, Llt, PartialPivLu, Qr, SelfAdjointEigen, Solve, Svd,
             };
             use $krate::traits::math_utils::from_f64;
             use $krate::traits::ComplexField;
             use $krate::{get_global_parallelism, Accum, Conj, MatMut, MatRef, Par, Side};
+
+            /// The parallelism the row asked for when an op is built.
+            fn cfg_par() -> ParCfg {
+                if $team && TEAM_ROW.load(std::sync::atomic::Ordering::Relaxed) {
+                    return ParCfg::Team;
+                }
+                match get_global_parallelism().degree() {
+                    0 | 1 => ParCfg::Seq,
+                    n => ParCfg::Rayon(n),
+                }
+            }
 
             /// Set this crate's own global parallelism from the row's budget.
             pub fn set_threads(threads: usize) {
@@ -191,7 +260,7 @@ macro_rules! define_backend {
                     batch: usize,
                     order: Order,
                 }
-                let par = get_global_parallelism();
+                let par = cfg_par();
                 let state = S {
                     a,
                     b,
@@ -215,7 +284,7 @@ macro_rules! define_backend {
                             let dst = mmut(&mut s.c[bi * s.m * s.n..], s.m, s.n, s.order);
                             let lhs = mref(&s.a[bi * s.m * s.k..], s.m, s.k, s.order);
                             let rhs = mref(&s.b[bi * s.k * s.n..], s.k, s.n, s.order);
-                            $krate::linalg::matmul::matmul(dst, Accum::Replace, lhs, rhs, T::one(), par);
+                            $krate::linalg::matmul::matmul(dst, Accum::Replace, lhs, rhs, T::one(), parmod::mk(par));
                         }
                         Ok(())
                     },
@@ -237,12 +306,12 @@ macro_rules! define_backend {
                 let size = m.min(n);
                 let block_size = qrf::recommended_block_size::<T>(m, n);
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, size));
-                let par = get_global_parallelism();
+                let par = cfg_par();
                 // The check rebuilds the compact `Q` from the basis and the
                 // coefficients the timed call left behind, so it needs the
                 // sequence apply's own temporary on top of the factorisation's.
                 let scratch = StackReq::all_of(&[
-                    qrf::qr_in_place_scratch::<T>(m, n, block_size, par, Default::default()),
+                    qrf::qr_in_place_scratch::<T>(m, n, block_size, parmod::shape(par), Default::default()),
                     householder::apply_block_householder_sequence_on_the_left_in_place_scratch::<T>(
                         m,
                         size,
@@ -260,7 +329,7 @@ macro_rules! define_backend {
                     size: usize,
                     batch: usize,
                     order: Order,
-                    par: Par,
+                    par: ParCfg,
                 }
                 let state = S {
                     a: a0.clone(),
@@ -295,7 +364,7 @@ macro_rules! define_backend {
                             qrf::qr_in_place(
                                 a,
                                 qc,
-                                s.par,
+                                parmod::mk(s.par),
                                 MemStack::new(&mut s.mem),
                                 Default::default(),
                             );
@@ -332,7 +401,7 @@ macro_rules! define_backend {
                                 mref(qc, s.block_size, s.size, Order::F),
                                 Conj::No,
                                 mmut(&mut q, s.m, s.size, s.order),
-                                s.par,
+                                parmod::mk(s.par),
                                 MemStack::new(&mut s.mem),
                             );
                             let mut recon = vec![T::zero(); s.m * s.n];
@@ -419,6 +488,9 @@ macro_rules! define_backend {
 
             // ------------------------------------------------------------ lu
 
+            /// `lu_in_place` with the row's explicit parallelism (the high level `partial_piv_lu()`
+            /// reads the global setting, which a team cannot be). The factors are rebuilt in
+            /// place from a copy that `prepare` restores, so only the factorisation is clocked.
             fn lu_op<T: Scalar + ComplexField>(
                 m: usize,
                 n: usize,
@@ -426,44 +498,75 @@ macro_rules! define_backend {
                 order: Order,
             ) -> Result<Op, String> {
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 5));
+                let par = cfg_par();
+                let scratch = plu::lu_in_place_scratch::<usize, T>(m, n, parmod::shape(par), Default::default());
                 struct S<T> {
                     a0: Vec<T>,
-                    lus: Vec<PartialPivLu<T>>,
+                    a: Vec<T>,
+                    perm: Vec<usize>,
+                    perm_inv: Vec<usize>,
+                    mem: MemBuffer,
                     m: usize,
                     n: usize,
                     batch: usize,
                     order: Order,
+                    par: ParCfg,
                 }
                 let state = S {
+                    a: a0.clone(),
                     a0,
-                    lus: Vec::with_capacity(batch),
+                    perm: vec![0usize; m],
+                    perm_inv: vec![0usize; m],
+                    mem: MemBuffer::new(scratch),
                     m,
                     n,
                     batch,
                     order,
+                    par,
                 };
                 Ok(op_from(
                     state,
                     String::new(),
                     |s| {
-                        s.lus.clear();
+                        s.a.copy_from_slice(&s.a0);
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
-                            let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let lu = mref(a0, s.m, s.n, s.order).partial_piv_lu();
-                            s.lus.push(lu);
+                            let a = mmut(&mut s.a[bi * s.m * s.n..(bi + 1) * s.m * s.n], s.m, s.n, s.order);
+                            plu::lu_in_place(
+                                a,
+                                &mut s.perm,
+                                &mut s.perm_inv,
+                                parmod::mk(s.par),
+                                MemStack::new(&mut s.mem),
+                                Default::default(),
+                            );
                         }
                         Ok(())
                     },
                     |s| {
-                        // The reconstruct is computed from the actual factorization
-                        // object the timed call returned, not from a fresh one.
+                        // the packed factors against the factorisation the library's own
+                        // sequential entry point returns for the same matrix
+                        let k = s.m.min(s.n);
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let recon = to_layout(s.lus[bi].reconstruct().as_ref(), s.m, s.n, s.order);
-                            within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "lu")?;
+                            let got = &s.a[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                            let reference = mref(a0, s.m, s.n, s.order).partial_piv_lu();
+                            let (l, u) = (reference.L(), reference.U());
+                            let mut want = vec![T::zero(); s.m * s.n];
+                            for j in 0..s.n {
+                                for i in 0..s.m {
+                                    want[idx(i, j, s.m, s.n, s.order)] = if i > j {
+                                        if j < k { l[(i, j)].clone() } else { T::zero() }
+                                    } else if i < k {
+                                        u[(i, j)].clone()
+                                    } else {
+                                        T::zero()
+                                    };
+                                }
+                            }
+                            within::<T>(max_diff(got, &want), frob(&want), s.n.max(s.m), "lu")?;
                         }
                         Ok(())
                     },
@@ -526,45 +629,73 @@ macro_rules! define_backend {
 
             // ------------------------------------------------------ cholesky
 
+            /// `cholesky_in_place` with the row's explicit parallelism, for the reason `lu_op` gives.
             fn cholesky_op<T: Scalar + ComplexField>(
                 n: usize,
                 batch: usize,
                 order: Order,
             ) -> Result<Op, String> {
                 let a0 = spd::<T>(n, batch, order, seed(n, n, 11));
+                let par = cfg_par();
+                let scratch = llt_factor::cholesky_in_place_scratch::<T>(n, parmod::shape(par), Default::default());
                 struct S<T> {
                     a0: Vec<T>,
-                    outputs: Vec<Llt<T>>,
+                    a: Vec<T>,
+                    mem: MemBuffer,
                     n: usize,
                     batch: usize,
                     order: Order,
+                    par: ParCfg,
                 }
                 let state = S {
+                    a: a0.clone(),
                     a0,
-                    outputs: Vec::with_capacity(batch),
+                    mem: MemBuffer::new(scratch),
                     n,
                     batch,
                     order,
+                    par,
                 };
                 Ok(op_from(
                     state,
                     String::new(),
-                    |s| { s.outputs.clear(); Ok(()) },
                     |s| {
-                        for bi in 0..s.batch {
-                            let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let llt = mref(a0, s.n, s.n, s.order)
-                                .llt(Side::Lower)
-                                .map_err(|e| format!("llt failed: {e:?}"))?;
-                            s.outputs.push(llt);
-                        }
+                        s.a.copy_from_slice(&s.a0);
                         Ok(())
                     },
                     |s| {
                         for bi in 0..s.batch {
+                            let a = mmut(&mut s.a[bi * s.n * s.n..(bi + 1) * s.n * s.n], s.n, s.n, s.order);
+                            llt_factor::cholesky_in_place(
+                                a,
+                                Default::default(),
+                                parmod::mk(s.par),
+                                MemStack::new(&mut s.mem),
+                                Default::default(),
+                            )
+                            .map_err(|e| format!("llt failed: {e:?}"))?;
+                        }
+                        Ok(())
+                    },
+                    |s| {
+                        // the lower triangle against the factor the library's own sequential
+                        // entry point returns for the same matrix
+                        for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let recon = to_layout(s.outputs[bi].reconstruct().as_ref(), s.n, s.n, s.order);
-                            within::<T>(max_diff(a0, &recon), frob(a0), s.n, "cholesky")?;
+                            let got = &s.a[bi * s.n * s.n..(bi + 1) * s.n * s.n];
+                            let reference = mref(a0, s.n, s.n, s.order)
+                                .llt(Side::Lower)
+                                .map_err(|e| format!("llt failed: {e:?}"))?;
+                            let l = reference.L();
+                            let mut got_l = vec![T::zero(); s.n * s.n];
+                            let mut want_l = vec![T::zero(); s.n * s.n];
+                            for j in 0..s.n {
+                                for i in j..s.n {
+                                    got_l[idx(i, j, s.n, s.n, s.order)] = got[idx(i, j, s.n, s.n, s.order)].clone();
+                                    want_l[idx(i, j, s.n, s.n, s.order)] = l[(i, j)].clone();
+                                }
+                            }
+                            within::<T>(max_diff(&got_l, &want_l), frob(&want_l), s.n, "cholesky")?;
                         }
                         Ok(())
                     },
@@ -890,7 +1021,7 @@ macro_rules! define_backend {
                 let target = n;
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 41));
                 let c0 = fill_seeded::<T>(m * target * batch, seed(m, target, 43));
-                let par = get_global_parallelism();
+                let par = cfg_par();
                 let block_scratch = householder::apply_block_householder_on_the_left_in_place_scratch::<T>(
                     m, size, target,
                 );
@@ -901,7 +1032,7 @@ macro_rules! define_backend {
                 let scratch = StackReq::any_of(&[
                     block_scratch,
                     seq_scratch,
-                    qrf::qr_in_place_scratch::<T>(m, n, size, par, Default::default()),
+                    qrf::qr_in_place_scratch::<T>(m, n, size, parmod::shape(par), Default::default()),
                 ]);
                 struct S<T> {
                     a: Vec<T>,
@@ -916,7 +1047,7 @@ macro_rules! define_backend {
                     target: usize,
                     batch: usize,
                     order: Order,
-                    par: Par,
+                    par: ParCfg,
                 }
                 let state = S {
                     a: a0.clone(),
@@ -943,7 +1074,7 @@ macro_rules! define_backend {
                         for bi in 0..s.batch {
                             let a = mmut(&mut s.a[bi * s.m * s.n..], s.m, s.n, s.order);
                             let qc = mmut(&mut s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
-                            qrf::qr_in_place(a, qc, s.par, MemStack::new(&mut s.mem), Default::default());
+                            qrf::qr_in_place(a, qc, parmod::mk(s.par), MemStack::new(&mut s.mem), Default::default());
                         }
                         Ok(())
                     },
@@ -954,10 +1085,10 @@ macro_rules! define_backend {
                             let dst = mmut(&mut s.c[bi * s.m * s.target..], s.m, s.target, s.order);
                             if sequence {
                                 householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
+                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
                             } else {
                                 householder::apply_block_householder_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
+                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
                             }
                         }
                         Ok(())
@@ -970,7 +1101,7 @@ macro_rules! define_backend {
                             qrf::qr_in_place(
                                 mmut(&mut a, s.m, s.n, s.order),
                                 mmut(&mut qc, s.size, s.size, Order::F),
-                                s.par,
+                                parmod::mk(s.par),
                                 MemStack::new(&mut s.mem),
                                 Default::default(),
                             );
@@ -980,10 +1111,10 @@ macro_rules! define_backend {
                             let dst = mmut(&mut reference, s.m, s.target, s.order);
                             if sequence {
                                 householder::apply_block_householder_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
+                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
                             } else {
                                 householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
+                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
                             }
                             let got = &s.c[bi * s.m * s.target..(bi + 1) * s.m * s.target];
                             within::<T>(
@@ -1046,5 +1177,5 @@ macro_rules! define_backend {
     };
 }
 
-define_backend!(fork, faer_fork);
-define_backend!(upstream, faer_upstream);
+define_backend!(fork, faer_fork, fork_par, true);
+define_backend!(upstream, faer_upstream, upstream_par, false);

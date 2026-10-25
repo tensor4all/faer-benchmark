@@ -19,7 +19,8 @@ use crate::{team, timing};
 use faer_fork::dyn_stack::{MemBuffer, MemStack};
 use faer_fork::linalg::lu::partial_pivoting::factor as lu;
 use faer_fork::linalg::matmul::matmul;
-use faer_fork::{Accum, Mat, Par};
+use crate::backend::{fork_par, ParCfg};
+use faer_fork::{Accum, Mat, Par, ParShape};
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -36,7 +37,7 @@ fn rnd(m: usize, n: usize, seed: u64) -> Mat<f64> {
 pub struct Seq {
     pub name: String,
     pub calls: usize,
-    run: Box<dyn FnMut(Par)>,
+    run: Box<dyn FnMut(Par<'_>)>,
     reset: Box<dyn FnMut()>,
 }
 
@@ -48,10 +49,10 @@ fn gemm_seq(n: usize) -> Seq {
     Seq {
         name: format!("gemm{n}"),
         calls,
-        run: Box::new(move |par| {
+        run: Box::new(move |mut par: Par<'_>| {
             for i in 0..calls {
                 let k = i % 16;
-                matmul(c[k].as_mut(), Accum::Replace, a[k].as_ref(), b[k].as_ref(), 1.0, par);
+                matmul(c[k].as_mut(), Accum::Replace, a[k].as_ref(), b[k].as_ref(), 1.0, par.reborrow());
             }
         }),
         reset: Box::new(|| {}),
@@ -65,21 +66,21 @@ fn lu_seq(n: usize) -> Seq {
     let w2 = work.clone();
     let mut perm = vec![0usize; n];
     let mut perm_inv = vec![0usize; n];
-    let scratch = lu::lu_in_place_scratch::<usize, f64>(n, n, Par::Seq, Default::default());
+    let scratch = lu::lu_in_place_scratch::<usize, f64>(n, n, ParShape::Seq, Default::default());
     let mut mem = MemBuffer::new(scratch);
     Seq {
         name: format!("lu{n}"),
         calls,
-        run: Box::new(move |par| {
+        run: Box::new(move |mut par: Par<'_>| {
             let mut w = work.borrow_mut();
             // the scratch of the parallel routes is no larger than the sequential one's requirement
             // by more than a small amount; request it per route once
-            let req = lu::lu_in_place_scratch::<usize, f64>(n, n, par, Default::default());
+            let req = lu::lu_in_place_scratch::<usize, f64>(n, n, par.shape(), Default::default());
             if mem.len() < req.unaligned_bytes_required() {
                 mem = MemBuffer::new(req);
             }
             for m in w.iter_mut() {
-                lu::lu_in_place(m.as_mut(), &mut perm, &mut perm_inv, par, MemStack::new(&mut mem), Default::default());
+                lu::lu_in_place(m.as_mut(), &mut perm, &mut perm_inv, par.reborrow(), MemStack::new(&mut mem), Default::default());
             }
         }),
         reset: Box::new(move || {
@@ -104,13 +105,13 @@ fn chain_seq() -> Seq {
     Seq {
         name: "chain".into(),
         calls,
-        run: Box::new(move |par| {
+        run: Box::new(move |mut par: Par<'_>| {
             let mut x = x_cell.borrow_mut();
             for _ in 0..calls / 2 {
                 // c = x * b: (128x32)(32x128); x = c * e: (128x128)(128x32); scaled to stay bounded
-                matmul(c.as_mut(), Accum::Replace, x.as_ref(), b.as_ref(), 0.1, par);
+                matmul(c.as_mut(), Accum::Replace, x.as_ref(), b.as_ref(), 0.1, par.reborrow());
                 let mut next = Mat::<f64>::zeros(128, 32);
-                matmul(next.as_mut(), Accum::Replace, c.as_ref(), e.as_ref(), 0.1, par);
+                matmul(next.as_mut(), Accum::Replace, c.as_ref(), e.as_ref(), 0.1, par.reborrow());
                 *x = next;
             }
         }),
@@ -130,18 +131,11 @@ fn quantile(s: &[f64], q: f64) -> f64 {
 
 fn session(row: &str, threads: usize, reps: usize, engage: bool, out: &mut Vec<String>) {
     let par = if threads <= 1 {
-        Par::Seq
+        ParCfg::Seq
     } else if row == "faer-fork-team" {
-        #[cfg(feature = "team")]
-        {
-            Par::team(threads)
-        }
-        #[cfg(not(feature = "team"))]
-        {
-            unreachable!()
-        }
+        ParCfg::Team
     } else {
-        Par::rayon(threads)
+        ParCfg::Rayon(threads)
     };
     // FBENCH_SETTLE_MS=<ms>: leader sleeps this long before each sequence, so that a team's
     // members (which spin for the 200 ms park delay after their last section or the team's
@@ -157,7 +151,7 @@ fn session(row: &str, threads: usize, reps: usize, engage: bool, out: &mut Vec<S
         // warm-up
         for _ in 0..3 {
             (seq.reset)();
-            (seq.run)(par);
+            (seq.run)(fork_par::mk(par));
         }
         let mut wall = Vec::new();
         let mut cpu = Vec::new();
@@ -165,7 +159,7 @@ fn session(row: &str, threads: usize, reps: usize, engage: bool, out: &mut Vec<S
             (seq.reset)();
             let c0 = timing::process_cpu_ns();
             let t = Instant::now();
-            (seq.run)(par);
+            (seq.run)(fork_par::mk(par));
             wall.push(t.elapsed().as_secs_f64() * 1e3);
             cpu.push(timing::process_cpu_ns().saturating_sub(c0) as f64 * 1e-6);
         }
@@ -179,7 +173,7 @@ fn session(row: &str, threads: usize, reps: usize, engage: bool, out: &mut Vec<S
             faer_fork::utils::team::stats::enable(true);
             let _ = faer_fork::utils::team::stats::take();
             (seq.reset)();
-            (seq.run)(par);
+            (seq.run)(fork_par::mk(par));
             faer_fork::utils::team::stats::enable(false);
             let s = faer_fork::utils::team::stats::take();
             let h = |v: &[usize]| {

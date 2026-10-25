@@ -431,14 +431,16 @@ fn ops_for(
 ) -> Result<Vec<op::Op>, String> {
     // the fork's global parallelism is read when an op is built: Rayon(n) for every fork row, the
     // team route for the team row (at one thread both are sequential)
+    // the fork's global parallelism is read when an op is built: Rayon(n) for every fork row; the
+    // team row builds its ops with `ParCfg::Team` (at one thread both are sequential)
     #[cfg(feature = "team")]
     if row.starts_with("faer-fork") {
         let n = team_row::threads();
-        if row == "faer-fork-team" && n > 1 {
-            faer_fork::set_global_parallelism(faer_fork::Par::team(n));
-        } else {
-            backend::fork::set_threads(n);
-        }
+        backend::fork::set_threads(n);
+        backend::TEAM_ROW.store(
+            cfg!(feature = "team") && row == "faer-fork-team" && n > 1,
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
     match row {
         "faer-fork" | "faer-fork-hot" | "faer-fork-free" | "faer-fork-team" => backend::fork::ops(dtype, family, case, order),

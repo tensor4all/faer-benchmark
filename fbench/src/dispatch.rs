@@ -50,11 +50,11 @@ fn rayon_dispatch(n: usize) {
 }
 
 /// The team row's dispatch: one flat section of `n` participants, the call faer's `Par::Team`
-/// regions make (`faer::utils::team::run`), with the same few-nanosecond body.
+/// regions make (the section a `Par::Team` region dispatches), with the same few-nanosecond body.
 #[cfg(feature = "team")]
 #[inline(never)]
 fn team_dispatch(n: usize) {
-    faer_fork::utils::team::run(n, &|i, _| body(i));
+    crate::team_row::run_flat(n, &|i, _| body(i));
 }
 
 #[cfg(feature = "team")]
