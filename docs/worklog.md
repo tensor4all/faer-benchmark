@@ -2,6 +2,26 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-25 - stage 1 of #24 on an M5 Max: held group, awake team, nothing (probe, no decision)
+
+`fbench` gained two opt-in rows over the fork, `faer-fork-hot` (an awake borrowed Rayon team around the
+timed loop) and `faer-fork-free` (nothing), beside the held `faer-fork`; per-call process CPU time; a
+`faer-only` build; `--orders` and `--check-max-dim`; and a `dispatch` subcommand (tiny region cost, wake
+latency, CPU over wall). On aarch64 the product is the `gemm` crate (raw Rayon), `t4a-private-gemm-x86` is
+not compiled, so no library change was needed and the x86_64 feature of #24 is not implemented.
+
+The campaign recorder needs `taskset`, the idle guard and boost control, so this host's runs are a probe:
+`data/probes/20261025-awake-team-stage1-m5/` (README with the revisions, host, load and tables; raw CSVs
+for 1, 6, 12 and 18 threads, three row rotations, plus a repeat of 18 threads under heavier load).
+Library `1599884` (tensor4all/faer#52 head `a399408` merged with main `752a0a6`), harness `f11a72a`.
+Stage 1 makes no decision; the data goes to the decision after stage 2 (tensor4all-meta#48).
+
+* The held group starves the `gemm` crate (1024 product 36.7 ms at every thread count); hot and free are 5 to 10 times faster there, and LU and Cholesky follow.
+* QR keeps spindle ahead: hot over held 1.02 to 1.19 at 6 and 12 threads.
+* After 1 ms idle the held group needs a futex wake (13, 28 and 318 us at 6, 12 and 18 threads); hot stays at 2.5 to 9 us but burns every borrowed core for as long as it is held.
+* 18 threads (all cores) is load sensitive in every row; the repeat under heavier ambient load reverses hot against free for LU and Cholesky.
+* The reference math at construction makes 4096 gemm cost about 11 minutes per process, so 4096 ran in one rotation.
+
 ## 2026-10-19 — the large tier: 1024 and the boundary shapes, and why 1536+ is not here
 
 `faer-kernels-large` had no current record at all. The estimate (faer-benchmark#22) scaled the 512
