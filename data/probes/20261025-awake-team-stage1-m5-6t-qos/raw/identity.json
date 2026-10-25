@@ -1,0 +1,139 @@
+{
+  "date": "2026-10-25T19:40:30+0900",
+  "harness": {
+    "repo": "/Users/hiroshi/projects/tensor4all/faer-benchmark-awake-stage1",
+    "commit": "b8fbfeec6d11c1700cd25f102987834ec9e27948",
+    "dirty": false,
+    "branch": "bench/awake-team-stage1"
+  },
+  "library": {
+    "checkout": "/Users/hiroshi/projects/tensor4all/t4a-faer-awake-stage1",
+    "commit": "1599884dba654c9ffd246f6acd7e806eada251d9",
+    "dirty": false,
+    "branch": "exp/awake-team-stage1",
+    "parents": [
+      "a399408589832fa03d95a5f897307cd8ba91e99a",
+      "752a0a6cc22d0f54573ec2d7077ecf348d2867c3"
+    ],
+    "version": "0.24.9"
+  },
+  "dependencies": {
+    "spindle": "0.2.6",
+    "gemm": "0.19.0",
+    "gemm-common": "0.19.0",
+    "gemm-f64": "0.19.0",
+    "rayon": "1.12.0",
+    "rayon-core": "1.13.0",
+    "libc": "0.2.190",
+    "nano-gemm": "0.2.2",
+    "pulp": "0.22.3"
+  },
+  "build": {
+    "features": "faer-only",
+    "profile": "release",
+    "rustc": [
+      "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "binary: rustc",
+      "commit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96"
+    ],
+    "binary": "/private/tmp/claude-501/-Users-hiroshi-projects-tensor4all/1e14fd5e-6cd9-434f-ab57-23b41e514391/scratchpad/fbench-qos",
+    "sha256": "afda9c2f68477f4853b26d0e534e4761911c735c50169e43d83477fc23655d8d"
+  },
+  "host": {
+    "uname": "Darwin MacBook-Pro-9.local 25.5.0 Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:12 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T6050 arm64",
+    "sw_vers": [
+      "ProductName:\t\tmacOS",
+      "ProductVersion:\t\t26.5.1",
+      "BuildVersion:\t\t25F80"
+    ],
+    "cpu": "Apple M5 Max",
+    "model": "Mac17,6",
+    "perflevels": {
+      "0": {
+        "name": "Super",
+        "logical": 6,
+        "l2_per_cluster_bytes": 16777216,
+        "cpus_per_l2": 6
+      },
+      "1": {
+        "name": "Performance",
+        "logical": 12,
+        "l2_per_cluster_bytes": 8388608,
+        "cpus_per_l2": 6
+      }
+    },
+    "power": [
+      "Now drawing from 'AC Power'",
+      " -InternalBattery-0 (id=23265379)\t76%; charging; 1:42 remaining present: true"
+    ],
+    "thermal": [
+      "Note: No thermal warning level has been recorded",
+      "Note: No performance warning level has been recorded",
+      "Note: No CPU power status has been recorded"
+    ]
+  },
+  "protocol": {
+    "pinning": "none (macOS)",
+    "boost": "not controlled",
+    "qos": "FBENCH_QOS=user-initiated (QOS_CLASS_USER_INITIATED 0x19 on the main thread and every Rayon worker)",
+    "large_reps_1t": 9,
+    "rows": [
+      "faer-fork",
+      "faer-fork-hot",
+      "faer-fork-free"
+    ],
+    "rotations": [
+      0,
+      1
+    ],
+    "threads": [
+      1,
+      6
+    ],
+    "sets": {
+      "small": {
+        "families": "gemm,lu,qr_factor,cholesky",
+        "shapes": "256,512",
+        "reps": 41,
+        "prime_ms": 250,
+        "extra": []
+      },
+      "large": {
+        "families": "gemm,lu,qr_factor,cholesky",
+        "shapes": "1024,2048",
+        "reps": 15,
+        "prime_ms": 250,
+        "extra": [
+          "--check-max-dim",
+          "1024"
+        ]
+      },
+      "skinny": {
+        "families": "gemm",
+        "shapes": "4096x64x64,64x4096x64,2048x2048x64",
+        "reps": 31,
+        "prime_ms": 250,
+        "extra": [
+          "--check-max-dim",
+          "1024"
+        ]
+      },
+      "gemm4096": {
+        "families": "gemm",
+        "shapes": "4096",
+        "reps": 7,
+        "prime_ms": 250,
+        "extra": [
+          "--check-max-dim",
+          "1024"
+        ]
+      }
+    },
+    "orders": "F",
+    "statistic": "median over samples_ms",
+    "idle_wait": {
+      "idle_min_pct": 0.0,
+      "max_wait_s": 0
+    }
+  }
+}
