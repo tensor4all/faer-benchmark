@@ -37,7 +37,7 @@ use lapack_src as _;
 use shared::{Case, Dtype, Order};
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: fbench info [--threads N] | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--csv PATH] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--orders LIST] [--reps M] [--prime-ms MS] [--rotate-rows K] [--statistic best|median] --csv PATH | dispatch --threads N [--rows LIST] [--reps M] --csv PATH";
+const USAGE: &str = "usage: fbench info [--threads N] | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--csv PATH] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--orders LIST] [--check-max-dim N] [--reps M] [--prime-ms MS] [--rotate-rows K] [--statistic best|median] --csv PATH | dispatch --threads N [--rows LIST] [--reps M] --csv PATH";
 
 /// Every family name the suite declares, in the harness's priority order.
 const ALL_FAMILIES: &[&str] = &[
@@ -164,8 +164,9 @@ fn measure_row(
     ops: &mut op::Op,
     prime_ms: u64,
     reps: usize,
+    check: bool,
 ) -> Result<timing::Measured, String> {
-    let mut f = move || timing::measure_full(ops, prime_ms, reps);
+    let mut f = move || timing::measure_full(ops, prime_ms, reps, check);
     if threads > 1 && (row == "faer-fork" || row == "faer-upstream") {
         spindle::with_lock(threads, f)
     } else if threads > 1 && row == "faer-fork-hot" {
@@ -211,6 +212,8 @@ struct Args {
     rows: Vec<String>,
     /// Memory orders to measure; both by default.
     orders: Vec<Order>,
+    /// `run` checks a result only when the case's largest extent is at most this (default: always).
+    check_max_dim: usize,
     statistic: Statistic,
     csv: Option<String>,
 }
@@ -250,6 +253,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             rotate_rows: 0,
             rows: Vec::new(),
             orders: vec![Order::C, Order::F],
+            check_max_dim: usize::MAX,
             statistic: Statistic::Best,
             csv: None,
         });
@@ -270,6 +274,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         rotate_rows: 0,
         rows: Vec::new(),
         orders: vec![Order::C, Order::F],
+        check_max_dim: usize::MAX,
         statistic: Statistic::Best,
         csv: None,
     };
@@ -331,6 +336,9 @@ fn parse(args: &[String]) -> Result<Args, String> {
                         ));
                     }
                 }
+            }
+            "--check-max-dim" => {
+                a.check_max_dim = value()?.parse().map_err(|_| USAGE.to_owned())?;
             }
             "--orders" => {
                 a.orders = value()?
@@ -652,7 +660,14 @@ fn main() -> ExitCode {
                             };
                             for mut ops in ops {
                                 if run {
-                                    match measure_row(row, threads, &mut ops, args.prime_ms, args.reps) {
+                                    match measure_row(
+                                        row,
+                                        threads,
+                                        &mut ops,
+                                        args.prime_ms,
+                                        args.reps,
+                                        case.m.max(case.n).max(case.k.unwrap_or(0)) <= args.check_max_dim,
+                                    ) {
                                         Ok(measured) => {
                                             let note = ops.note.clone();
                                             emit(

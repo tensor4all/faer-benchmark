@@ -40,11 +40,18 @@ pub struct Measured {
 /// Prime for `prime_ms`, then return all `reps` times in milliseconds.
 /// The op's `check` runs once afterwards, outside the clock.
 pub fn measure(op: &mut Op, prime_ms: u64, reps: usize) -> Result<Vec<f64>, String> {
-    measure_full(op, prime_ms, reps).map(|m| m.samples_ms)
+    measure_full(op, prime_ms, reps, true).map(|m| m.samples_ms)
 }
 
 /// As [`measure`], and also the process CPU time of every repetition and of the whole phase.
-pub fn measure_full(op: &mut Op, prime_ms: u64, reps: usize) -> Result<Measured, String> {
+/// `check` false skips the op's check, whose serial reference math at large sizes would keep a
+/// held team spinning for seconds between cells.
+pub fn measure_full(
+    op: &mut Op,
+    prime_ms: u64,
+    reps: usize,
+    check: bool,
+) -> Result<Measured, String> {
     if reps == 0 {
         return Err("--reps must be positive".to_owned());
     }
@@ -69,7 +76,9 @@ pub fn measure_full(op: &mut Op, prime_ms: u64, reps: usize) -> Result<Measured,
     }
     let loop_wall = loop_start.elapsed();
     let loop_cpu = process_cpu_ns().saturating_sub(loop_cpu0);
-    op.check()?;
+    if check {
+        op.check()?;
+    }
     op.prepare()?;
     Ok(Measured {
         samples_ms: samples,
