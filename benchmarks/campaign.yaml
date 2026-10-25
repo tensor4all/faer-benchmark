@@ -84,6 +84,10 @@ case_label: "`{family}/{dims}/b{batch}` {order} {threads}T {row}"
 engines:
   faer-fork: faer-fork
   faer-upstream: faer-upstream
+  # Opt-in rows (`--rows`) of the awake-team comparison, tensor4all/faer-benchmark#24: the same
+  # fork, with the timed loop wrapped differently (an awake Rayon team, and nothing).
+  faer-fork-hot: faer-fork
+  faer-fork-free: faer-fork
   lapack-openblas: openblas
   lapack-mkl: mkl
 

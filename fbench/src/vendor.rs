@@ -84,7 +84,7 @@ pub fn identity() -> Identity {
 /// Set the vendor library's thread budget and read it back.
 pub fn set_threads(threads: usize) -> Result<(), String> {
     if NAME == "none" {
-        return if threads == 1 {
+        return if threads == 1 || cfg!(feature = "faer-only") {
             Ok(())
         } else {
             Err("no vendor library is linked, so a vendor thread budget cannot be set".to_owned())

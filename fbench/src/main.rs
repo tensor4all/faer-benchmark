@@ -20,7 +20,9 @@
 mod backend;
 mod lapack;
 mod op;
+mod dispatch;
 mod shared;
+mod team;
 mod timing;
 mod vendor;
 
@@ -35,7 +37,7 @@ use lapack_src as _;
 use shared::{Case, Dtype, Order};
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: fbench info [--threads N] | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--csv PATH] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--reps M] [--prime-ms MS] [--rotate-rows K] [--statistic best|median] --csv PATH";
+const USAGE: &str = "usage: fbench info [--threads N] | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--csv PATH] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--orders LIST] [--reps M] [--prime-ms MS] [--rotate-rows K] [--statistic best|median] --csv PATH | dispatch --threads N [--rows LIST] [--reps M] --csv PATH";
 
 /// Every family name the suite declares, in the harness's priority order.
 const ALL_FAMILIES: &[&str] = &[
@@ -136,25 +138,40 @@ enum Statistic {
     Median,
 }
 
+/// The faer rows that differ only in how the timed loop is wrapped (tensor4all/faer-benchmark#24).
+/// All three link the fork and take the same code path at one thread.
+///
+/// * `faer-fork`: the spindle worker group is held (`spindle::with_lock`) around the loop;
+/// * `faer-fork-hot`: an awake borrowed Rayon team ([`team::with_team`]) is held around the loop;
+/// * `faer-fork-free`: nothing is held, which is the behaviour before the group was held.
+///
+/// The hot and free rows are opt-in through `--rows`; the default row set is unchanged.
+const TEAM_ROWS: &[&str] = &["faer-fork-hot", "faer-fork-free"];
+
 /// The timed loop of one row.
 ///
-/// The two faer rows run it with the spindle worker group held (`spindle::with_lock`) when the
-/// budget is more than one thread: that is how a caller with a thread budget is meant to call faer
-/// (the fork's crate docs, *parallelism*), and without it every parallel region inside the call is a
-/// plain rayon fork/join that wakes the workers and partitions the work afresh. The lock is taken
-/// once around priming, every repetition and the check, as a session would, so its setup is outside
-/// every clocked region. The vendor rows own their threading and are not touched.
+/// The faer rows `faer-fork` and `faer-upstream` run it with the spindle worker group held
+/// (`spindle::with_lock`) when the budget is more than one thread: that is how a caller with a
+/// thread budget is meant to call faer (the fork's crate docs, *parallelism*), and without it every
+/// parallel region inside the call is a plain rayon fork/join that wakes the workers and partitions
+/// the work afresh. The lock is taken once around priming, every repetition and the check, as a
+/// session would, so its setup is outside every clocked region. `faer-fork-hot` holds an awake
+/// Rayon team the same way and `faer-fork-free` holds nothing. The vendor rows own their threading
+/// and are not touched.
 fn measure_row(
     row: &str,
     threads: usize,
     ops: &mut op::Op,
     prime_ms: u64,
     reps: usize,
-) -> Result<Vec<f64>, String> {
+) -> Result<timing::Measured, String> {
+    let mut f = move || timing::measure_full(ops, prime_ms, reps);
     if threads > 1 && (row == "faer-fork" || row == "faer-upstream") {
-        spindle::with_lock(threads, || timing::measure(ops, prime_ms, reps))
+        spindle::with_lock(threads, f)
+    } else if threads > 1 && row == "faer-fork-hot" {
+        team::with_team(threads, f)?
     } else {
-        timing::measure(ops, prime_ms, reps)
+        f()
     }
 }
 
@@ -192,6 +209,8 @@ struct Args {
     /// Which engine rows this run measures. A campaign may declare a subset per arm
     /// (an arm that carries an unchanged faer row twice does not have to pay for both).
     rows: Vec<String>,
+    /// Memory orders to measure; both by default.
+    orders: Vec<Order>,
     statistic: Statistic,
     csv: Option<String>,
 }
@@ -230,11 +249,12 @@ fn parse(args: &[String]) -> Result<Args, String> {
             prime_ms: 500,
             rotate_rows: 0,
             rows: Vec::new(),
+            orders: vec![Order::C, Order::F],
             statistic: Statistic::Best,
             csv: None,
         });
     }
-    if command != "run" && command != "verify" {
+    if command != "run" && command != "verify" && command != "dispatch" {
         return Err(USAGE.to_owned());
     }
     let mut a = Args {
@@ -249,6 +269,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         prime_ms: 500,
         rotate_rows: 0,
         rows: Vec::new(),
+        orders: vec![Order::C, Order::F],
         statistic: Statistic::Best,
         csv: None,
     };
@@ -302,7 +323,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
                     .filter(|s| !s.is_empty())
                     .map(str::to_owned)
                     .collect();
-                let known = engine_rows();
+                let known = known_rows();
                 for row in &a.rows {
                     if !known.contains(row) {
                         return Err(format!(
@@ -310,6 +331,16 @@ fn parse(args: &[String]) -> Result<Args, String> {
                         ));
                     }
                 }
+            }
+            "--orders" => {
+                a.orders = value()?
+                    .split(',')
+                    .map(|o| match o {
+                        "C" | "c" => Ok(Order::C),
+                        "F" | "f" => Ok(Order::F),
+                        other => Err(format!("unknown order {other:?}")),
+                    })
+                    .collect::<Result<_, _>>()?;
             }
             "--rotate-rows" => {
                 a.rotate_rows = value()?.parse().map_err(|e| format!("{e}"))?;
@@ -358,6 +389,13 @@ fn engine_rows() -> Vec<String> {
     rows
 }
 
+/// Every row name `--rows` accepts: the default rows plus the opt-in team rows.
+fn known_rows() -> Vec<String> {
+    let mut rows = engine_rows();
+    rows.extend(TEAM_ROWS.iter().map(|r| (*r).to_owned()));
+    rows
+}
+
 fn ops_for(
     row: &str,
     dtype: Dtype,
@@ -366,7 +404,7 @@ fn ops_for(
     order: Order,
 ) -> Result<Vec<op::Op>, String> {
     match row {
-        "faer-fork" => backend::fork::ops(dtype, family, case, order),
+        "faer-fork" | "faer-fork-hot" | "faer-fork-free" => backend::fork::ops(dtype, family, case, order),
         "faer-upstream" => backend::upstream::ops(dtype, family, case, order),
         _ => lapack::ops(dtype, family, case, order),
     }
@@ -442,6 +480,10 @@ struct Record {
     samples_ms: Vec<f64>,
     status: &'static str,
     note: String,
+    /// Process CPU time of each timed call (all threads), ms; empty for rows that do not record it.
+    cpu_samples_ms: Vec<f64>,
+    loop_wall_ms: Option<f64>,
+    loop_cpu_ms: Option<f64>,
 }
 
 impl Record {
@@ -478,6 +520,17 @@ impl Record {
             self.vendor_threads
                 .map(|n| n.to_string())
                 .unwrap_or_default(),
+            if self.cpu_samples_ms.is_empty() {
+                String::new()
+            } else {
+                format!("{:?}", self.cpu_samples_ms)
+            },
+            self.loop_wall_ms
+                .map(|v| format!("{v:.6}"))
+                .unwrap_or_default(),
+            self.loop_cpu_ms
+                .map(|v| format!("{v:.6}"))
+                .unwrap_or_default(),
         ];
         fields
             .iter()
@@ -507,16 +560,22 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     let threads = args.threads.expect("verify and run require --threads");
-
-    let mut rows = engine_rows();
-    if !args.rows.is_empty() {
-        rows.retain(|row| args.rows.contains(row));
+    if args.command == "dispatch" {
+        return dispatch::main(&args.rows, threads, args.reps, args.csv.as_deref());
     }
+
+    let mut rows = if args.rows.is_empty() {
+        engine_rows()
+    } else {
+        let mut rows = known_rows();
+        rows.retain(|row| args.rows.contains(row));
+        rows
+    };
     let n_rows = rows.len();
     if n_rows > 0 {
         rows.rotate_left(args.rotate_rows % n_rows);
     }
-    let orders = [Order::C, Order::F];
+    let orders = args.orders.clone();
     let run = args.command == "run";
     let mut records = Vec::new();
     let mut all_ok = true;
@@ -528,7 +587,7 @@ fn main() -> ExitCode {
                     let case = match shape.case(family, *batch) {
                         Ok(case) => case,
                         Err(note) => {
-                            for order in orders {
+                            for order in orders.iter().copied() {
                                 for row in &rows {
                                     if !run {
                                         println!(
@@ -557,7 +616,7 @@ fn main() -> ExitCode {
                             continue;
                         }
                     };
-                    for order in orders {
+                    for order in orders.iter().copied() {
                         for row in &rows {
                             if let Err(e) = require_threads(threads) {
                                 eprintln!("{e}");
@@ -594,7 +653,7 @@ fn main() -> ExitCode {
                             for mut ops in ops {
                                 if run {
                                     match measure_row(row, threads, &mut ops, args.prime_ms, args.reps) {
-                                        Ok(samples) => {
+                                        Ok(measured) => {
                                             let note = ops.note.clone();
                                             emit(
                                                 &mut records,
@@ -605,10 +664,14 @@ fn main() -> ExitCode {
                                                 case,
                                                 order,
                                                 row,
-                                                Some(samples),
+                                                Some(measured.samples_ms),
                                                 "ok",
                                                 note,
                                             );
+                                            let last = records.last_mut().expect("just emitted");
+                                            last.cpu_samples_ms = measured.cpu_samples_ms;
+                                            last.loop_wall_ms = Some(measured.loop_wall_ms);
+                                            last.loop_cpu_ms = Some(measured.loop_cpu_ms);
                                         }
                                         Err(e) => {
                                             let e = format!("{}; {e}", ops.note);
@@ -703,7 +766,7 @@ fn main() -> ExitCode {
         .as_ref()
         .expect("run or verification census needs --csv");
     let mut text = String::from(
-        "regime,family,dtype,order,m,n,k,batch,row,threads,total_ms,per_item_us,status,note,samples_ms,rayon_threads,vendor_threads\n",
+        "regime,family,dtype,order,m,n,k,batch,row,threads,total_ms,per_item_us,status,note,samples_ms,rayon_threads,vendor_threads,cpu_samples_ms,loop_wall_ms,loop_cpu_ms\n",
     );
     for record in &records {
         text.push_str(&record.line());
@@ -762,6 +825,9 @@ fn emit(
         samples_ms: samples.unwrap_or_default(),
         status,
         note,
+        cpu_samples_ms: Vec::new(),
+        loop_wall_ms: None,
+        loop_cpu_ms: None,
     });
 }
 
@@ -834,6 +900,6 @@ mod tests {
         assert_eq!(records[0].samples_ms, [3.0, 1.0, 2.0]);
         records[0].rayon_threads = 17;
         records[0].vendor_threads = Some(19);
-        assert!(records[0].line().ends_with(",17,19"));
+        assert!(records[0].line().contains(",17,19,"));
     }
 }
