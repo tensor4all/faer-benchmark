@@ -1,0 +1,16 @@
+[package]
+name = "consts"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Serial throughput constants of the kernel families gated in faer/src/linalg (one thread).
+# Standalone: not a member of the fbench workspace.
+[workspace]
+
+[dependencies]
+faer = { package = "t4a-faer", path = "../../../../../../t4a-faer-par-team/faer", default-features = false, features = ["std", "linalg", "rand"] }
+
+[profile.release]
+opt-level = 3
+debug = false
