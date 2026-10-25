@@ -25,7 +25,10 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+#[cfg(not(feature = "team"))]
 const ROWS: &[&str] = &["faer-fork", "faer-fork-hot", "faer-fork-free"];
+#[cfg(feature = "team")]
+const ROWS: &[&str] = &["faer-fork", "faer-fork-hot", "faer-fork-free", "faer-fork-team"];
 const GAPS_US: &[u64] = &[0, 1, 10, 30, 100, 1_000, 10_000, 100_000];
 const BLOCK: usize = 1000;
 
@@ -44,6 +47,49 @@ fn spindle_dispatch(n: usize) {
 #[inline(never)]
 fn rayon_dispatch(n: usize) {
     (0..n).into_par_iter().for_each(body);
+}
+
+/// The team row's dispatch: one flat section of `n` participants, the call faer's `Par::Team`
+/// regions make (`faer::utils::team::run`), with the same few-nanosecond body.
+#[cfg(feature = "team")]
+#[inline(never)]
+fn team_dispatch(n: usize) {
+    faer_fork::utils::team::run(n, &|i, _| body(i));
+}
+
+#[cfg(feature = "team")]
+fn session_team(row: &str, threads: usize, blocks: usize) -> Vec<Line> {
+    let mut out = Vec::new();
+    for _ in 0..20_000 {
+        team_dispatch(threads);
+    }
+    let (ns, ratio) = timed(|| {
+        (0..blocks)
+            .map(|_| {
+                let t = Instant::now();
+                for _ in 0..BLOCK {
+                    team_dispatch(threads);
+                }
+                t.elapsed().as_secs_f64() * 1e9 / BLOCK as f64
+            })
+            .collect::<Vec<f64>>()
+    });
+    out.push(line(row, threads, "b2b_team_run", 0, ns, ratio));
+    for &gap in GAPS_US {
+        let cycles = (400_000 / (gap + 2)).clamp(100, 20_000) as usize;
+        let (ns, ratio) = timed(|| {
+            let mut ns = Vec::with_capacity(cycles);
+            for _ in 0..cycles {
+                busy_wait(Duration::from_micros(gap));
+                let t = Instant::now();
+                team_dispatch(threads);
+                ns.push(t.elapsed().as_secs_f64() * 1e9);
+            }
+            ns
+        });
+        out.push(line(row, threads, "gap_team_run", gap, ns, ratio));
+    }
+    out
 }
 
 struct Line {
@@ -155,6 +201,17 @@ pub fn main(rows: &[String], threads: usize, reps: usize, csv: Option<&str>) -> 
     let mut lines = Vec::new();
     for row in &rows {
         let f = || session(row, threads, blocks);
+        #[cfg(feature = "team")]
+        if threads > 1 && row == "faer-fork-team" {
+            match crate::team_row::with_session(threads, || session_team(row, threads, blocks)) {
+                Ok(mut l) => lines.append(&mut l),
+                Err(e) => {
+                    eprintln!("{row}: {e}");
+                    return ExitCode::from(2);
+                }
+            }
+            continue;
+        }
         let result = if threads > 1 && row == "faer-fork" {
             Ok(spindle::with_lock(threads, f))
         } else if threads > 1 && row == "faer-fork-hot" {

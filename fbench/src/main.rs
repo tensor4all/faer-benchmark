@@ -24,6 +24,8 @@ mod qos;
 mod dispatch;
 mod shared;
 mod team;
+#[cfg(feature = "team")]
+mod team_row;
 mod timing;
 mod vendor;
 
@@ -147,7 +149,12 @@ enum Statistic {
 /// * `faer-fork-free`: nothing is held, which is the behaviour before the group was held.
 ///
 /// The hot and free rows are opt-in through `--rows`; the default row set is unchanged.
+#[cfg(not(feature = "team"))]
 const TEAM_ROWS: &[&str] = &["faer-fork-hot", "faer-fork-free"];
+/// With feature `team` the stage 2 row `faer-fork-team` joins them: the fork's `Par::Team` route on a
+/// threadteam team held around the loop (`team_row::with_session`).
+#[cfg(feature = "team")]
+const TEAM_ROWS: &[&str] = &["faer-fork-hot", "faer-fork-free", "faer-fork-team"];
 
 /// The timed loop of one row.
 ///
@@ -172,6 +179,15 @@ fn measure_row(
         spindle::with_lock(threads, f)
     } else if threads > 1 && row == "faer-fork-hot" {
         team::with_team(threads, f)?
+    } else if cfg!(feature = "team") && threads > 1 && row == "faer-fork-team" {
+        #[cfg(feature = "team")]
+        {
+            team_row::with_session(threads, f)?
+        }
+        #[cfg(not(feature = "team"))]
+        {
+            unreachable!()
+        }
     } else {
         f()
     }
@@ -412,8 +428,19 @@ fn ops_for(
     case: Case,
     order: Order,
 ) -> Result<Vec<op::Op>, String> {
+    // the fork's global parallelism is read when an op is built: Rayon(n) for every fork row, the
+    // team route for the team row (at one thread both are sequential)
+    #[cfg(feature = "team")]
+    if row.starts_with("faer-fork") {
+        let n = team_row::threads();
+        if row == "faer-fork-team" && n > 1 {
+            faer_fork::set_global_parallelism(faer_fork::Par::team(n));
+        } else {
+            backend::fork::set_threads(n);
+        }
+    }
     match row {
-        "faer-fork" | "faer-fork-hot" | "faer-fork-free" => backend::fork::ops(dtype, family, case, order),
+        "faer-fork" | "faer-fork-hot" | "faer-fork-free" | "faer-fork-team" => backend::fork::ops(dtype, family, case, order),
         "faer-upstream" => backend::upstream::ops(dtype, family, case, order),
         _ => lapack::ops(dtype, family, case, order),
     }
@@ -455,6 +482,8 @@ fn configure_threads(n: usize) -> Result<(), String> {
     vendor::set_threads(n)?;
     backend::fork::set_threads(n);
     backend::upstream::set_threads(n);
+    #[cfg(feature = "team")]
+    team_row::THREADS.store(n, std::sync::atomic::Ordering::Relaxed);
     require_threads(n)
 }
 

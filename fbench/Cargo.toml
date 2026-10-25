@@ -30,6 +30,9 @@ default = []
 # A build with no vendor library, for the faer-only comparisons (tensor4all/faer-benchmark#24) on a
 # host where neither vendor arm builds: a multi-thread budget is then accepted without a vendor to set.
 faer-only = []
+# Stage 2 of tensor4all/faer-benchmark#24: the `faer-fork-team` row, the fork's `Par::Team` route on a
+# threadteam team (needs a t4a-faer checkout that has the `threadteam` feature, patched in by path).
+team = ["faer_fork/threadteam", "dep:threadteam"]
 link-openblas = [
     "dep:blas-src",
     "dep:lapack-src",
@@ -58,6 +61,7 @@ spindle = "0.2.6"
 # one of the two faer crates.
 num-complex = { version = "0.4", default-features = false, features = ["std"] }
 rayon = "1"
+threadteam = { git = "https://github.com/tensor4all/threadteam-rs", rev = "b7d094dde11be2e3f947675db2803f03ad2ad259", default-features = false, features = ["parallel"], optional = true }
 # `clock_gettime(CLOCK_PROCESS_CPUTIME_ID)` for the per-call CPU time of the stage 1 team comparison.
 libc = "0.2"
 
