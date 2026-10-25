@@ -40,6 +40,30 @@ pub fn with_session<R>(threads: usize, f: impl FnOnce() -> R) -> Result<R, Strin
 
 #[cfg(test)]
 mod tests {
+    /// The QoS class of the leader and of every reserved member, read on the participants' own
+    /// threads (`pthread_get_qos_class_np`): all `QOS_CLASS_USER_INITIATED` (0x19).
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn team_participants_run_at_user_initiated() {
+        extern "C" {
+            fn pthread_get_qos_class_np(t: libc::pthread_t, c: *mut u32, p: *mut i32) -> i32;
+        }
+        let classes = std::sync::Mutex::new(Vec::new());
+        super::with_session(6, || {
+            faer_fork::utils::team::run(6, &|_i, _n| {
+                let mut c = 0u32;
+                let mut p = 0i32;
+                unsafe { pthread_get_qos_class_np(libc::pthread_self(), &mut c, &mut p) };
+                classes.lock().unwrap().push(c);
+            });
+        })
+        .unwrap();
+        let classes = classes.into_inner().unwrap();
+        eprintln!("team qos classes: {classes:x?}");
+        assert_eq!(classes.len(), 6);
+        assert!(classes.iter().all(|c| *c == 0x19), "{classes:x?}");
+    }
+
     #[test]
     fn session_has_the_requested_width() {
         let n = super::with_session(4, || faer_fork::utils::team::available(4)).unwrap();
