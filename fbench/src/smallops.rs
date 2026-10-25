@@ -190,6 +190,12 @@ fn session(row: &str, threads: usize, reps: usize, engage: bool, out: &mut Vec<S
 }
 
 pub fn main(rows: &[String], threads: usize, reps: usize, csv: Option<&str>) -> ExitCode {
+    // sensitivity pass: FBENCH_GEMM_FLOOR=<m*n*k> replaces the `gemm` crate's threading floor, which
+    // both the Rayon routes (inside `gemm::gemm`) and the team tiling consult
+    if let Some(v) = std::env::var("FBENCH_GEMM_FLOOR").ok().and_then(|v| v.parse::<usize>().ok()) {
+        gemm::set_threading_threshold(v);
+        eprintln!("smallops.gemm_floor={v}");
+    }
     let rows: Vec<String> = if rows.is_empty() { ROWS.iter().map(|r| (*r).to_owned()).collect() } else { rows.to_vec() };
     let mut out = Vec::new();
     for row in &rows {
