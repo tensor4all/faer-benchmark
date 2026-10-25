@@ -20,6 +20,7 @@
 mod backend;
 mod lapack;
 mod op;
+mod qos;
 mod dispatch;
 mod shared;
 mod team;
@@ -445,8 +446,10 @@ fn configure_threads(n: usize) -> Result<(), String> {
     if n == 0 {
         return Err("--threads must be positive".to_owned());
     }
+    qos::init_main();
     rayon::ThreadPoolBuilder::new()
         .num_threads(n)
+        .start_handler(|_| qos::init_worker())
         .build_global()
         .map_err(|e| format!("cannot create the owned {n}-worker Rayon pool: {e}"))?;
     vendor::set_threads(n)?;
@@ -568,8 +571,11 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     let threads = args.threads.expect("verify and run require --threads");
+    qos::report("before");
     if args.command == "dispatch" {
-        return dispatch::main(&args.rows, threads, args.reps, args.csv.as_deref());
+        let code = dispatch::main(&args.rows, threads, args.reps, args.csv.as_deref());
+        qos::report("after");
+        return code;
     }
 
     let mut rows = if args.rows.is_empty() {
@@ -763,6 +769,7 @@ fn main() -> ExitCode {
         }
     }
 
+    qos::report("after");
     if !run {
         if all_ok {
             println!("all comparisons within tolerance");
