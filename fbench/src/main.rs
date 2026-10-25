@@ -22,6 +22,7 @@ mod lapack;
 mod op;
 mod qos;
 mod dispatch;
+mod smallops;
 mod shared;
 mod team;
 #[cfg(feature = "team")]
@@ -40,7 +41,7 @@ use lapack_src as _;
 use shared::{Case, Dtype, Order};
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: fbench info [--threads N] | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--csv PATH] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--orders LIST] [--check-max-dim N] [--reps M] [--prime-ms MS] [--rotate-rows K] [--statistic best|median] --csv PATH | dispatch --threads N [--rows LIST] [--reps M] --csv PATH";
+const USAGE: &str = "usage: fbench info [--threads N] | verify --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--csv PATH] | run --threads N --n LIST [--batch LIST] [--dtype LIST] [--family LIST] [--regime R] [--rows LIST] [--orders LIST] [--check-max-dim N] [--reps M] [--prime-ms MS] [--rotate-rows K] [--statistic best|median] --csv PATH | dispatch --threads N [--rows LIST] [--reps M] --csv PATH | smallops --threads N [--rows LIST] [--reps M] --csv PATH";
 
 /// Every family name the suite declares, in the harness's priority order.
 const ALL_FAMILIES: &[&str] = &[
@@ -275,7 +276,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             csv: None,
         });
     }
-    if command != "run" && command != "verify" && command != "dispatch" {
+    if command != "run" && command != "verify" && command != "dispatch" && command != "smallops" {
         return Err(USAGE.to_owned());
     }
     let mut a = Args {
@@ -601,6 +602,11 @@ fn main() -> ExitCode {
     }
     let threads = args.threads.expect("verify and run require --threads");
     qos::report("before");
+    if args.command == "smallops" {
+        let code = smallops::main(&args.rows, threads, args.reps, args.csv.as_deref());
+        qos::report("after");
+        return code;
+    }
     if args.command == "dispatch" {
         let code = dispatch::main(&args.rows, threads, args.reps, args.csv.as_deref());
         qos::report("after");
