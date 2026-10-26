@@ -117,6 +117,104 @@ macro_rules! define_backend {
                 }
             }
 
+
+            // The high level solver methods (`singular_values`, `thin_svd`, `self_adjoint_eigen`,
+            // `solve_upper_triangular_in_place`) read the crate's `GlobalPar`, which is `Copy` and cannot
+            // be a team: in the team row they would run `Par::rayon` outside any group, the free row's
+            // numbers under the team row's name. The fork rows therefore call the explicit-parallelism
+            // entry points with the row's `Par`; the upstream row keeps the high level call (upstream
+            // reads its own global inside its held spindle group).
+
+            fn singular_values_of<T: ComplexField>(a: MatRef<'_, T>, cfg: ParCfg) -> Result<Vec<T::Real>, String> {
+                if !$team {
+                    return a.singular_values().map_err(|e| format!("singular_values failed: {e:?}"));
+                }
+                let (m, n) = (a.nrows(), a.ncols());
+                let mut s = $krate::diag::Diag::<T>::zeros(Ord::min(m, n));
+                let req = $krate::linalg::svd::svd_scratch::<T>(
+                    m,
+                    n,
+                    $krate::linalg::svd::ComputeSvdVectors::No,
+                    $krate::linalg::svd::ComputeSvdVectors::No,
+                    parmod::shape(cfg),
+                    Default::default(),
+                );
+                $krate::linalg::svd::svd(
+                    a,
+                    s.as_mut(),
+                    None,
+                    None,
+                    parmod::mk(cfg),
+                    MemStack::new(&mut MemBuffer::new(req)),
+                    Default::default(),
+                )
+                .map_err(|e| format!("singular_values failed: {e:?}"))?;
+                Ok(s.column_vector().iter().map(|x| T::real_part_impl(x)).collect())
+            }
+
+            fn thin_svd_of<T: ComplexField>(
+                a: MatRef<'_, T>,
+                cfg: ParCfg,
+            ) -> Result<($krate::diag::Diag<T>, $krate::Mat<T>, $krate::Mat<T>), String> {
+                let (m, n) = (a.nrows(), a.ncols());
+                let r = Ord::min(m, n);
+                let mut s = $krate::diag::Diag::<T>::zeros(r);
+                let mut u = $krate::Mat::<T>::zeros(m, r);
+                let mut v = $krate::Mat::<T>::zeros(n, r);
+                let req = $krate::linalg::svd::svd_scratch::<T>(
+                    m,
+                    n,
+                    $krate::linalg::svd::ComputeSvdVectors::Thin,
+                    $krate::linalg::svd::ComputeSvdVectors::Thin,
+                    parmod::shape(cfg),
+                    Default::default(),
+                );
+                $krate::linalg::svd::svd(
+                    a,
+                    s.as_mut(),
+                    Some(u.as_mut()),
+                    Some(v.as_mut()),
+                    parmod::mk(cfg),
+                    MemStack::new(&mut MemBuffer::new(req)),
+                    Default::default(),
+                )
+                .map_err(|e| format!("thin_svd failed: {e:?}"))?;
+                Ok((s, u, v))
+            }
+
+            fn eigh_of<T: ComplexField>(
+                a: MatRef<'_, T>,
+                cfg: ParCfg,
+            ) -> Result<($krate::diag::Diag<T>, $krate::Mat<T>), String> {
+                let n = a.nrows();
+                let mut s = $krate::diag::Diag::<T>::zeros(n);
+                let mut u = $krate::Mat::<T>::zeros(n, n);
+                let req = $krate::linalg::evd::self_adjoint_evd_scratch::<T>(
+                    n,
+                    $krate::linalg::evd::ComputeEigenvectors::Yes,
+                    parmod::shape(cfg),
+                    Default::default(),
+                );
+                $krate::linalg::evd::self_adjoint_evd(
+                    a,
+                    s.as_mut(),
+                    Some(u.as_mut()),
+                    parmod::mk(cfg),
+                    MemStack::new(&mut MemBuffer::new(req)),
+                    Default::default(),
+                )
+                .map_err(|e| format!("self_adjoint_eigen failed: {e:?}"))?;
+                Ok((s, u))
+            }
+
+            fn solve_upper_in_place_of<T: ComplexField>(u: MatRef<'_, T>, rhs: MatMut<'_, T>, cfg: ParCfg) {
+                if !$team {
+                    u.solve_upper_triangular_in_place(rhs);
+                    return;
+                }
+                $krate::linalg::triangular_solve::solve_upper_triangular_in_place(u, rhs, parmod::mk(cfg));
+            }
+
             /// Set this crate's own global parallelism from the row's budget.
             pub fn set_threads(threads: usize) {
                 parmod::set_global(threads);
@@ -795,6 +893,7 @@ macro_rules! define_backend {
                     batch: usize,
                     order: Order,
                 }
+                let par = cfg_par();
                 let state = S {
                     u0,
                     b0: b0.clone(),
@@ -811,11 +910,11 @@ macro_rules! define_backend {
                         s.b.copy_from_slice(&s.b0);
                         Ok(())
                     },
-                    |s| {
+                    move |s| {
                         for bi in 0..s.batch {
                             let u = mref(&s.u0[bi * s.n * s.n..], s.n, s.n, s.order);
                             let rhs = mmut(&mut s.b[bi * s.n..], s.n, 1, s.order);
-                            u.solve_upper_triangular_in_place(rhs);
+                            solve_upper_in_place_of(u, rhs, par);
                             acc(&mut s.sink, s.b[bi * s.n].clone());
                         }
                         Ok(())
@@ -853,6 +952,7 @@ macro_rules! define_backend {
                     n: usize,
                     batch: usize,
                     order: Order,
+                    par: ParCfg,
                 }
                 let state = S {
                     a0,
@@ -861,6 +961,7 @@ macro_rules! define_backend {
                     n,
                     batch,
                     order,
+                    par: cfg_par(),
                 };
                 Ok(op_from(
                     state,
@@ -869,9 +970,7 @@ macro_rules! define_backend {
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let sv = mref(a0, s.m, s.n, s.order)
-                                .singular_values()
-                                .map_err(|e| format!("singular_values failed: {e:?}"))?;
+                            let sv = singular_values_of(mref(a0, s.m, s.n, s.order), s.par)?;
                             s.outputs.push(sv);
                         }
                         Ok(())
@@ -926,11 +1025,12 @@ macro_rules! define_backend {
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 31));
                 struct S<T> {
                     a0: Vec<T>,
-                    outputs: Vec<Svd<T>>,
+                    outputs: Vec<($krate::diag::Diag<T>, $krate::Mat<T>, $krate::Mat<T>)>,
                     m: usize,
                     n: usize,
                     batch: usize,
                     order: Order,
+                    par: ParCfg,
                 }
                 let state = S {
                     a0,
@@ -939,6 +1039,7 @@ macro_rules! define_backend {
                     n,
                     batch,
                     order,
+                    par: cfg_par(),
                 };
                 Ok(op_from(
                     state,
@@ -947,9 +1048,7 @@ macro_rules! define_backend {
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let svd = mref(a0, s.m, s.n, s.order)
-                                .thin_svd()
-                                .map_err(|e| format!("thin_svd failed: {e:?}"))?;
+                            let svd = thin_svd_of(mref(a0, s.m, s.n, s.order), s.par)?;
                             s.outputs.push(svd);
                         }
                         Ok(())
@@ -957,14 +1056,14 @@ macro_rules! define_backend {
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                            let svd = &s.outputs[bi];
-                            let r = svd.S().dim();
-                            let u = to_layout(svd.U(), s.m, r, s.order);
-                            let v = to_layout(svd.V(), s.n, r, s.order);
+                            let (sd, um, vm) = &s.outputs[bi];
+                            let r = sd.dim();
+                            let u = to_layout(um.as_ref(), s.m, r, s.order);
+                            let v = to_layout(vm.as_ref(), s.n, r, s.order);
                             let scale = frob(a0);
                             within::<T>(gram_residual(&u, s.m, r, s.order), 1.0, s.m, "svd_thin U")?;
                             within::<T>(gram_residual(&v, s.n, r, s.order), 1.0, s.n, "svd_thin V")?;
-                            let s_diag = diag_vec(svd.S());
+                            let s_diag = diag_vec(sd.as_ref());
                             let scaled_v = scale_cols(&v, s.n, r, &s_diag, s.order);
                             let mut recon = vec![T::zero(); s.m * s.n];
                             mul_adj_b(s.m, r, s.n, s.order, &u, &scaled_v, &mut recon);
@@ -982,10 +1081,11 @@ macro_rules! define_backend {
                 let a0 = replicate(&a0, batch);
                 struct S<T> {
                     a0: Vec<T>,
-                    outputs: Vec<SelfAdjointEigen<T>>,
+                    outputs: Vec<($krate::diag::Diag<T>, $krate::Mat<T>)>,
                     n: usize,
                     batch: usize,
                     order: Order,
+                    par: ParCfg,
                 }
                 let state = S {
                     a0,
@@ -993,6 +1093,7 @@ macro_rules! define_backend {
                     n,
                     batch,
                     order,
+                    par: cfg_par(),
                 };
                 Ok(op_from(
                     state,
@@ -1001,9 +1102,7 @@ macro_rules! define_backend {
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let evd = mref(a0, s.n, s.n, s.order)
-                                .self_adjoint_eigen(Side::Lower)
-                                .map_err(|e| format!("self_adjoint_eigen failed: {e:?}"))?;
+                            let evd = eigh_of(mref(a0, s.n, s.n, s.order), s.par)?;
                             s.outputs.push(evd);
                         }
                         Ok(())
@@ -1011,11 +1110,11 @@ macro_rules! define_backend {
                     |s| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
-                            let evd = &s.outputs[bi];
-                            let u = to_layout(evd.U(), s.n, s.n, s.order);
+                            let (sd, um) = &s.outputs[bi];
+                            let u = to_layout(um.as_ref(), s.n, s.n, s.order);
                             let scale = frob(a0);
                             within::<T>(gram_residual(&u, s.n, s.n, s.order), 1.0, s.n, "eigh U")?;
-                            let s_diag = diag_vec(evd.S());
+                            let s_diag = diag_vec(sd.as_ref());
                             let mut au = vec![T::zero(); s.n * s.n];
                             mul(s.n, s.n, s.n, s.order, a0, &u, &mut au);
                             let us = scale_cols(&u, s.n, s.n, &s_diag, s.order);
