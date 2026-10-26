@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Driver of the Linux acceptance measurement of tensor4all-meta#51 (awake-team design).
 
-    run_awake.py PHASE [--dry-run] [--only SUBSTR] [--out DIR]
+    run_awake.py PHASE [--dry-run] [--only SUBSTR] [--out DIR] [--bins exec]
     PHASE: a  threadteam dispatch cost per token kind, wake latency, idle spin trace
            b  serial throughput constants at 1 thread (f64/c64, GEMM also f32/c32)
            c  fbench stage comparisons (rows held/upstream/hot/free/team) at 4T and 8T, dispatch, smallops
@@ -15,6 +15,8 @@ before and after, no other build/test process, boost off, scrubbed thread enviro
 `--dry-run` prints the planned process list with estimated wall time and runs nothing (no guard, no sleeping).
 Run it under the observer mask:  taskset -c 0-3,12-15 python3 run_awake.py c
 
+`--bins exec`: the *-exec binaries (target-bench/{fbench,tt,tt-trace,consts,stack}-exec) and raw-exec/ instead of raw/.
+
 Resume: a process whose tag is already in raw/processes.log with busy=false is skipped.
 """
 import argparse, json, os, sys
@@ -25,16 +27,23 @@ sys.path.insert(0, str(HERE))
 import hostguard as hg
 
 ROOT = HERE.parents[3]                      # .../awake-team-linux
-BIN = {
-    "fbench": ROOT / "target-bench/fbench/release/fbench",
-    "dispatch_cost": ROOT / "target-bench/tt/release/dispatch_cost",
-    "wake_probe": ROOT / "target-bench/tt/release/wake_probe",
-    "idle_trace": ROOT / "target-bench/tt-trace/release/idle_trace",
-    "consts": ROOT / "target-bench/consts/release/consts",
-    "regions_consts": ROOT / "target-bench/consts/release/regions_consts",
-    "thr-confirm": ROOT / "target-bench/stack/release/thr-confirm",
-    "tl-probe": ROOT / "target-bench/stack/release/tl-probe",
-}
+def bin_table(suffix):
+    """Binary paths; suffix "" = acceptance run (target-bench/<dir>), "exec" = target-bench/<dir>-exec."""
+    d = (lambda n: n + "-exec") if suffix == "exec" else (lambda n: n)
+    t = ROOT / "target-bench"
+    return {
+        "fbench": t / d("fbench") / "release/fbench",
+        "dispatch_cost": t / d("tt") / "release/dispatch_cost",
+        "wake_probe": t / d("tt") / "release/wake_probe",
+        "idle_trace": t / d("tt-trace") / "release/idle_trace",
+        "consts": t / d("consts") / "release/consts",
+        "regions_consts": t / d("consts") / "release/regions_consts",
+        "thr-confirm": t / d("stack") / "release/thr-confirm",
+        "tl-probe": t / d("stack") / "release/tl-probe",
+    }
+
+
+BIN = bin_table(os.environ.get("AWAKE_BINS", ""))   # --bins overrides (main); phase functions read this global
 ROWS = ["faer-fork", "faer-upstream", "faer-fork-hot", "faer-fork-free", "faer-fork-team"]   # held, upstream (held), hot, free, team
 NROT = len(ROWS)   # one rotation per row position: every row takes every position once
 GUARD_S = 25   # idle checks (2 x 3 s), host state, startup, per process
@@ -67,7 +76,7 @@ class P:
 
 
 def raw(out, name):
-    return str(Path(out) / "raw" / name)
+    return str(Path(out) / hg.RAWNAME / name)
 
 
 NROW = len(ROWS)
@@ -173,7 +182,7 @@ PHASES = {"a": phase_a, "b": phase_b, "c": phase_c, "d": phase_d, "e": phase_e}
 
 
 def done_tags(out):
-    path = Path(out) / "raw" / "processes.log"
+    path = Path(out) / hg.RAWNAME / "processes.log"
     tags = set()
     if path.exists():
         for line in path.read_text().splitlines():
@@ -192,7 +201,12 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", default="", help="run only processes whose tag contains this text")
     ap.add_argument("--out", default=str(HERE))
+    ap.add_argument("--bins", default=os.environ.get("AWAKE_BINS", ""), choices=["", "exec"],
+                    help="binary set: '' = target-bench/<dir> (acceptance run, output raw/); exec = target-bench/<dir>-exec "
+                         "(team-gemm-executor build, output raw-exec/; log it with `| tee run-exec.log`)")
     a = ap.parse_args()
+    BIN.clear(); BIN.update(bin_table(a.bins))
+    hg.RAWNAME = "raw-exec" if a.bins == "exec" else "raw"
     phases = list(PHASES) if a.phase == "all" else ([] if a.phase == "verify" else [a.phase])
     plan = []
     for ph in phases:
@@ -204,7 +218,7 @@ def main():
         for name, path in BIN.items():
             if not Path(path).exists() and any(name in " ".join(p.cmd) for _, p in plan):
                 raise SystemExit(f"missing binary {path}: run build_all.sh")
-        Path(a.out, "raw").mkdir(parents=True, exist_ok=True)
+        Path(a.out, hg.RAWNAME).mkdir(parents=True, exist_ok=True)
         done = done_tags(a.out)
     total = {}
     if a.dry_run:

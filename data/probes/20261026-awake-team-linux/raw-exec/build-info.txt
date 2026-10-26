@@ -1,0 +1,26 @@
+# build-info (exec) 2026-10-26T05:28:53Z
+rustc: rustc 1.99.0 (b940084d7 2026-09-28)  cargo: cargo 1.99.0 (5f94df478 2026-08-27)
+threadteam-rs 586738b6b6384617a455e35f0bcdfe616e40ea04 branch=feat/dispatch-cost dirty=no
+faer-teamgemm 4ed3db8cef92185555c12d51048587760ff32db5 branch=exp/team-gemm-executor dirty=no
+strided-rs bd0360888353fe65dcbbb87da1414a65d2761ac8 branch=feat/dispatch-cost dirty=no
+tcontract-rs 597ef0f4711c81e46977f44f0bee090730ee2243 branch= dirty=no
+cpueinsum-rs 38360c8877a23ff723e660900828d311026982d7 branch= dirty=no
+tlinalg-rs cf6fa84f531b34a05752d1d3d5c32e5d08b3cb5b branch= dirty=no
+faer-benchmark 3eb828df09705ac0edf6a2e7ea12a01ffb148664 branch=bench/awake-team-linux dirty=yes
+extern-build/t4a-faer 4ed3db8cef92185555c12d51048587760ff32db5  extern-build/upstream-faer 0539947ffb757a739d7e703a7d2fa0c792a909c1
+t4a-private-gemm-x86 git rev 4f51ae9a83a851fad46fba13aa3d92bf136cf49d (feat/executor); threadteam 586738b6b6384617a455e35f0bcdfe616e40ea04
+graph check (one entry each in the lock of every build):
+  stack-exec: threadteam x1, t4a-private-gemm-x86 x1 rev=4f51ae9
+  qr128-exec: threadteam x1, t4a-private-gemm-x86 x1 rev=4f51ae9
+  consts-exec: threadteam x1, t4a-private-gemm-x86 x1 rev=4f51ae9
+  fbench-exec: patched lock (resolved during the build; committed lock restored): see raw-exec/fbench-cargo-lock.diff; harness threadteam rev rev = "586738b
+e94523c04f8a2b60e4677a87d52514687a538d754d7869da15146b80725d4dae  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/fbench-exec/release/fbench
+f8531690c16b0136d9f7b86aa58b0fd516b1556752b07ec0a7d045a92e16b522  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/tt-exec/release/dispatch_cost
+34975d8f818db1a2ee3318ceeb76afd16f2d81bd7c624f1a83601db59ada333d  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/tt-exec/release/wake_probe
+8b0294196170395c17118883f08e9f1b738d7a11d4c061896bdc96369bd108a8  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/tt-trace-exec/release/idle_trace
+b236954b6cedf48f2cd5054b138043fd7bfbf9f117c33ee3ebdaa74c3c26fa9e  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/consts-exec/release/consts
+5e755a419fc6e1cdb5e28027be75165577dfdab75513263cd3b389536b97ee8a  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/consts-exec/release/regions_consts
+2f212fe8d1e4eec29dc1211c622e4f6740dae5a3f841dd9d7ce44b9fd2c79420  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/stack-exec/release/thr-confirm
+22ab9bfa90e9b17288b24e6c200dac85d34820f0ddeaf806785105972738b2ba  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/stack-exec/release/tl-probe
+b419a77e9c5df81af3334ba22bc7132bc88de12b74eece328cb422d9ef89e587  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/stack-exec/release/tl-team-diag
+27af9a189512c50f1c163fa163c8a6d2be506242f3e5e9e451171162b86fe404  /home/shinaoka/projects/tensor4all/awake-team-linux/target-bench/qr128-exec/release/qr128-exec

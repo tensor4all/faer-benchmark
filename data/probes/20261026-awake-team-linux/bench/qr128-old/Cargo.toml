@@ -1,0 +1,24 @@
+[package]
+name = "qr128-old"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# The same probe source built against faer 2107b81 (the revision of the Linux acceptance measurement: team tiles on the
+# `gemm` crate, spicy/triangular products thread outside the team). Unpacked with `git archive` into target-bench/faer-2107b81.
+[workspace]
+
+[[bin]]
+name = "qr128-old"
+path = "../qr128/src/main.rs"
+
+[dependencies]
+faer = { package = "t4a-faer", path = "../../../../../../target-bench/faer-2107b81/faer", default-features = false, features = ["std", "linalg", "rand", "rayon", "threadteam", "par-trace"] }
+threadteam = { path = "../../../../../../threadteam-rs", default-features = false, features = ["parallel"] }
+
+[profile.release]
+opt-level = 3
+debug = false
+
+[patch."https://github.com/tensor4all/threadteam-rs"]
+threadteam = { path = "../../../../../../threadteam-rs" }

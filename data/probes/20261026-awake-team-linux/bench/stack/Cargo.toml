@@ -21,7 +21,16 @@ path = "src/bin/thr_confirm.rs"
 name = "tl-probe"
 path = "src/bin/tl_probe.rs"
 
+[[bin]]
+name = "tl-team-diag"
+path = "src/bin/tl_team_diag.rs"
+
+[features]
+# gate-decision log of faer (`utils::cost::trace`); keep it out of timing builds
+trace = ["faer/par-trace"]
+
 [dependencies]
+faer = { package = "t4a-faer", path = "../../../../../../faer/faer", default-features = false, features = ["std", "rayon", "threadteam"] }
 threadteam = { path = "../../../../../../threadteam-rs", default-features = false, features = ["parallel"] }
 strided-basic = { path = "../../../../../../strided-rs/strided-basic", features = ["parallel"] }
 strided-view = { path = "../../../../../../strided-rs/strided-view" }

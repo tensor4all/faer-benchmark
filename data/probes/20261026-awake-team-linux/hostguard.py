@@ -28,12 +28,13 @@ IDLE_SCRIPT = HERE.parents[2] / "benchmarks" / "scripts" / "idle_cpus.py"   # fa
 DOMAIN = "4-11,16-23"          # the measured L3 domain (whole domain is guarded)
 OBSERVER = "0-3,12-15"         # the other L3 domain
 MASKS = {1: "4", 4: "4-7", 8: "4-11"}
+RAWNAME = "raw"                # raw directory under out_dir; run_awake.py --bins exec sets "raw-exec"
 IDLE_SECONDS, MAX_BUSY, RETRIES, WAIT = 3, 0.05, 8, 30
 DURING_INTERVAL, DURING_REJECT = 10.0, 0.20   # busy fraction of an unmeasured domain CPU that rejects a run
 SCRUB = re.compile(r"^(RAYON_NUM_THREADS|OMP_.*|GOMP_.*|KMP_.*|MKL_.*|OPENBLAS_.*|GOTO_NUM_THREADS|BLIS_.*|"
                    r"VECLIB_MAXIMUM_THREADS|NUMEXPR_.*|FBENCH_QOS|TLINALG_BENCH_THREADS|TT_.*)$")
 BLOCKERS = re.compile(r"(^|/)(cargo|rustc|cc1|cc1plus|lld|ld|clang|gcc|fbench|consts|regions_consts|"
-                      r"thr-confirm|tl-probe|dispatch_cost|wake_probe|idle_trace|faer-[0-9a-f]{8,}|"
+                      r"thr-confirm|tl-probe|tl-team-diag|qr128(-old|-exec)?|dispatch_cost|wake_probe|idle_trace|faer-[0-9a-f]{8,}|"
                       r"[a-z_0-9]+-[0-9a-f]{16})( |$)")
 
 
@@ -164,7 +165,7 @@ def run_guarded(tag, cmd, mask, out_dir, stdout_file=None, outputs=(), env_extra
         print(f"  {tag:<34} {mask:<5} {shlex.join(cmd)}")
         return None
     out_dir = Path(out_dir)
-    (out_dir / "raw" / "rejected").mkdir(parents=True, exist_ok=True)
+    (out_dir / RAWNAME / "rejected").mkdir(parents=True, exist_ok=True)
     refuse_if_observer_misplaced()
     attempts = []
     for attempt in range(1, RETRIES + 1):
@@ -211,7 +212,7 @@ def run_guarded(tag, cmd, mask, out_dir, stdout_file=None, outputs=(), env_extra
             why = "domain busy after" if not ok_after else f"unmeasured domain CPU busy during ({during.max:.2f})"
             for i, f in enumerate([stdout_file, *outputs]):
                 if f and os.path.exists(f):
-                    os.replace(f, out_dir / "raw" / "rejected" / f"{tag}.attempt{attempt}.{os.path.basename(f)}")
+                    os.replace(f, out_dir / RAWNAME / "rejected" / f"{tag}.attempt{attempt}.{os.path.basename(f)}")
             attempts.append({"attempt": attempt, "rejected": why, "guard": g_after, "during_max": round(during.max, 3)})
             print(f"{tag}: rejected ({why}); archived under raw/rejected/, retrying", file=sys.stderr)
             time.sleep(WAIT)
@@ -225,5 +226,5 @@ def run_guarded(tag, cmd, mask, out_dir, stdout_file=None, outputs=(), env_extra
 
 
 def _write(log, out_dir, rec):
-    with open(log or (Path(out_dir) / "raw" / "processes.log"), "a") as f:
+    with open(log or (Path(out_dir) / RAWNAME / "processes.log"), "a") as f:
         f.write(json.dumps(rec) + "\n")

@@ -8,6 +8,7 @@
     summarize.py diag       x86_64 GEMM path: threads busy per row
     summarize.py hosts      host protocol per process (idle before/after, load, top 3, governor, boost, EPP)
     summarize.py all
+    summarize.py NAME RAWDIR   read RAWDIR (e.g. raw-exec) instead of raw/; writes tables-NAME-exec.md
 
 Adapted from par-team-lifetime-m5-6t/summarize.py, threadteam-rs thresholds-data/summarize.py and the
 recalibration probe's summarize_consts.py. A process in raw/processes.log is valid (the runner never keeps a
@@ -17,6 +18,7 @@ import collections, csv, glob, json, os, re, statistics as st, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.environ.get("AWAKE_RAW", os.path.join(HERE, "raw"))
+SUFFIX = ""   # tables-<name><SUFFIX>.md: "-exec" when the raw directory is raw-exec
 HELD, UP, HOT, FREE, TEAM = "faer-fork", "faer-upstream", "faer-fork-hot", "faer-fork-free", "faer-fork-team"
 
 
@@ -294,11 +296,15 @@ FUNCS = {"fbench": fbench, "dispatch": dispatch, "consts": consts, "confirm": co
 
 
 def main():
+    global RAW, SUFFIX
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
+    if len(sys.argv) > 2:   # optional raw directory (absolute, or relative to this directory), e.g. raw-exec
+        RAW = os.path.join(HERE, sys.argv[2])
+        SUFFIX = os.path.basename(os.path.normpath(RAW))[3:]
     for name in (FUNCS if which == "all" else [which]):
         text = FUNCS[name]()
         if text:
-            open(os.path.join(HERE, f"tables-{name}.md"), "w").write(text + "\n")
+            open(os.path.join(HERE, f"tables-{name}{SUFFIX}.md"), "w").write(text + "\n")
             print(text + "\n")
 
 

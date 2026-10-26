@@ -1,0 +1,31 @@
+[package]
+name = "consts"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Serial (Par::Seq, one thread) throughput constants of the kernel families gated in faer/src/linalg.
+# `consts` (from threshold-recalibration/constants/bench) and `regions_consts` (the `consts` subcommand of
+# qr128-regions/bench-tbl: block apply, divide and conquer solves, triangular inverse, sparse product).
+# Standalone: not a member of the fbench workspace. The fork is linked by path from the worktree at 2107b81.
+[workspace]
+
+[[bin]]
+name = "consts"
+path = "../consts/src/main.rs"
+
+[[bin]]
+name = "regions_consts"
+path = "../consts/src/bin/regions_consts.rs"
+
+[dependencies]
+faer = { package = "t4a-faer", path = "../../../../../../faer-teamgemm/faer", default-features = false, features = ["std", "linalg", "rand", "rayon", "threadteam", "sparse-linalg"] }
+threadteam = { path = "../../../../../../threadteam-rs", default-features = false, features = ["parallel"] }
+
+[profile.release]
+opt-level = 3
+debug = false
+
+# the fork pins threadteam by git rev 5afe0b4 (d08b3e7 differs from it in docs only); one copy, the worktree
+[patch."https://github.com/tensor4all/threadteam-rs"]
+threadteam = { path = "../../../../../../threadteam-rs" }
