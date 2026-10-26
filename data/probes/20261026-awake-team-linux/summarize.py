@@ -17,7 +17,7 @@ import collections, csv, glob, json, os, re, statistics as st, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.environ.get("AWAKE_RAW", os.path.join(HERE, "raw"))
-HELD, HOT, FREE, TEAM = "faer-fork", "faer-fork-hot", "faer-fork-free", "faer-fork-team"
+HELD, UP, HOT, FREE, TEAM = "faer-fork", "faer-upstream", "faer-fork-hot", "faer-fork-free", "faer-fork-team"
 
 
 def med(v):
@@ -45,12 +45,12 @@ def fbench():
         if not cells:
             continue
         out.append(f"## Stage comparison, {T} threads: median wall time (ms) over rotations, ratios per rotation\n")
-        out.append("Rows: held = `faer-fork` (spindle group held), hot = awake Rayon team, free = nothing held, team = `Par::Team`. "
+        out.append("Rows: held = `faer-fork` (spindle group held), upstream = upstream faer 0.24.4 (spindle group held), hot = awake Rayon team, free = nothing held, team = `Par::Team`. "
                    "Ratios are medians over the rotation processes of the per-process ratio (below 1: team faster). "
                    "`rot` counts the row-order rotations that produced the cell (`--rotate-rows`); `pos` is the spread of "
                    "the team ratio to held over rotations (max/min): a large value means row position matters.\n")
-        out.append("| op | shape | held ms | hot ms | free ms | team ms | team/held | team/hot | team/free | rot | pos | team cpu/wall |")
-        out.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        out.append("| op | shape | held ms | upstream ms | hot ms | free ms | team ms | team/held | team/upstream | team/hot | team/free | rot | pos | team cpu/wall |")
+        out.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for k in sorted(cells, key=lambda k: (k[0], k[1], k[2])):
             c = cells[k]
             tags = sorted(set(c.get(TEAM, {})) & set(c.get(HELD, {})))
@@ -61,8 +61,8 @@ def fbench():
             rr = ratio(TEAM, HELD)
             shape = f"{k[1]}x{k[3]}x{k[2]}" if k[0] == "gemm" else f"{k[1]}"
             cw = med([c[TEAM][t][1] for t in tags])
-            out.append(f"| {k[0]} | {shape} | {fmt(m(HELD))} | {fmt(m(HOT))} | {fmt(m(FREE))} | {fmt(m(TEAM))} | {fmt(med(rr))} | "
-                       f"{fmt(med(ratio(TEAM, HOT)))} | {fmt(med(ratio(TEAM, FREE)))} | {len(tags)} | {fmt(max(rr) / min(rr), 3)} | {fmt(cw, 3)} |")
+            out.append(f"| {k[0]} | {shape} | {fmt(m(HELD))} | {fmt(m(UP))} | {fmt(m(HOT))} | {fmt(m(FREE))} | {fmt(m(TEAM))} | {fmt(med(rr))} | "
+                       f"{fmt(med(ratio(TEAM, UP)))} | {fmt(med(ratio(TEAM, HOT)))} | {fmt(med(ratio(TEAM, FREE)))} | {len(tags)} | {fmt(max(rr) / min(rr), 3)} | {fmt(cw, 3)} |")
         out.append("")
         # smallops
         rows = collections.defaultdict(lambda: collections.defaultdict(dict))
@@ -72,14 +72,14 @@ def fbench():
                 rows[r["seq"]][r["row"]][tag] = (float(r["per_call_us"]), float(r["cpu_over_wall"]), r["engagement"])
         if rows:
             out.append(f"## Small-operation sequences, {T} threads (median of 41 repetitions, microseconds per call; settle 300 ms)\n")
-            out.append("| sequence | held | hot | free | team | team/held | team/free | team cpu/wall | rot |")
-            out.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+            out.append("| sequence | held | upstream | hot | free | team | team/held | team/upstream | team/free | team cpu/wall | rot |")
+            out.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
             for s, c in rows.items():
                 tags = sorted(c[TEAM])
                 m = lambda row: med([c[row][t][0] for t in tags if t in c[row]])
                 ratio = lambda a, b: med([c[a][t][0] / c[b][t][0] for t in tags if t in c[a] and t in c[b]])
-                out.append(f"| {s} | {fmt(m(HELD))} | {fmt(m(HOT))} | {fmt(m(FREE))} | {fmt(m(TEAM))} | {fmt(ratio(TEAM, HELD))} | "
-                           f"{fmt(ratio(TEAM, FREE))} | {fmt(med([c[TEAM][t][1] for t in tags]), 3)} | {len(tags)} |")
+                out.append(f"| {s} | {fmt(m(HELD))} | {fmt(m(UP))} | {fmt(m(HOT))} | {fmt(m(FREE))} | {fmt(m(TEAM))} | {fmt(ratio(TEAM, HELD))} | "
+                           f"{fmt(ratio(TEAM, UP))} | {fmt(ratio(TEAM, FREE))} | {fmt(med([c[TEAM][t][1] for t in tags]), 3)} | {len(tags)} |")
             out.append("\nEngagement of the team row (one untimed pass per sequence):\n")
             for s, c in rows.items():
                 out.append(f"* {s}: {c[TEAM][sorted(c[TEAM])[0]][2]}")
@@ -91,11 +91,11 @@ def fbench():
                 d[(r["test"], int(r["gap_us"]))][r["row"]].append((float(r["median_ns"]), float(r["cpu_over_wall"])))
         if d:
             out.append(f"## `fbench dispatch`, {T} threads: median ns over rotations (cpu/wall in brackets)\n")
-            out.append("| test | gap us | held | hot | free | team |")
-            out.append("| --- | --- | --- | --- | --- | --- |")
+            out.append("| test | gap us | held | upstream | hot | free | team |")
+            out.append("| --- | --- | --- | --- | --- | --- | --- |")
             for (test, gap), c in sorted(d.items()):
                 cell = lambda row: "" if row not in c else f"{med([x[0] for x in c[row]]):.0f} ({med([x[1] for x in c[row]]):.2f})"
-                out.append(f"| {test} | {gap} | {cell(HELD)} | {cell(HOT)} | {cell(FREE)} | {cell(TEAM)} |")
+                out.append(f"| {test} | {gap} | {cell(HELD)} | {cell(UP)} | {cell(HOT)} | {cell(FREE)} | {cell(TEAM)} |")
             out.append("")
     return "\n".join(out)
 
@@ -259,7 +259,7 @@ def confirm():
 def diag():
     out = ["## x86_64 GEMM path: which threads run the product (`fbench diag-gemm`)\n",
            "Per row and size: `participants` = distinct threads that took a share of 200 probe fan-outs through the row's own entry point "
-           "(`spindle::for_each_raw` inside `with_lock` for held; Rayon `par_iter` for hot and free; `Team::run` for team, plus the leader); "
+           "(`spindle::for_each_raw` inside `with_lock` for held and upstream; Rayon `par_iter` for hot and free; `Team::run` for team, plus the leader); "
            "`busy` = of those, busy more than half of the wall time during the GEMM loop; `cpu participants / other` = on-CPU ms of the "
            "probed threads against all other threads of the process (other pool threads, e.g. the idle Rayon pool under the team row). "
            "A row whose work runs where its probe says has `cpu other` near 0; for lu/qr_factor/cholesky under the team row a non-zero `cpu other` / `busy other threads` is `private-gemm-x86` threading through spindle outside the team (`par.degree()` of a team token).\n",

@@ -144,7 +144,10 @@ enum Statistic {
 }
 
 /// The faer rows that differ only in how the timed loop is wrapped (tensor4all/faer-benchmark#24).
-/// All three link the fork and take the same code path at one thread.
+/// All three link the fork and take the same code path at one thread. `faer-upstream` (a default row, so
+/// also part of every team comparison) holds the spindle group exactly like `faer-fork`, with upstream's
+/// own global parallelism set to `Rayon(threads)` (`backend::upstream::set_threads`) for the entry points
+/// that read it and an explicit `Par::rayon(threads)` where the API takes a par.
 ///
 /// * `faer-fork`: the spindle worker group is held (`spindle::with_lock`) around the loop;
 /// * `faer-fork-hot`: an awake borrowed Rayon team ([`team::with_team`]) is held around the loop;

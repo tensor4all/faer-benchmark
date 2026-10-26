@@ -4,7 +4,7 @@
     run_awake.py PHASE [--dry-run] [--only SUBSTR] [--out DIR]
     PHASE: a  threadteam dispatch cost per token kind, wake latency, idle spin trace
            b  serial throughput constants at 1 thread (f64/c64, GEMM also f32/c32)
-           c  fbench stage comparisons (rows held/hot/free/team) at 4T and 8T, dispatch, smallops
+           c  fbench stage comparisons (rows held/upstream/hot/free/team) at 4T and 8T, dispatch, smallops
            d  strided / tcontract / cpueinsum / tlinalg confirmation sweeps
            e  x86_64 GEMM path diagnostic (which threads run the GEMM under each row)
            verify  untimed fbench correctness check (a few seconds)
@@ -35,19 +35,20 @@ BIN = {
     "thr-confirm": ROOT / "target-bench/stack/release/thr-confirm",
     "tl-probe": ROOT / "target-bench/stack/release/tl-probe",
 }
-ROWS = ["faer-fork", "faer-fork-hot", "faer-fork-free", "faer-fork-team"]   # held, hot, free, team
+ROWS = ["faer-fork", "faer-upstream", "faer-fork-hot", "faer-fork-free", "faer-fork-team"]   # held, upstream (held), hot, free, team
+NROT = len(ROWS)   # one rotation per row position: every row takes every position once
 GUARD_S = 25   # idle checks (2 x 3 s), host state, startup, per process
 
 # --- fbench sets (phase c). (name, families, shapes, reps, check-max-dim, rotations)
 FAMS = "gemm,lu,qr_factor,cholesky,svd_values,eigh"
 SETS = [
-    ("small", FAMS, "128,256,512", 41, 512, 4),
-    ("n1024", FAMS, "1024", 21, 0, 4),
-    ("n2048", FAMS, "2048", 9, 0, 4),
-    ("skinny", "gemm", "4096x64x64,64x4096x64,2048x2048x64", 31, 0, 4),
+    ("small", FAMS, "128,256,512", 41, 512, NROT),
+    ("n1024", FAMS, "1024", 21, 0, NROT),
+    ("n2048", FAMS, "2048", 9, 0, NROT),
+    ("skinny", "gemm", "4096x64x64,64x4096x64,2048x2048x64", 31, 0, NROT),
 ]
 # best-row time of one call in ms at the M5 6T (data of the par-team-lifetime probe; svd/eigh scaled from the recalibration
-# probe); used only for the wall-time estimate: host factor 1.3 per core, 4 rows cost about 3.5 best rows.
+# probe); used only for the wall-time estimate: host factor 1.3 per core, 5 rows cost about 4.4 best rows.
 BASE_MS = {
     "gemm": {128: .04, 256: .17, 512: .85, 1024: 7.1, 2048: 60},
     "lu": {128: .08, 256: .3, 512: 1.13, 1024: 5.4, 2048: 35},
@@ -69,6 +70,9 @@ def raw(out, name):
     return str(Path(out) / "raw" / name)
 
 
+NROW = len(ROWS)
+
+
 def est_fbench_set(threads, fams, shapes, reps):
     s = 1.3 * 6 / threads
     total = 0.0
@@ -76,13 +80,13 @@ def est_fbench_set(threads, fams, shapes, reps):
         if "x" in shape:
             n = shape
             for fam in fams.split(","):
-                total += 4 * 0.5 + 3.5 * s * SKINNY_MS[shape] * reps / 1000
+                total += NROW * 0.5 + 4.4 * s * SKINNY_MS[shape] * reps / 1000
             continue
         n = int(shape)
         for fam in fams.split(","):
             base = BASE_MS[fam][n]
             construct = 0.3 + (2.0 if n >= 2048 else 0.0)
-            total += 4 * (construct + 0.25) + 3.5 * s * base * reps / 1000
+            total += NROW * (construct + 0.25) + 4.4 * s * base * reps / 1000
     return total
 
 
@@ -131,16 +135,16 @@ def phase_c(out):
                        "--rotate-rows", rot, "--orders", "F", "--reps", reps, "--prime-ms", 250, "--statistic", "median",
                        "--regime", f"awake-linux-{name}", "--check-max-dim", chk, "--csv", csv]
                 ps.append(P(f"main-{name}-T{T}-rot{rot}", cmd, mask, GUARD_S + est_fbench_set(T, fams, shapes, reps), outputs=[csv]))
-        for rot in range(4):   # smallops and dispatch order the rows as listed
+        for rot in range(NROT):   # smallops and dispatch order the rows as listed
             rows = ROWS[rot:] + ROWS[:rot]
             csv = raw(out, f"smallops-seq-T{T}-rot{rot}.csv")
             ps.append(P(f"smallops-seq-T{T}-rot{rot}", [BIN["fbench"], "smallops", "--threads", T, "--rows", ",".join(rows), "--reps", 41, "--csv", csv],
-                        mask, GUARD_S + 60, outputs=[csv], env={"FBENCH_SETTLE_MS": "300"}))
-        for rot in range(4):
+                        mask, GUARD_S + 75, outputs=[csv], env={"FBENCH_SETTLE_MS": "300"}))
+        for rot in range(NROT):
             rows = ROWS[rot:] + ROWS[:rot]
             csv = raw(out, f"dispatch-fbench-T{T}-rot{rot}.csv")
             ps.append(P(f"dispatch-fbench-T{T}-rot{rot}", [BIN["fbench"], "dispatch", "--threads", T, "--rows", ",".join(rows), "--reps", 10, "--csv", csv],
-                        mask, GUARD_S + 50, outputs=[csv]))
+                        mask, GUARD_S + 62, outputs=[csv]))
     return ps
 
 
@@ -157,8 +161,10 @@ def phase_e(out):
     ps = []
     for T, nproc in ((8, 2), (4, 1)):
         for i in range(1, nproc + 1):
+            rot = 2 * (i - 1)   # the two 8T passes start at different row positions (a diagnostic of thread use, not a timing)
+            rows = ROWS[rot:] + ROWS[:rot]
             ps.append(P(f"diag-gemm-T{T}-p{i}", [BIN["fbench"], "diag-gemm", "--threads", T, "--family", "gemm,lu,qr_factor,cholesky", "--n", "512,1024", "--reps", 3,
-                                                 "--rows", ",".join(ROWS)], hg.MASKS[T], GUARD_S + 80,
+                                                 "--rows", ",".join(rows)], hg.MASKS[T], GUARD_S + 100,
                         stdout=raw(out, f"diag-gemm-T{T}-p{i}.csv")))
     return ps
 

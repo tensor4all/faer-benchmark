@@ -96,6 +96,7 @@ the QR gates more than the multiple does).
 
 ### Harness
 
+* The row set is `faer-fork` (spindle group held), `faer-upstream` (upstream faer, spindle group held, explicit `Par::rayon(threads)` plus its global parallelism set to the budget), `faer-fork-hot`, `faer-fork-free`, `faer-fork-team`: five rows, so five `--rotate-rows` positions in every comparison (`run`, `smallops`, `dispatch`, `diag-gemm`).
 * The M5 runner rotated rows by reordering `--rows`, which `fbench run` ignores: its "rotations" all ran the same
   order. This run uses `--rotate-rows` (4 positions per cell; the `pos` column is the spread of the team ratio over
   positions, at most 1.25 except Cholesky under the leak, 3.5 to 10.7).

@@ -3,7 +3,8 @@
 //!
 //! On x86_64 the fork's `Par::Rayon(w)` GEMM goes through `t4a-private-gemm-x86`, which fans out
 //! with `spindle::for_each`: inside `spindle::with_lock` (row `faer-fork`) onto the held group,
-//! otherwise (rows `-hot`, `-free`) onto the Rayon pool. `Par::Team` tiles the product over the
+//! otherwise (rows `-hot`, `-free`) onto the Rayon pool. Row `faer-upstream` is upstream faer 0.24.4,
+//! whose `rayon` feature fans out through the same `spindle` crate, with the group held like `faer-fork`. `Par::Team` tiles the product over the
 //! team's members (`utils::team::gemm_tiled`, the `gemm` crate per tile). This subcommand shows it
 //! without a profiler: per row it
 //!
@@ -32,9 +33,9 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "team")]
-const ROWS: &[&str] = &["faer-fork", "faer-fork-hot", "faer-fork-free", "faer-fork-team"];
+const ROWS: &[&str] = &["faer-fork", "faer-upstream", "faer-fork-hot", "faer-fork-free", "faer-fork-team"];
 #[cfg(not(feature = "team"))]
-const ROWS: &[&str] = &["faer-fork", "faer-fork-hot", "faer-fork-free"];
+const ROWS: &[&str] = &["faer-fork", "faer-upstream", "faer-fork-hot", "faer-fork-free"];
 
 fn gettid() -> u64 {
     unsafe { libc::syscall(libc::SYS_gettid) as u64 }
@@ -83,7 +84,7 @@ fn probe(row: &str, threads: usize) -> BTreeSet<u64> {
             spin(Duration::from_micros(50));
         };
         match row {
-            "faer-fork" => spindle::for_each_raw(threads, body),
+            "faer-fork" | "faer-upstream" => spindle::for_each_raw(threads, body),
             #[cfg(feature = "team")]
             "faer-fork-team" => team_probe(threads, &body),
             _ => (0..threads).into_par_iter().for_each(body),
@@ -117,8 +118,20 @@ fn session(row: &str, threads: usize, fams: &[String], sizes: &[usize], secs: f6
             let case = shape.case(fam, 1).expect("case");
             crate::ops_for(row, crate::shared::Dtype::F64, fam, case, crate::shared::Order::F).expect("ops")
         };
+        // the upstream row multiplies upstream's own matrices, with an explicit `Par::rayon(threads)`
+        let up = |m: &Mat<f64>| faer_upstream::Mat::<f64>::from_fn(n, n, |i, j| m[(i, j)]);
+        let (ua, ub, mut uc) = if row == "faer-upstream" {
+            (up(&a), up(&b), faer_upstream::Mat::<f64>::zeros(n, n))
+        } else {
+            (faer_upstream::Mat::zeros(0, 0), faer_upstream::Mat::zeros(0, 0), faer_upstream::Mat::zeros(0, 0))
+        };
         let mut step = |a: &Mat<f64>, b: &Mat<f64>, c: &mut Mat<f64>| {
-            if fam == "gemm" {
+            if fam == "gemm" && row == "faer-upstream" {
+                faer_upstream::linalg::matmul::matmul(
+                    uc.as_mut(), faer_upstream::Accum::Replace, ua.as_ref(), ub.as_ref(), 1.0,
+                    crate::backend::upstream_par::mk(par_cfg),
+                );
+            } else if fam == "gemm" {
                 matmul(c.as_mut(), Accum::Replace, a.as_ref(), b.as_ref(), 1.0, fork_par::mk(par_cfg));
             } else {
                 for op in ops.iter_mut() {
@@ -193,7 +206,7 @@ pub fn main(rows: &[String], threads: usize, fams: &[String], sizes: &[usize], s
             return ExitCode::from(2);
         }
         let f = |o: &mut Vec<String>| session(row, threads, fams, sizes, secs, o);
-        if threads > 1 && row == "faer-fork" {
+        if threads > 1 && (row == "faer-fork" || row == "faer-upstream") {
             spindle::with_lock(threads, || f(&mut out));
         } else if threads > 1 && row == "faer-fork-hot" {
             if let Err(e) = team::with_team(threads, || f(&mut out)) {

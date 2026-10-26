@@ -7,6 +7,9 @@
 //! the number is the dispatch, not the work, under the three wrappers the timed loops use:
 //!
 //! * `faer-fork`: `spindle::with_lock(threads)` held around everything below;
+//! * `faer-upstream`: the same wrapper for the upstream row (upstream faer's `rayon` feature forks through
+//!   the same `spindle` crate instance; the probes below call `spindle` directly, so the numbers equal
+//!   `faer-fork`'s up to noise and the row is a control for the harness);
 //! * `faer-fork-hot`: the awake Rayon team held around everything below;
 //! * `faer-fork-free`: nothing held.
 //!
@@ -26,9 +29,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 #[cfg(not(feature = "team"))]
-const ROWS: &[&str] = &["faer-fork", "faer-fork-hot", "faer-fork-free"];
+const ROWS: &[&str] = &["faer-fork", "faer-upstream", "faer-fork-hot", "faer-fork-free"];
 #[cfg(feature = "team")]
-const ROWS: &[&str] = &["faer-fork", "faer-fork-hot", "faer-fork-free", "faer-fork-team"];
+const ROWS: &[&str] = &["faer-fork", "faer-upstream", "faer-fork-hot", "faer-fork-free", "faer-fork-team"];
 const GAPS_US: &[u64] = &[0, 1, 10, 30, 100, 1_000, 10_000, 100_000];
 const BLOCK: usize = 1000;
 
@@ -212,7 +215,7 @@ pub fn main(rows: &[String], threads: usize, reps: usize, csv: Option<&str>) -> 
             }
             continue;
         }
-        let result = if threads > 1 && row == "faer-fork" {
+        let result = if threads > 1 && (row == "faer-fork" || row == "faer-upstream") {
             Ok(spindle::with_lock(threads, f))
         } else if threads > 1 && row == "faer-fork-hot" {
             team::with_team(threads, f)
