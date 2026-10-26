@@ -27,6 +27,9 @@ publish = false
 
 [features]
 default = []
+# The measured fork has the 0.25 parallelism API (`Par<'team>`, `ParShape` for workspace queries, no process-wide
+# setting). Set by `scripts/build_for_faer_rev.sh` from the fork checkout; see `backend::fork_par`.
+fork-par-shape = []
 link-openblas = [
     "dep:blas-src",
     "dep:lapack-src",
@@ -43,7 +46,7 @@ link-mkl = [
 ]
 
 [dependencies]
-faer_fork = { package = "t4a-faer", version = "0.24", default-features = false, features = ["std", "rayon"] }
+faer_fork = { package = "t4a-faer", version = ">=0.24, <0.26", default-features = false, features = ["std", "rayon"] }
 faer_upstream = { package = "faer", version = "0.24", default-features = false, features = ["std", "rayon"] }
 # The thread-pool helper both faer crates issue their parallel regions through, the same
 # crate instance as theirs (one 0.2.x resolves for all three): the harness holds the worker
