@@ -15,6 +15,7 @@ before and after, no other build/test process, boost off, scrubbed thread enviro
 `--dry-run` prints the planned process list with estimated wall time and runs nothing (no guard, no sleeping).
 Run it under the observer mask:  taskset -c 0-3,12-15 python3 run_awake.py c
 
+`--bins exec2`: the same for the *-exec2 binaries (build_exec2.sh: faer 7e0f98f, threadteam 7095893, kernel 212cacf) and raw-exec2/.
 `--bins exec`: the *-exec binaries (target-bench/{fbench,tt,tt-trace,consts,stack}-exec) and raw-exec/ instead of raw/.
 
 Resume: a process whose tag is already in raw/processes.log with busy=false is skipped.
@@ -29,7 +30,7 @@ import hostguard as hg
 ROOT = HERE.parents[3]                      # .../awake-team-linux
 def bin_table(suffix):
     """Binary paths; suffix "" = acceptance run (target-bench/<dir>), "exec" = target-bench/<dir>-exec."""
-    d = (lambda n: n + "-exec") if suffix == "exec" else (lambda n: n)
+    d = (lambda n: n + "-" + suffix) if suffix else (lambda n: n)
     t = ROOT / "target-bench"
     return {
         "fbench": t / d("fbench") / "release/fbench",
@@ -201,12 +202,12 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", default="", help="run only processes whose tag contains this text")
     ap.add_argument("--out", default=str(HERE))
-    ap.add_argument("--bins", default=os.environ.get("AWAKE_BINS", ""), choices=["", "exec"],
+    ap.add_argument("--bins", default=os.environ.get("AWAKE_BINS", ""), choices=["", "exec", "exec2"],
                     help="binary set: '' = target-bench/<dir> (acceptance run, output raw/); exec = target-bench/<dir>-exec "
                          "(team-gemm-executor build, output raw-exec/; log it with `| tee run-exec.log`)")
     a = ap.parse_args()
     BIN.clear(); BIN.update(bin_table(a.bins))
-    hg.RAWNAME = "raw-exec" if a.bins == "exec" else "raw"
+    hg.RAWNAME = "raw-" + a.bins if a.bins else "raw"
     phases = list(PHASES) if a.phase == "all" else ([] if a.phase == "verify" else [a.phase])
     plan = []
     for ph in phases:

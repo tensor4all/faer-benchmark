@@ -34,7 +34,7 @@ DURING_INTERVAL, DURING_REJECT = 10.0, 0.20   # busy fraction of an unmeasured d
 SCRUB = re.compile(r"^(RAYON_NUM_THREADS|OMP_.*|GOMP_.*|KMP_.*|MKL_.*|OPENBLAS_.*|GOTO_NUM_THREADS|BLIS_.*|"
                    r"VECLIB_MAXIMUM_THREADS|NUMEXPR_.*|FBENCH_QOS|TLINALG_BENCH_THREADS|TT_.*)$")
 BLOCKERS = re.compile(r"(^|/)(cargo|rustc|cc1|cc1plus|lld|ld|clang|gcc|fbench|consts|regions_consts|"
-                      r"thr-confirm|tl-probe|tl-team-diag|qr128(-old|-exec)?|dispatch_cost|wake_probe|idle_trace|faer-[0-9a-f]{8,}|"
+                      r"thr-confirm|tl-probe|tl-team-diag|qr128(-[a-z0-9]+)?|dispatch_cost|wake_probe|idle_trace|faer-[0-9a-f]{8,}|"
                       r"[a-z_0-9]+-[0-9a-f]{16})( |$)")
 
 
