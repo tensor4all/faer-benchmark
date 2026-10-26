@@ -1,0 +1,16 @@
+[package]
+name = "tblbefore"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Serial constants and the 1T/plain/team tables; one source for any fork revision (path below). Standalone.
+[workspace]
+
+[dependencies]
+faer = { package = "t4a-faer", path = "../../../../../t4a-faer-par-team-6788b20/faer", default-features = false, features = ["std", "linalg", "rand", "rayon", "threadteam", "sparse-linalg"] }
+threadteam = { git = "https://github.com/tensor4all/threadteam-rs", rev = "5afe0b4d2ea604d0d8fe6b563bacf4c80f2d0bc4", default-features = false, features = ["parallel"] }
+
+[profile.release]
+opt-level = 3
+debug = false

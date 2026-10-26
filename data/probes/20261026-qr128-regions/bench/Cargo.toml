@@ -1,0 +1,16 @@
+[package]
+name = "regions"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Decision trace and region timings of QR 128 (and later the new gates). Standalone, not an fbench member.
+[workspace]
+
+[dependencies]
+faer = { package = "t4a-faer", path = "../../../../../t4a-faer-par-team/faer", default-features = false, features = ["std", "linalg", "rand", "rayon", "threadteam", "par-trace"] }
+threadteam = { git = "https://github.com/tensor4all/threadteam-rs", rev = "5afe0b4d2ea604d0d8fe6b563bacf4c80f2d0bc4", default-features = false, features = ["parallel"] }
+
+[profile.release]
+opt-level = 3
+debug = false
