@@ -10,11 +10,108 @@
 //! `run` is the measured call, and `check` is a residual or norm identity computed
 //! from that provider's own result against provider-independent reference math.
 //! A family that is not implemented returns `Err(note)`; the caller records it as
-//! `skipped`, never as a number.
+
+/// How a row runs its parallel regions, as a plain value. The fork's `Par` is not `Copy` from 0.25
+/// on (a team is exclusive authority), so an op keeps this and builds a `Par` for every call; the
+/// same value serves the baseline, where `Par` is `Copy`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParCfg {
+    Seq,
+    Rayon(usize),
+}
+
+/// `ParCfg` into the fork's `Par` (for running) and into what its workspace queries take.
+///
+/// The fork is linked at two API generations and the library is not edited to bridge them:
+///
+/// * baseline (0.24.x): `Par` is `Copy`, the `*_scratch` functions take a `Par`, and there is a
+///   process-wide parallelism setting (which the fork rows do **not** use);
+/// * 0.25 candidate: `Par<'team>` is not `Copy`, the `*_scratch` functions take a `ParShape`, and
+///   the process-wide setting is removed.
+///
+/// `scripts/build_for_faer_rev.sh` looks at the fork checkout (`faer/src/lib.rs` declares
+/// `pub enum ParShape` or not) and turns on the harness feature `fork-par-shape` for the second
+/// generation. The row's budget is the harness's own [`FORK_THREADS`], never a library global.
+pub mod fork_par {
+    use super::ParCfg;
+    use faer_fork::Par;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static FORK_THREADS: AtomicUsize = AtomicUsize::new(1);
+
+    #[cfg(feature = "fork-par-shape")]
+    pub type Run = Par<'static>;
+    #[cfg(not(feature = "fork-par-shape"))]
+    pub type Run = Par;
+    #[cfg(feature = "fork-par-shape")]
+    pub type Shape = faer_fork::ParShape;
+    #[cfg(not(feature = "fork-par-shape"))]
+    pub type Shape = Par;
+
+    pub fn mk(c: ParCfg) -> Run {
+        match c {
+            ParCfg::Seq => Par::Seq,
+            ParCfg::Rayon(n) => Par::rayon(n),
+        }
+    }
+
+    #[cfg(feature = "fork-par-shape")]
+    pub fn shape(c: ParCfg) -> Shape {
+        match c {
+            ParCfg::Seq => faer_fork::ParShape::Seq,
+            ParCfg::Rayon(n) => faer_fork::ParShape::rayon(n),
+        }
+    }
+    #[cfg(not(feature = "fork-par-shape"))]
+    pub fn shape(c: ParCfg) -> Shape {
+        mk(c)
+    }
+
+    pub fn degree() -> usize {
+        FORK_THREADS.load(Ordering::Relaxed)
+    }
+
+    pub fn set_threads(threads: usize) {
+        FORK_THREADS.store(threads.max(1), Ordering::Relaxed);
+    }
+}
+
+/// `ParCfg` into upstream's `Par` (`Copy`, and also what its workspace queries take). Upstream keeps
+/// its own process-wide setting: the high level calls of the upstream row read it, inside the
+/// spindle group the row holds (`main.rs` `measure_row`).
+pub mod upstream_par {
+    use super::ParCfg;
+    use faer_upstream::Par;
+
+    #[allow(dead_code)]
+    pub type Run = Par;
+    #[allow(dead_code)]
+    pub type Shape = Par;
+
+    pub fn mk(c: ParCfg) -> Par {
+        match c {
+            ParCfg::Seq => Par::Seq,
+            ParCfg::Rayon(n) => Par::rayon(n),
+        }
+    }
+    pub fn shape(c: ParCfg) -> Par {
+        mk(c)
+    }
+    pub fn degree() -> usize {
+        faer_upstream::get_global_parallelism().degree()
+    }
+    pub fn set_threads(threads: usize) {
+        let par = if threads <= 1 { Par::Seq } else { Par::rayon(threads) };
+        faer_upstream::set_global_parallelism(par);
+    }
+}
+
 
 macro_rules! define_backend {
-    ($modname:ident, $krate:ident) => {
+    ($modname:ident, $krate:ident, $parmod:ident, $ops:ident) => {
         pub mod $modname {
+            use super::$parmod as parmod;
+            use super::ParCfg;
             use crate::op::{op_from, Op};
             use crate::shared::*;
             use num_complex::Complex64;
@@ -22,21 +119,22 @@ macro_rules! define_backend {
             use $krate::dyn_stack::{MemBuffer, MemStack, StackReq};
             use $krate::linalg::householder;
             use $krate::linalg::qr::no_pivoting::factor as qrf;
-            use $krate::linalg::solvers::{
-                DenseSolveCore, FullPivLu, Llt, PartialPivLu, Qr, SelfAdjointEigen, Solve, Svd,
-            };
             use $krate::traits::math_utils::from_f64;
             use $krate::traits::ComplexField;
-            use $krate::{get_global_parallelism, Accum, Conj, MatMut, MatRef, Par, Side};
+            use $krate as fk;
+            use $krate::{Accum, Conj, MatMut, MatRef};
 
-            /// Set this crate's own global parallelism from the row's budget.
+            /// The row's budget: the fork's own atomic, or upstream's global setting.
             pub fn set_threads(threads: usize) {
-                let par = if threads <= 1 {
-                    Par::Seq
-                } else {
-                    Par::rayon(threads)
-                };
-                $krate::set_global_parallelism(par);
+                parmod::set_threads(threads);
+            }
+
+            /// The parallelism the row asked for when an op is built.
+            fn cfg_par() -> ParCfg {
+                match parmod::degree() {
+                    0 | 1 => ParCfg::Seq,
+                    n => ParCfg::Rayon(n),
+                }
             }
 
             fn strides(m: usize, n: usize, order: Order) -> (isize, isize) {
@@ -168,18 +266,9 @@ macro_rules! define_backend {
             ) -> Result<Op, String> {
                 let a = fill_seeded::<T>(m * k * batch, seed(m, k, n));
                 let b = fill_seeded::<T>(k * n * batch, seed(k, n, m));
-                let mut c_ref = vec![T::zero(); m * n * batch];
-                for bi in 0..batch {
-                    mul(
-                        m,
-                        k,
-                        n,
-                        order,
-                        &a[bi * m * k..(bi + 1) * m * k],
-                        &b[bi * k * n..(bi + 1) * k * n],
-                        &mut c_ref[bi * m * n..(bi + 1) * m * n],
-                    );
-                }
+                // Built when `check` first needs it, not at construction: the naive O(m*n*k) reference is
+                // outside every timed region either way, and a row that is never checked never pays it.
+                let c_ref: Vec<T> = Vec::new();
                 struct S<T> {
                     a: Vec<T>,
                     b: Vec<T>,
@@ -191,7 +280,7 @@ macro_rules! define_backend {
                     batch: usize,
                     order: Order,
                 }
-                let par = get_global_parallelism();
+                let par = cfg_par();
                 let state = S {
                     a,
                     b,
@@ -215,11 +304,26 @@ macro_rules! define_backend {
                             let dst = mmut(&mut s.c[bi * s.m * s.n..], s.m, s.n, s.order);
                             let lhs = mref(&s.a[bi * s.m * s.k..], s.m, s.k, s.order);
                             let rhs = mref(&s.b[bi * s.k * s.n..], s.k, s.n, s.order);
-                            $krate::linalg::matmul::matmul(dst, Accum::Replace, lhs, rhs, T::one(), par);
+                            $krate::linalg::matmul::matmul(dst, Accum::Replace, lhs, rhs, T::one(), parmod::mk(par));
                         }
                         Ok(())
                     },
                     |s| {
+                        if s.c_ref.is_empty() {
+                            let mut c_ref = vec![T::zero(); s.m * s.n * s.batch];
+                            for bi in 0..s.batch {
+                                mul(
+                                    s.m,
+                                    s.k,
+                                    s.n,
+                                    s.order,
+                                    &s.a[bi * s.m * s.k..(bi + 1) * s.m * s.k],
+                                    &s.b[bi * s.k * s.n..(bi + 1) * s.k * s.n],
+                                    &mut c_ref[bi * s.m * s.n..(bi + 1) * s.m * s.n],
+                                );
+                            }
+                            s.c_ref = c_ref;
+                        }
                         let diff = max_diff(&s.c, &s.c_ref);
                         within::<T>(diff, frob(&s.c_ref), s.n.max(s.m), "gemm")
                     },
@@ -237,12 +341,12 @@ macro_rules! define_backend {
                 let size = m.min(n);
                 let block_size = qrf::recommended_block_size::<T>(m, n);
                 let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, size));
-                let par = get_global_parallelism();
+                let par = cfg_par();
                 // The check rebuilds the compact `Q` from the basis and the
                 // coefficients the timed call left behind, so it needs the
                 // sequence apply's own temporary on top of the factorisation's.
                 let scratch = StackReq::all_of(&[
-                    qrf::qr_in_place_scratch::<T>(m, n, block_size, par, Default::default()),
+                    qrf::qr_in_place_scratch::<T>(m, n, block_size, parmod::shape(par), Default::default()),
                     householder::apply_block_householder_sequence_on_the_left_in_place_scratch::<T>(
                         m,
                         size,
@@ -260,7 +364,7 @@ macro_rules! define_backend {
                     size: usize,
                     batch: usize,
                     order: Order,
-                    par: Par,
+                    par: ParCfg,
                 }
                 let state = S {
                     a: a0.clone(),
@@ -295,7 +399,7 @@ macro_rules! define_backend {
                             qrf::qr_in_place(
                                 a,
                                 qc,
-                                s.par,
+                                parmod::mk(s.par),
                                 MemStack::new(&mut s.mem),
                                 Default::default(),
                             );
@@ -332,7 +436,7 @@ macro_rules! define_backend {
                                 mref(qc, s.block_size, s.size, Order::F),
                                 Conj::No,
                                 mmut(&mut q, s.m, s.size, s.order),
-                                s.par,
+                                parmod::mk(s.par),
                                 MemStack::new(&mut s.mem),
                             );
                             let mut recon = vec![T::zero(); s.m * s.n];
@@ -345,6 +449,226 @@ macro_rules! define_backend {
                 ))
             }
 
+
+            #[allow(dead_code)]
+            /// The singular value checks shared by the families that return values only.
+            fn check_singular_values<T: Scalar + ComplexField>(
+                a0: &[T],
+                sv: &[T::Real],
+                m: usize,
+                n: usize,
+            ) -> Result<(), String>
+            where
+                T::Real: Scalar,
+            {
+                let r = sv.len();
+                let eps = tol_of::<T>(n.max(m));
+                let neg_eps = from_f64::<T::Real>(-eps);
+                let eps_r = from_f64::<T::Real>(eps);
+                for i in 0..r {
+                    let value = <T::Real as Scalar>::abs(sv[i]);
+                    if !value.is_finite() || sv[i] < neg_eps {
+                        return Err(format!("singular value {i} is negative: {value}"));
+                    }
+                    if i + 1 < r && sv[i] < sv[i + 1] - eps_r {
+                        return Err("singular values are not sorted".to_owned());
+                    }
+                }
+                let sum: f64 = sv
+                    .iter()
+                    .map(|x| {
+                        let v = <T::Real as Scalar>::abs(*x);
+                        v * v
+                    })
+                    .sum();
+                let scale = frob(a0);
+                within::<T>((sum.sqrt() - scale).abs(), scale, n.max(m), "svd_values norm identity")
+            }
+
+            $ops!();
+
+            // -------------------------------------------------- householder_apply
+
+            fn householder_ops<T: Scalar + ComplexField>(
+                m: usize, n: usize, batch: usize, order: Order,
+            ) -> Result<Vec<Op>, String> {
+                Ok(vec![householder_op::<T>(m, n, batch, order, false)?,
+                        householder_op::<T>(m, n, batch, order, true)?])
+            }
+
+            fn householder_op<T: Scalar + ComplexField>(
+                m: usize, n: usize, batch: usize, order: Order, sequence: bool,
+            ) -> Result<Op, String> {
+                let size = m.min(n);
+                let target = n;
+                let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 41));
+                let c0 = fill_seeded::<T>(m * target * batch, seed(m, target, 43));
+                let par = cfg_par();
+                let block_scratch = householder::apply_block_householder_on_the_left_in_place_scratch::<T>(
+                    m, size, target,
+                );
+                let seq_scratch =
+                    householder::apply_block_householder_sequence_on_the_left_in_place_scratch::<T>(
+                        m, size, target,
+                    );
+                let scratch = StackReq::any_of(&[
+                    block_scratch,
+                    seq_scratch,
+                    qrf::qr_in_place_scratch::<T>(m, n, size, parmod::shape(par), Default::default()),
+                ]);
+                struct S<T> {
+                    a: Vec<T>,
+                    a0: Vec<T>,
+                    qc: Vec<T>,
+                    c0: Vec<T>,
+                    c: Vec<T>,
+                    mem: MemBuffer,
+                    m: usize,
+                    n: usize,
+                    size: usize,
+                    target: usize,
+                    batch: usize,
+                    order: Order,
+                    par: ParCfg,
+                }
+                let state = S {
+                    a: a0.clone(),
+                    a0,
+                    qc: vec![T::zero(); size * size * batch],
+                    c0: c0.clone(),
+                    c: c0,
+                    mem: MemBuffer::new(scratch),
+                    m,
+                    n,
+                    size,
+                    target,
+                    batch,
+                    order,
+                    par,
+                };
+                let block = op_from(
+                    state,
+                    format!("{}(basis={size},target={target})", if sequence { "sequence" } else { "block" }),
+                    |s| {
+                        s.a.copy_from_slice(&s.a0);
+                        s.qc.fill(T::zero());
+                        s.c.copy_from_slice(&s.c0);
+                        for bi in 0..s.batch {
+                            let a = mmut(&mut s.a[bi * s.m * s.n..], s.m, s.n, s.order);
+                            let qc = mmut(&mut s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
+                            qrf::qr_in_place(a, qc, parmod::mk(s.par), MemStack::new(&mut s.mem), Default::default());
+                        }
+                        Ok(())
+                    },
+                    move |s| {
+                        for bi in 0..s.batch {
+                            let basis = mref(&s.a[bi * s.m * s.n..], s.m, s.n, s.order).get(.., ..s.size);
+                            let factor = mref(&s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
+                            let dst = mmut(&mut s.c[bi * s.m * s.target..], s.m, s.target, s.order);
+                            if sequence {
+                                householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
+                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
+                            } else {
+                                householder::apply_block_householder_on_the_left_in_place_with_conj(
+                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
+                            }
+                        }
+                        Ok(())
+                    },
+                    move |s| {
+                        // Compare the actual timed result with the other public form.
+                        for bi in 0..s.batch {
+                            let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
+                            let mut qc = vec![T::zero(); s.size * s.size];
+                            qrf::qr_in_place(
+                                mmut(&mut a, s.m, s.n, s.order),
+                                mmut(&mut qc, s.size, s.size, Order::F),
+                                parmod::mk(s.par),
+                                MemStack::new(&mut s.mem),
+                                Default::default(),
+                            );
+                            let mut reference = s.c0[bi * s.m * s.target..(bi + 1) * s.m * s.target].to_vec();
+                            let basis = mref(&a, s.m, s.n, s.order).get(.., ..s.size);
+                            let factor = mref(&qc, s.size, s.size, Order::F);
+                            let dst = mmut(&mut reference, s.m, s.target, s.order);
+                            if sequence {
+                                householder::apply_block_householder_on_the_left_in_place_with_conj(
+                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
+                            } else {
+                                householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
+                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
+                            }
+                            let got = &s.c[bi * s.m * s.target..(bi + 1) * s.m * s.target];
+                            within::<T>(
+                                max_diff(got, &reference),
+                                frob(&reference),
+                                s.target.max(s.m),
+                                "householder_apply",
+                            )?;
+                        }
+                        Ok(())
+                    },
+                );
+                Ok(block)
+            }
+
+            fn replicate<T: Copy>(values: &[T], batch: usize) -> Vec<T> {
+                let mut out = Vec::with_capacity(values.len() * batch);
+                for _ in 0..batch {
+                    out.extend_from_slice(values);
+                }
+                out
+            }
+
+            /// `M + n I`: general, well conditioned.
+            fn diag_dominant<T: Scalar>(n: usize, batch: usize, order: Order, seed: u64) -> Vec<T> {
+                let mut out = fill_seeded::<T>(n * n, seed);
+                for i in 0..n {
+                    out[idx(i, i, n, n, order)].add_assign(T::from_f64(n as f64));
+                }
+                replicate(&out, batch)
+            }
+
+            /// A diagonally dominant upper triangular matrix.
+            fn upper_triangular<T: Scalar>(n: usize, batch: usize, order: Order, seed: u64) -> Vec<T> {
+                let raw = fill_seeded::<T>(n * n, seed);
+                let mut out = vec![T::zero(); n * n];
+                for j in 0..n {
+                    for i in 0..n {
+                        if i <= j {
+                            out[idx(i, j, n, n, order)] = raw[idx(i, j, n, n, order)];
+                        }
+                    }
+                    out[idx(j, j, n, n, order)].add_assign(T::from_f64(n as f64 + 1.0));
+                }
+                replicate(&out, batch)
+            }
+
+            /// `M M^H + n I`: a Hermitian positive-definite matrix of shape `n x n`,
+            /// replicated `batch` times.
+            fn spd<T: Scalar>(n: usize, batch: usize, order: Order, seed: u64) -> Vec<T> {
+                let m = fill_seeded::<T>(n * n, seed);
+                let mut mm = vec![T::zero(); n * n];
+                mul_adj_b(n, n, n, order, &m, &m, &mut mm);
+                for i in 0..n {
+                    mm[idx(i, i, n, n, order)].add_assign(T::from_f64(n as f64 + 1.0));
+                }
+                replicate(&mm, batch)
+            }
+        }
+    };
+}
+
+/// The upstream row's families: the high level methods, as the campaign has always measured them,
+/// reading upstream's own global parallelism inside the held spindle group. Written once against
+/// `$krate`'s solver types, so it is only expanded for upstream (the fork's 0.25 methods take a
+/// `par` and are replaced by `explicit_ops!`).
+macro_rules! highlevel_ops {
+    () => {
+        use fk::linalg::solvers::{
+            DenseSolveCore, FullPivLu, Llt, PartialPivLu, Qr, SelfAdjointEigen, Solve, Svd,
+        };
+        use fk::Side;
             // -------------------------------------------------------- qr (composite)
 
             fn qr_op<T: Scalar + ComplexField>(
@@ -357,7 +681,7 @@ macro_rules! define_backend {
                 let size = m.min(n);
                 struct S<T> {
                     a0: Vec<T>,
-                    outputs: Vec<(Qr<T>, $krate::Mat<T>)>,
+                    outputs: Vec<(Qr<T>, fk::Mat<T>)>,
                     m: usize,
                     n: usize,
                     size: usize,
@@ -874,177 +1198,783 @@ macro_rules! define_backend {
                 ))
             }
 
-            // -------------------------------------------------- householder_apply
+    };
+}
 
-            fn householder_ops<T: Scalar + ComplexField>(
-                m: usize, n: usize, batch: usize, order: Order,
-            ) -> Result<Vec<Op>, String> {
-                Ok(vec![householder_op::<T>(m, n, batch, order, false)?,
-                        householder_op::<T>(m, n, batch, order, true)?])
-            }
 
-            fn householder_op<T: Scalar + ComplexField>(
-                m: usize, n: usize, batch: usize, order: Order, sequence: bool,
-            ) -> Result<Op, String> {
-                let size = m.min(n);
-                let target = n;
-                let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 41));
-                let c0 = fill_seeded::<T>(m * target * batch, seed(m, target, 43));
-                let par = get_global_parallelism();
-                let block_scratch = householder::apply_block_householder_on_the_left_in_place_scratch::<T>(
-                    m, size, target,
-                );
-                let seq_scratch =
-                    householder::apply_block_householder_sequence_on_the_left_in_place_scratch::<T>(
-                        m, size, target,
-                    );
-                let scratch = StackReq::any_of(&[
-                    block_scratch,
-                    seq_scratch,
-                    qrf::qr_in_place_scratch::<T>(m, n, size, par, Default::default()),
-                ]);
-                struct S<T> {
-                    a: Vec<T>,
-                    a0: Vec<T>,
-                    qc: Vec<T>,
-                    c0: Vec<T>,
-                    c: Vec<T>,
-                    mem: MemBuffer,
-                    m: usize,
-                    n: usize,
-                    size: usize,
-                    target: usize,
-                    batch: usize,
-                    order: Order,
-                    par: Par,
-                }
-                let state = S {
-                    a: a0.clone(),
-                    a0,
-                    qc: vec![T::zero(); size * size * batch],
-                    c0: c0.clone(),
-                    c: c0,
-                    mem: MemBuffer::new(scratch),
-                    m,
-                    n,
-                    size,
-                    target,
-                    batch,
-                    order,
-                    par,
-                };
-                let block = op_from(
-                    state,
-                    format!("{}(basis={size},target={target})", if sequence { "sequence" } else { "block" }),
-                    |s| {
-                        s.a.copy_from_slice(&s.a0);
-                        s.qc.fill(T::zero());
-                        s.c.copy_from_slice(&s.c0);
-                        for bi in 0..s.batch {
-                            let a = mmut(&mut s.a[bi * s.m * s.n..], s.m, s.n, s.order);
-                            let qc = mmut(&mut s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
-                            qrf::qr_in_place(a, qc, s.par, MemStack::new(&mut s.mem), Default::default());
-                        }
-                        Ok(())
-                    },
-                    move |s| {
-                        for bi in 0..s.batch {
-                            let basis = mref(&s.a[bi * s.m * s.n..], s.m, s.n, s.order).get(.., ..s.size);
-                            let factor = mref(&s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
-                            let dst = mmut(&mut s.c[bi * s.m * s.target..], s.m, s.target, s.order);
-                            if sequence {
-                                householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
-                            } else {
-                                householder::apply_block_householder_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
-                            }
-                        }
-                        Ok(())
-                    },
-                    move |s| {
-                        // Compare the actual timed result with the other public form.
-                        for bi in 0..s.batch {
-                            let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
-                            let mut qc = vec![T::zero(); s.size * s.size];
-                            qrf::qr_in_place(
-                                mmut(&mut a, s.m, s.n, s.order),
-                                mmut(&mut qc, s.size, s.size, Order::F),
-                                s.par,
-                                MemStack::new(&mut s.mem),
-                                Default::default(),
-                            );
-                            let mut reference = s.c0[bi * s.m * s.target..(bi + 1) * s.m * s.target].to_vec();
-                            let basis = mref(&a, s.m, s.n, s.order).get(.., ..s.size);
-                            let factor = mref(&qc, s.size, s.size, Order::F);
-                            let dst = mmut(&mut reference, s.m, s.target, s.order);
-                            if sequence {
-                                householder::apply_block_householder_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
-                            } else {
-                                householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, s.par, MemStack::new(&mut s.mem));
-                            }
-                            let got = &s.c[bi * s.m * s.target..(bi + 1) * s.m * s.target];
-                            within::<T>(
-                                max_diff(got, &reference),
-                                frob(&reference),
-                                s.target.max(s.m),
-                                "householder_apply",
-                            )?;
-                        }
-                        Ok(())
-                    },
-                );
-                Ok(block)
-            }
+/// The families that the fork rows run through explicit-parallelism entry points only.
+///
+/// `faer-fork` is measured at two API generations: the baseline, where the high level methods
+/// (`partial_piv_lu()`, `thin_svd()`, ...) read a process-wide parallelism setting, and the
+/// 0.25 candidate, where that setting is gone and the same methods take a `Par<'team>`. A call
+/// through a high level method therefore cannot be written once for both. Every family below is
+/// the composite the high level method performs, rebuilt from the low-level entry points that
+/// take the row's parallelism as an argument, so the same text builds and measures the same work
+/// against both revisions: the same copy of the input into an owned column-major matrix, the same
+/// factorisation call, the same split of the packed factors, the same allocation of outputs.
+/// The result of the timed call is kept, and the check inspects it (reconstructing with the
+/// library's own low-level `reconstruct`, run sequentially, outside the clock).
+macro_rules! explicit_ops {
+    () => {
+        use fk::linalg::cholesky::llt::{factor as llt_factor, reconstruct as llt_rec};
+        use fk::linalg::lu::full_pivoting::{factor as flu, reconstruct as flu_rec};
+        use fk::linalg::lu::partial_pivoting::{
+            factor as plu, reconstruct as plu_rec, solve as plu_solve,
+        };
+        use fk::perm::PermRef;
 
-            fn replicate<T: Copy>(values: &[T], batch: usize) -> Vec<T> {
-                let mut out = Vec::with_capacity(values.len() * batch);
-                for _ in 0..batch {
-                    out.extend_from_slice(values);
-                }
-                out
-            }
-
-            /// `M + n I`: general, well conditioned.
-            fn diag_dominant<T: Scalar>(n: usize, batch: usize, order: Order, seed: u64) -> Vec<T> {
-                let mut out = fill_seeded::<T>(n * n, seed);
-                for i in 0..n {
-                    out[idx(i, i, n, n, order)].add_assign(T::from_f64(n as f64));
-                }
-                replicate(&out, batch)
-            }
-
-            /// A diagonally dominant upper triangular matrix.
-            fn upper_triangular<T: Scalar>(n: usize, batch: usize, order: Order, seed: u64) -> Vec<T> {
-                let raw = fill_seeded::<T>(n * n, seed);
-                let mut out = vec![T::zero(); n * n];
-                for j in 0..n {
-                    for i in 0..n {
-                        if i <= j {
-                            out[idx(i, j, n, n, order)] = raw[idx(i, j, n, n, order)];
-                        }
+        /// `(L, U)` of a packed LU, as `PartialPivLu::new` / `FullPivLu::new` split it: `L` is unit
+        /// lower trapezoidal, `U` upper trapezoidal.
+        fn split_lu<T: ComplexField>(lu: fk::Mat<T>) -> (fk::Mat<T>, fk::Mat<T>) {
+            let (m, n) = lu.shape();
+            let size = m.min(n);
+            if m >= n {
+                let mut u = fk::Mat::<T>::zeros(size, size);
+                for j in 0..size {
+                    for i in 0..=j {
+                        u[(i, j)] = lu[(i, j)].clone();
                     }
-                    out[idx(j, j, n, n, order)].add_assign(T::from_f64(n as f64 + 1.0));
                 }
-                replicate(&out, batch)
+                let mut l = lu;
+                for j in 0..n {
+                    for i in 0..j {
+                        l[(i, j)] = T::zero_impl();
+                    }
+                    l[(j, j)] = T::one_impl();
+                }
+                (l, u)
+            } else {
+                let mut l = fk::Mat::<T>::zeros(size, size);
+                for j in 0..size {
+                    for i in j + 1..size {
+                        l[(i, j)] = lu[(i, j)].clone();
+                    }
+                    l[(j, j)] = T::one_impl();
+                }
+                let mut u = lu;
+                for j in 0..size {
+                    for i in j + 1..m {
+                        u[(i, j)] = T::zero_impl();
+                    }
+                }
+                (l, u)
             }
+        }
 
-            /// `M M^H + n I`: a Hermitian positive-definite matrix of shape `n x n`,
-            /// replicated `batch` times.
-            fn spd<T: Scalar>(n: usize, batch: usize, order: Order, seed: u64) -> Vec<T> {
-                let m = fill_seeded::<T>(n * n, seed);
-                let mut mm = vec![T::zero(); n * n];
-                mul_adj_b(n, n, n, order, &m, &m, &mut mm);
-                for i in 0..n {
-                    mm[idx(i, i, n, n, order)].add_assign(T::from_f64(n as f64 + 1.0));
-                }
-                replicate(&mm, batch)
+        fn partial_lu_of<T: ComplexField>(
+            a: MatRef<'_, T>,
+            cfg: ParCfg,
+        ) -> (fk::Mat<T>, fk::Mat<T>, Vec<usize>, Vec<usize>) {
+            let mut lu = a.to_owned();
+            let (m, n) = lu.shape();
+            let mut fwd = vec![0usize; m];
+            let mut bwd = vec![0usize; m];
+            let req = plu::lu_in_place_scratch::<usize, T>(m, n, parmod::shape(cfg), Default::default());
+            plu::lu_in_place(
+                lu.as_mut(),
+                &mut fwd,
+                &mut bwd,
+                parmod::mk(cfg),
+                MemStack::new(&mut MemBuffer::new(req)),
+                Default::default(),
+            );
+            let (l, u) = split_lu(lu);
+            (l, u, fwd, bwd)
+        }
+
+        // ------------------------------------------------------- qr (composite)
+
+        fn qr_op<T: Scalar + ComplexField>(
+            m: usize,
+            n: usize,
+            batch: usize,
+            order: Order,
+        ) -> Result<Op, String> {
+            let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 3));
+            let size = m.min(n);
+            struct S<T: ComplexField> {
+                a0: Vec<T>,
+                outputs: Vec<(fk::Mat<T>, fk::Mat<T>)>,
+                m: usize,
+                n: usize,
+                size: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
             }
+            let state = S {
+                a0,
+                outputs: Vec::with_capacity(batch),
+                m,
+                n,
+                size,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.outputs.clear();
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        // `Qr::new` then `compute_thin_Q`, with the row's parallelism.
+                        let mut qr = mref(a0, s.m, s.n, s.order).to_owned();
+                        let block_size = qrf::recommended_block_size::<T>(s.m, s.n);
+                        let mut coeff = fk::Mat::<T>::zeros(block_size, s.size);
+                        let req = qrf::qr_in_place_scratch::<T>(
+                            s.m,
+                            s.n,
+                            block_size,
+                            parmod::shape(s.par),
+                            Default::default(),
+                        );
+                        qrf::qr_in_place(
+                            qr.as_mut(),
+                            coeff.as_mut(),
+                            parmod::mk(s.par),
+                            MemStack::new(&mut MemBuffer::new(req)),
+                            Default::default(),
+                        );
+                        let (basis, r) = split_lu(qr);
+                        let mut q = fk::Mat::<T>::identity(s.m, s.size);
+                        householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
+                            basis.as_ref(),
+                            coeff.as_ref(),
+                            Conj::No,
+                            q.as_mut(),
+                            parmod::mk(s.par),
+                            MemStack::new(&mut MemBuffer::new(
+                                householder::apply_block_householder_sequence_on_the_left_in_place_scratch::<T>(
+                                    s.m, block_size, s.size,
+                                ),
+                            )),
+                        );
+                        s.outputs.push((r, q));
+                    }
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        let (r, q) = &s.outputs[bi];
+                        let q = to_layout(q.as_ref(), s.m, s.size, s.order);
+                        let r = to_layout(r.as_ref(), s.size, s.n, s.order);
+                        let mut recon = vec![T::zero(); s.m * s.n];
+                        mul(s.m, s.size, s.n, s.order, &q, &r, &mut recon);
+                        within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "qr")?;
+                        within::<T>(gram_residual(&q, s.m, s.size, s.order), 1.0, s.m, "qr Q")?;
+                    }
+                    Ok(())
+                },
+            ))
+        }
+
+        // ------------------------------------------------------------ lu
+
+        fn lu_op<T: Scalar + ComplexField>(
+            m: usize,
+            n: usize,
+            batch: usize,
+            order: Order,
+        ) -> Result<Op, String> {
+            let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 5));
+            struct S<T: ComplexField> {
+                a0: Vec<T>,
+                lus: Vec<(fk::Mat<T>, fk::Mat<T>, Vec<usize>, Vec<usize>)>,
+                m: usize,
+                n: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
+            }
+            let state = S {
+                a0,
+                lus: Vec::with_capacity(batch),
+                m,
+                n,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.lus.clear();
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        s.lus.push(partial_lu_of(mref(a0, s.m, s.n, s.order), s.par));
+                    }
+                    Ok(())
+                },
+                |s| {
+                    // The reconstruct is computed from the actual factorization the timed call
+                    // returned, not from a fresh one.
+                    let seq = ParCfg::Seq;
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        let (l, u, fwd, bwd) = &s.lus[bi];
+                        let mut out = fk::Mat::<T>::zeros(s.m, s.n);
+                        plu_rec::reconstruct(
+                            out.as_mut(),
+                            l.as_ref(),
+                            u.as_ref(),
+                            PermRef::new_checked(fwd, bwd, s.m),
+                            parmod::mk(seq),
+                            MemStack::new(&mut MemBuffer::new(
+                                plu_rec::reconstruct_scratch::<usize, T>(s.m, s.n, parmod::shape(seq)),
+                            )),
+                        );
+                        let recon = to_layout(out.as_ref(), s.m, s.n, s.order);
+                        within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "lu")?;
+                    }
+                    Ok(())
+                },
+            ))
+        }
+
+        fn full_piv_lu_op<T: Scalar + ComplexField>(
+            m: usize,
+            n: usize,
+            batch: usize,
+            order: Order,
+        ) -> Result<Op, String> {
+            let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 7));
+            struct S<T: ComplexField> {
+                a0: Vec<T>,
+                lus: Vec<(fk::Mat<T>, fk::Mat<T>, [Vec<usize>; 4])>,
+                m: usize,
+                n: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
+            }
+            let state = S {
+                a0,
+                lus: Vec::with_capacity(batch),
+                m,
+                n,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.lus.clear();
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        let mut lu = mref(a0, s.m, s.n, s.order).to_owned();
+                        let (m, n) = lu.shape();
+                        let mut rf = vec![0usize; m];
+                        let mut rb = vec![0usize; m];
+                        let mut cf = vec![0usize; n];
+                        let mut cb = vec![0usize; n];
+                        let req = flu::lu_in_place_scratch::<usize, T>(
+                            m,
+                            n,
+                            parmod::shape(s.par),
+                            Default::default(),
+                        );
+                        flu::lu_in_place(
+                            lu.as_mut(),
+                            &mut rf,
+                            &mut rb,
+                            &mut cf,
+                            &mut cb,
+                            parmod::mk(s.par),
+                            MemStack::new(&mut MemBuffer::new(req)),
+                            Default::default(),
+                        );
+                        let (l, u) = split_lu(lu);
+                        s.lus.push((l, u, [rf, rb, cf, cb]));
+                    }
+                    Ok(())
+                },
+                |s| {
+                    let seq = ParCfg::Seq;
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        let (l, u, [rf, rb, cf, cb]) = &s.lus[bi];
+                        let mut out = fk::Mat::<T>::zeros(s.m, s.n);
+                        flu_rec::reconstruct(
+                            out.as_mut(),
+                            l.as_ref(),
+                            u.as_ref(),
+                            PermRef::new_checked(rf, rb, s.m),
+                            PermRef::new_checked(cf, cb, s.n),
+                            parmod::mk(seq),
+                            MemStack::new(&mut MemBuffer::new(
+                                flu_rec::reconstruct_scratch::<usize, T>(s.m, s.n, parmod::shape(seq)),
+                            )),
+                        );
+                        let recon = to_layout(out.as_ref(), s.m, s.n, s.order);
+                        within::<T>(max_diff(a0, &recon), frob(a0), s.n.max(s.m), "full_piv_lu")?;
+                    }
+                    Ok(())
+                },
+            ))
+        }
+
+        // ------------------------------------------------------ cholesky
+
+        fn cholesky_op<T: Scalar + ComplexField>(
+            n: usize,
+            batch: usize,
+            order: Order,
+        ) -> Result<Op, String> {
+            let a0 = spd::<T>(n, batch, order, seed(n, n, 11));
+            struct S<T: ComplexField> {
+                a0: Vec<T>,
+                outputs: Vec<fk::Mat<T>>,
+                n: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
+            }
+            let state = S {
+                a0,
+                outputs: Vec::with_capacity(batch),
+                n,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.outputs.clear();
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
+                        // `Llt::new(A, Side::Lower)`: copy the lower triangle, factor, clear the upper.
+                        let mut l = fk::Mat::<T>::zeros(s.n, s.n);
+                        l.copy_from_triangular_lower(mref(a0, s.n, s.n, s.order));
+                        let req = llt_factor::cholesky_in_place_scratch::<T>(
+                            s.n,
+                            parmod::shape(s.par),
+                            Default::default(),
+                        );
+                        llt_factor::cholesky_in_place(
+                            l.as_mut(),
+                            Default::default(),
+                            parmod::mk(s.par),
+                            MemStack::new(&mut MemBuffer::new(req)),
+                            Default::default(),
+                        )
+                        .map_err(|e| format!("llt failed: {e:?}"))?;
+                        for j in 1..s.n {
+                            for i in 0..j {
+                                l[(i, j)] = T::zero_impl();
+                            }
+                        }
+                        s.outputs.push(l);
+                    }
+                    Ok(())
+                },
+                |s| {
+                    let seq = ParCfg::Seq;
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
+                        let mut out = fk::Mat::<T>::zeros(s.n, s.n);
+                        llt_rec::reconstruct(
+                            out.as_mut(),
+                            s.outputs[bi].as_ref(),
+                            parmod::mk(seq),
+                            MemStack::new(&mut MemBuffer::new(
+                                llt_rec::reconstruct_scratch::<T>(s.n, parmod::shape(seq)),
+                            )),
+                        );
+                        // the product is the lower triangle only; the library's own `reconstruct`
+                        // then makes it self-adjoint, so the check does the same
+                        for j in 1..s.n {
+                            for i in 0..j {
+                                out[(i, j)] = T::conj_impl(&out[(j, i)]);
+                            }
+                        }
+                        let recon = to_layout(out.as_ref(), s.n, s.n, s.order);
+                        within::<T>(max_diff(a0, &recon), frob(a0), s.n, "cholesky")?;
+                    }
+                    Ok(())
+                },
+            ))
+        }
+
+        // ----------------------------------------------------------- solve
+
+        fn solve_op<T: Scalar + ComplexField>(n: usize, batch: usize, order: Order) -> Result<Op, String> {
+            let a0 = diag_dominant::<T>(n, batch, order, seed(n, n, 13));
+            let b0 = fill_seeded::<T>(n * batch, seed(n, 1, 17));
+            struct S<T> {
+                a0: Vec<T>,
+                b0: Vec<T>,
+                b: Vec<T>,
+                sink: T,
+                n: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
+            }
+            let state = S {
+                a0,
+                b0: b0.clone(),
+                b: b0.clone(),
+                sink: T::zero(),
+                n,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.b.copy_from_slice(&s.b0);
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a = mref(&s.a0[bi * s.n * s.n..], s.n, s.n, s.order);
+                        let (l, u, fwd, bwd) = partial_lu_of(a, s.par);
+                        let rhs = mmut(&mut s.b[bi * s.n..], s.n, 1, s.order);
+                        plu_solve::solve_in_place_with_conj(
+                            l.as_ref(),
+                            u.as_ref(),
+                            PermRef::new_checked(&fwd, &bwd, s.n),
+                            Conj::No,
+                            rhs,
+                            parmod::mk(s.par),
+                            MemStack::new(&mut MemBuffer::new(
+                                plu_solve::solve_in_place_scratch::<usize, T>(s.n, 1, parmod::shape(s.par)),
+                            )),
+                        );
+                        acc(&mut s.sink, s.b[bi * s.n].clone());
+                    }
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
+                        let b0 = &s.b0[bi * s.n..(bi + 1) * s.n];
+                        let x = &s.b[bi * s.n..(bi + 1) * s.n];
+                        let mut ax = vec![T::zero(); s.n];
+                        mul(s.n, s.n, 1, s.order, a0, x, &mut ax);
+                        within::<T>(max_diff(&ax, b0), frob(b0), s.n, "solve")?;
+                    }
+                    Ok(())
+                },
+            ))
+        }
+
+        // -------------------------------------------------- triangular_solve
+
+        fn triangular_solve_op<T: Scalar + ComplexField>(
+            n: usize,
+            batch: usize,
+            order: Order,
+        ) -> Result<Op, String> {
+            let u0 = upper_triangular::<T>(n, batch, order, seed(n, n, 19));
+            let b0 = fill_seeded::<T>(n * batch, seed(n, 1, 23));
+            struct S<T> {
+                u0: Vec<T>,
+                b0: Vec<T>,
+                b: Vec<T>,
+                sink: T,
+                n: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
+            }
+            let state = S {
+                u0,
+                b0: b0.clone(),
+                b: b0.clone(),
+                sink: T::zero(),
+                n,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.b.copy_from_slice(&s.b0);
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let u = mref(&s.u0[bi * s.n * s.n..], s.n, s.n, s.order);
+                        let rhs = mmut(&mut s.b[bi * s.n..], s.n, 1, s.order);
+                        fk::linalg::triangular_solve::solve_upper_triangular_in_place(u, rhs, parmod::mk(s.par));
+                        acc(&mut s.sink, s.b[bi * s.n].clone());
+                    }
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let u0 = &s.u0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
+                        let b0 = &s.b0[bi * s.n..(bi + 1) * s.n];
+                        let x = &s.b[bi * s.n..(bi + 1) * s.n];
+                        let mut ux = vec![T::zero(); s.n];
+                        mul(s.n, s.n, 1, s.order, u0, x, &mut ux);
+                        within::<T>(max_diff(&ux, b0), frob(b0), s.n, "triangular_solve")?;
+                    }
+                    Ok(())
+                },
+            ))
+        }
+
+        // ----------------------------------------------------- svd_values
+
+        fn svd_values_op<T: Scalar + ComplexField>(
+            m: usize,
+            n: usize,
+            batch: usize,
+            order: Order,
+        ) -> Result<Op, String>
+        where
+            T::Real: Scalar,
+        {
+            let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 29));
+            struct S<T: ComplexField> {
+                a0: Vec<T>,
+                outputs: Vec<Vec<T::Real>>,
+                m: usize,
+                n: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
+            }
+            let state = S {
+                a0,
+                outputs: Vec::with_capacity(batch),
+                m,
+                n,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.outputs.clear();
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        // `MatRef::singular_values`, with the row's parallelism.
+                        let a = mref(a0, s.m, s.n, s.order);
+                        let mut sv = fk::diag::Diag::<T>::zeros(s.m.min(s.n));
+                        let req = fk::linalg::svd::svd_scratch::<T>(
+                            s.m,
+                            s.n,
+                            fk::linalg::svd::ComputeSvdVectors::No,
+                            fk::linalg::svd::ComputeSvdVectors::No,
+                            parmod::shape(s.par),
+                            Default::default(),
+                        );
+                        fk::linalg::svd::svd(
+                            a,
+                            sv.as_mut(),
+                            None,
+                            None,
+                            parmod::mk(s.par),
+                            MemStack::new(&mut MemBuffer::new(req)),
+                            Default::default(),
+                        )
+                        .map_err(|e| format!("singular_values failed: {e:?}"))?;
+                        s.outputs.push(sv.column_vector().iter().map(|x| T::real_part_impl(x)).collect());
+                    }
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        let sv = &s.outputs[bi];
+                        check_singular_values::<T>(a0, sv, s.m, s.n)?;
+                    }
+                    Ok(())
+                },
+            ))
+        }
+
+        // ------------------------------------------------------- svd_thin
+
+        fn svd_thin_op<T: Scalar + ComplexField>(
+            m: usize,
+            n: usize,
+            batch: usize,
+            order: Order,
+        ) -> Result<Op, String> {
+            let a0 = fill_seeded::<T>(m * n * batch, seed(m, n, 31));
+            struct S<T: ComplexField> {
+                a0: Vec<T>,
+                outputs: Vec<(fk::diag::Diag<T>, fk::Mat<T>, fk::Mat<T>)>,
+                m: usize,
+                n: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
+            }
+            let state = S {
+                a0,
+                outputs: Vec::with_capacity(batch),
+                m,
+                n,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.outputs.clear();
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        // `MatRef::thin_svd`, with the row's parallelism.
+                        let a = mref(a0, s.m, s.n, s.order);
+                        let r = s.m.min(s.n);
+                        let mut sv = fk::diag::Diag::<T>::zeros(r);
+                        let mut u = fk::Mat::<T>::zeros(s.m, r);
+                        let mut v = fk::Mat::<T>::zeros(s.n, r);
+                        let req = fk::linalg::svd::svd_scratch::<T>(
+                            s.m,
+                            s.n,
+                            fk::linalg::svd::ComputeSvdVectors::Thin,
+                            fk::linalg::svd::ComputeSvdVectors::Thin,
+                            parmod::shape(s.par),
+                            Default::default(),
+                        );
+                        fk::linalg::svd::svd(
+                            a,
+                            sv.as_mut(),
+                            Some(u.as_mut()),
+                            Some(v.as_mut()),
+                            parmod::mk(s.par),
+                            MemStack::new(&mut MemBuffer::new(req)),
+                            Default::default(),
+                        )
+                        .map_err(|e| format!("thin_svd failed: {e:?}"))?;
+                        s.outputs.push((sv, u, v));
+                    }
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
+                        let (sv, uu, vv) = &s.outputs[bi];
+                        let r = sv.dim();
+                        let u = to_layout(uu.as_ref(), s.m, r, s.order);
+                        let v = to_layout(vv.as_ref(), s.n, r, s.order);
+                        let scale = frob(a0);
+                        within::<T>(gram_residual(&u, s.m, r, s.order), 1.0, s.m, "svd_thin U")?;
+                        within::<T>(gram_residual(&v, s.n, r, s.order), 1.0, s.n, "svd_thin V")?;
+                        let s_diag = diag_vec(sv.as_ref());
+                        let scaled_v = scale_cols(&v, s.n, r, &s_diag, s.order);
+                        let mut recon = vec![T::zero(); s.m * s.n];
+                        mul_adj_b(s.m, r, s.n, s.order, &u, &scaled_v, &mut recon);
+                        within::<T>(max_diff(a0, &recon), scale, s.n.max(s.m), "svd_thin")?;
+                    }
+                    Ok(())
+                },
+            ))
+        }
+
+        // ---------------------------------------------------------- eigh
+
+        fn eigh_op<T: Scalar + ComplexField>(n: usize, batch: usize, order: Order) -> Result<Op, String> {
+            let a0 = hermitian::<T>(n, order, seed(n, n, 37));
+            let a0 = replicate(&a0, batch);
+            struct S<T: ComplexField> {
+                a0: Vec<T>,
+                outputs: Vec<(fk::diag::Diag<T>, fk::Mat<T>)>,
+                n: usize,
+                batch: usize,
+                order: Order,
+                par: ParCfg,
+            }
+            let state = S {
+                a0,
+                outputs: Vec::with_capacity(batch),
+                n,
+                batch,
+                order,
+                par: cfg_par(),
+            };
+            Ok(op_from(
+                state,
+                String::new(),
+                |s| {
+                    s.outputs.clear();
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
+                        // `MatRef::self_adjoint_eigen(Side::Lower)`, with the row's parallelism.
+                        let a = mref(a0, s.n, s.n, s.order);
+                        let mut u = fk::Mat::<T>::zeros(s.n, s.n);
+                        let mut sv = fk::diag::Diag::<T>::zeros(s.n);
+                        let req = fk::linalg::evd::self_adjoint_evd_scratch::<T>(
+                            s.n,
+                            fk::linalg::evd::ComputeEigenvectors::Yes,
+                            parmod::shape(s.par),
+                            Default::default(),
+                        );
+                        fk::linalg::evd::self_adjoint_evd(
+                            a,
+                            sv.as_mut(),
+                            Some(u.as_mut()),
+                            parmod::mk(s.par),
+                            MemStack::new(&mut MemBuffer::new(req)),
+                            Default::default(),
+                        )
+                        .map_err(|e| format!("self_adjoint_eigen failed: {e:?}"))?;
+                        s.outputs.push((sv, u));
+                    }
+                    Ok(())
+                },
+                |s| {
+                    for bi in 0..s.batch {
+                        let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
+                        let (sv, uu) = &s.outputs[bi];
+                        let u = to_layout(uu.as_ref(), s.n, s.n, s.order);
+                        let scale = frob(a0);
+                        within::<T>(gram_residual(&u, s.n, s.n, s.order), 1.0, s.n, "eigh U")?;
+                        let s_diag = diag_vec(sv.as_ref());
+                        let mut au = vec![T::zero(); s.n * s.n];
+                        mul(s.n, s.n, s.n, s.order, a0, &u, &mut au);
+                        let us = scale_cols(&u, s.n, s.n, &s_diag, s.order);
+                        within::<T>(max_diff(&au, &us), scale, s.n, "eigh")?;
+                    }
+                    Ok(())
+                },
+            ))
         }
     };
 }
 
-define_backend!(fork, faer_fork);
-define_backend!(upstream, faer_upstream);
+define_backend!(fork, faer_fork, fork_par, explicit_ops);
+define_backend!(upstream, faer_upstream, upstream_par, highlevel_ops);

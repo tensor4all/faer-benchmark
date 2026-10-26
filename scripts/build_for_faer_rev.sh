@@ -200,6 +200,22 @@ case "$VENDOR" in
     echo "ERROR: unknown --vendor '$VENDOR'; this harness knows openblas and mkl" >&2; exit 1 ;;
 esac
 
+# ------------------------------------------------------------ fork API generation
+# The fork is measured at two parallelism API generations without editing the library: the 0.24.x
+# line (`Par` is `Copy`, workspace queries take a `Par`, a process-wide setting exists) and the 0.25
+# line (`Par<'team>`, `ParShape` for workspace queries, no process-wide setting). The harness's fork
+# rows call explicit-parallelism entry points only (`backend::fork_par`); the one spelling that
+# differs is the type a `*_scratch` function takes, and the harness feature `fork-par-shape` picks it.
+# The generation is read from the checkout itself (`faer/src/lib.rs` declares `pub enum ParShape`
+# or it does not), so it cannot disagree with the revision that is linked.
+if grep -q '^pub enum ParShape' "$FORK_DIR/faer/src/lib.rs"; then
+    FORK_API="parshape"
+    FEATURES="$FEATURES,fbench/fork-par-shape"
+else
+    FORK_API="par"
+fi
+# ------------------------------------------------------------------------------
+
 # --------------------------------------------------------------- path injection
 # The measured libraries are the checkouts the caller named, not registry downloads, and Cargo has
 # no `--path` for a dependency. So the registry entries the harness declares are patched to those
@@ -219,6 +235,19 @@ PATCH_ARGS=(
 # A `[patch]` is silently ignored when the locked version is not the version the checkout provides:
 # cargo warns and links the registry crate instead, so the build would record a revision it did not
 # use. Resolve the graph first and refuse unless both measured crates come from the named checkouts.
+# The committed `Cargo.lock` is the harness's own resolution; a path-patched fork whose version or
+# dependency set differs from the one the lock names (0.24.x against 0.25.0 are different lock
+# entries) makes cargo rewrite it. That rewrite belongs to the build of *that checkout*, not to the
+# harness source: the recorder's clean-tree rule would otherwise refuse the run after the build. So
+# the lock the build resolved is kept beside the binary (`Cargo.lock.resolved`, hashed into
+# `BUILD_LOCK_SHA256`) and the committed lock is put back byte for byte. Read the resolved lock's
+# diff against the committed one unfiltered (`diff Cargo.lock <target>/Cargo.lock.resolved`): the
+# only acceptable differences are the fork's own version and dependency lines.
+lock_backup="$(mktemp)"
+cp "$PROJECT_DIR/Cargo.lock" "$lock_backup"
+restore_lock() { cp "$lock_backup" "$PROJECT_DIR/Cargo.lock"; rm -f "$lock_backup"; }
+trap restore_lock EXIT
+
 patch_meta="$(mktemp)"
 if ! cargo metadata --manifest-path "$PROJECT_DIR/Cargo.toml" --format-version 1 --offline \
         "${PATCH_ARGS[@]}" > "$patch_meta" 2>/dev/null; then
@@ -244,6 +273,7 @@ rm -f "$patch_meta"
 bin_args=()
 for bin in "${BINS[@]}"; do bin_args+=(--bin "$bin"); done
 
+
 RUSTC_WRAPPER= CARGO_TARGET_DIR="$target" \
     env -u OPENBLAS_NUM_THREADS -u OMP_NUM_THREADS -u RAYON_NUM_THREADS -u MKL_NUM_THREADS \
         -u MKL_DOMAIN_NUM_THREADS -u MKL_INTERFACE_LAYER -u MKL_THREADING_LAYER -u MKL_DYNAMIC \
@@ -252,6 +282,8 @@ RUSTC_WRAPPER= CARGO_TARGET_DIR="$target" \
     -p fbench --features "$FEATURES" "${PATCH_ARGS[@]}" "${bin_args[@]}" >&2
 
 bin_dir="$target/$subdir"
+cp "$PROJECT_DIR/Cargo.lock" "$target/Cargo.lock.resolved"
+lock_sha="$(sha256sum "$target/Cargo.lock.resolved" | cut -d' ' -f1)"
 {
     printf 'FAER_FORK_REV=%q\n' "$fork_rev"
     printf 'FAER_FORK_DIRTY=%q\n' "$fork_dirty"
@@ -268,5 +300,7 @@ bin_dir="$target/$subdir"
     printf 'BUILD_FEATURES=%q\n' "$FEATURES"
     printf 'BUILD_ENV=%q\n' "$VENDOR_BUILD_ENV"
     printf 'BUILD_VENDOR=%q\n' "$VENDOR"
+    printf 'BUILD_FORK_API=%q\n' "$FORK_API"
+    printf 'BUILD_LOCK_SHA256=%q\n' "$lock_sha"
 } > "$OUT_FILE"
 echo "built ${BINS[*]} for fork $fork_rev and upstream $up_rev (dirty=$fork_dirty/$up_dirty) in $bin_dir" >&2

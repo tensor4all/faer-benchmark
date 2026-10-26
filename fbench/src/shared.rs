@@ -298,6 +298,23 @@ pub fn fill_seeded<T: Scalar>(len: usize, seed: u64) -> Vec<T> {
 
 /// `c = a * b` with `a` `m x k` and `b` `k x n`, all in the same `order`.
 pub fn mul<T: Scalar>(m: usize, k: usize, n: usize, order: Order, a: &[T], b: &[T], c: &mut [T]) {
+    if order == Order::F {
+        // Column-major: accumulate down contiguous columns. Each `c[i, j]` is still the sum over `p` in
+        // ascending order starting from zero, so the result is bit-identical to the loop below; only the
+        // memory access is cache friendly (the strided loop took minutes at n = 2048).
+        for j in 0..n {
+            let col = &mut c[j * m..(j + 1) * m];
+            col.fill(T::zero());
+            for p in 0..k {
+                let bpj = b[p + j * k];
+                let acol = &a[p * m..(p + 1) * m];
+                for i in 0..m {
+                    col[i].add_assign(acol[i].mul(bpj));
+                }
+            }
+        }
+        return;
+    }
     for j in 0..n {
         for i in 0..m {
             let mut acc = T::zero();
@@ -319,6 +336,21 @@ pub fn mul_adj_b<T: Scalar>(
     b: &[T],
     c: &mut [T],
 ) {
+    if order == Order::F {
+        // as in `mul`: same per-element summation order, contiguous access
+        for j in 0..n {
+            let col = &mut c[j * m..(j + 1) * m];
+            col.fill(T::zero());
+            for p in 0..k {
+                let bjp = b[j + p * n].conj();
+                let acol = &a[p * m..(p + 1) * m];
+                for i in 0..m {
+                    col[i].add_assign(acol[i].mul(bjp));
+                }
+            }
+        }
+        return;
+    }
     for j in 0..n {
         for i in 0..m {
             let mut acc = T::zero();
