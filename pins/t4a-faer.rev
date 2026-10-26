@@ -45,4 +45,13 @@
 # cells by 1.4-1.8x on `qr_factor` and are exact everywhere else; the next publication
 # replaces them. 1T at 32 was not re-measured: at 1T the copy never paid, and the change
 # removes it.
-50c2b989484f063f4e1b132adc333715391d8b73
+# `0e15729` from 2026-10-27, the merge of tensor4all/faer#61 (`t4a-faer` 0.25.0: `Par` carries its
+# lifetime and is no longer `Copy`, workspace queries take `ParShape`, parallel floors decided from the
+# dispatch cost, the team route, `t4a-private-gemm-x86` 0.1.26). Measured as the pair `0e15729` against
+# `5a27bce` (`20261026T183341Z-pair3-cand-1` against `20261026T180406Z-pair3-base-1`, MKL arm, 1/4/8T,
+# f64/c64, both orders): control 0.9997, family medians 0.979 to 1.017, no cell robustly slower by more
+# than 10% (largest 1.075; residuals listed in the fork's `PATCHSET.md`). The merge is a fast-forward, so
+# the merged tree is the measured tree. The pin moved without re-recording the declared suite: the
+# publication run at this revision is a separate, deliberately started run, and the pages still name the
+# previous pin until it lands. Harness: `harness/faer-0.25` (#27) selects the 0.25 entry points.
+0e15729ad011e3813a41c168167ec61ed11a9dbb
