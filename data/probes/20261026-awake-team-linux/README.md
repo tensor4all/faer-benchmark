@@ -29,7 +29,66 @@ and the per-process host record: `raw/`.
   before it was committed. rustc 1.99.0. Binary sha256 in `raw/build-info.txt`. fbench `--features faer-only,team`
   (no vendor arm).
 
-## Acceptance conditions: recommendation
+## Final run after the fixes (`raw-exec3/`, `tables-*-exec3.md`), 18:47 to 20:34 JST
+
+Same host, protocol and runner (`run_awake.py all --bins exec3`), **113 processes, all accepted at the first attempt**.
+Five rows, every row in every position (5 rotations): `held` (fork, `Par::Rayon`, spindle group held), `upstream`
+(upstream faer 0.24.4, spindle group held), `hot`, `free`, `team` (`Par::Team`).
+
+Revisions (all pushed, none merged): threadteam `feat/dispatch-cost` `0036264`; faer `exp/team-gemm-executor` `9f92e5c`;
+t4a-private-gemm-x86 `feat/executor` `212cacf` (0.1.26, on the race fix `fix/lhs-pack-claim` `7069b59`, draft PRs #2
+and #1); strided-rs `feat/dispatch-cost` `5da0ef3`; tcontract `597ef0f4`, cpueinsum `38360c8`, tlinalg `cf6fa84`;
+harness `88b5f30` (+ `a4030a7` probe). Sha256 in `raw-exec3/build-info.txt`.
+
+What changed since the first run, each with its cause:
+
+| fix | where | cause found by this run |
+| --- | --- | --- |
+| a team never hands threads to an outside runtime on x86 | faer `c47e8e2` | `spicy_matmul` and the triangular product passed `par.degree()` of a team to `private_gemm_x86` (spindle) |
+| the x86 kernel runs on the team: `Fork` / `gemm_with` | private-gemm-x86 `feat/executor`, faer `4ed3db8` | the team GEMM used the `gemm` crate in outer tiles (1.05-1.11x on squares), and triangular/indexed blocks could not be tiled outside |
+| shared lhs/rhs packing is claimed by one job | private-gemm-x86 `7069b59` | unclaimed packing: jobs on a shared block all packed it at once when they started together; 128^3 at 8 threads 71-110 us on spindle (start-timing luck), ~110 us on a team; after the fix 34 us on both |
+| one floor per block apply, cheap gates | faer `c4f802a`, `7e0f98f` | a non-Seq `Par` cost +8-21% on QR 128 with every gate serial: 353 gate evaluations per factorization (`width_for` per GEMM, `DispatchCosts` copies) |
+| one parker per member | threadteam `7095893` | one pool-wide parker: every publish woke every parked member (`notify_all`), so a narrow section on a team of 8 cost 2.8 us at width 2 against 0.57 after |
+| measured Linux row, flat model above width 6, precomputed lookups | threadteam `586738b`, `7095893`, `0036264` | `host_default()` was the generic table on Linux |
+| copy gated as `Copy`, reductions as `Reduce`, element functions carry their class (`MapFn`, `Classed`) | strided `bd03608`, `5da0ef3` | contiguous copy and every opaque `map_into` closure (`exp` too) were gated as `Map` |
+| svd_values, svd_thin, eigh, triangular_solve take the row's `Par` | harness `c31bddb` | they called high-level solvers that read the process-wide parallelism, so the team row ran `Par::rayon` outside any group (identical to `free`) |
+
+Not merged: a tree-shaped wake (threadteam `feat/tree-wake` `cb8df37`): each tree level pays a parked core's whole
+C-state exit (55-60 us) against ~3 us saved per serially woken member, slower at widths 4-8 on this host.
+
+### Team over held (spindle) and over upstream, final run
+
+| family | 8 threads team/held | 8 threads team/upstream | 4 threads team/held |
+| --- | --- | --- | --- |
+| GEMM 128^3 / 256^3 / 512^3..2048^3 / skinny | 0.96 / 0.99 / 1.00 / 0.99-1.00 | 0.29 / 0.65 / 0.96-1.00 / 0.99-1.00 | 0.99 / 1.00 / 1.00 / 0.98-1.00 |
+| LU 128 / 256 / 512-2048 | 0.99 / 0.97 / 0.88-0.92 | 0.88-0.93 | 1.00 / 0.90 / 0.87-0.90 |
+| QR 128 / 256-2048 | **0.78** / 0.94-0.98 | 0.41-0.71 | 0.80 / 0.96-0.99 |
+| Cholesky 128 / 256 / 512-2048 | 1.01 / 0.98 / 0.89-0.93 | 0.80-0.96 | 0.94 / 0.97 / 0.93-0.95 |
+| SVD values 128 / 256 / 512 / 1024-2048 | 1.01 / 0.88 / **0.75** / 0.92-0.98 | 0.88-1.02 | 1.02 / 0.88 / 0.78 / 0.93-0.99 |
+| EVD (eigh) 128-2048 | 0.85-0.95 | 0.89-0.98 | 0.85-0.97 |
+| small sequences: gemm64 / gemm128 / chain / lu64, lu128 | 0.58 / 0.96 / **0.56** / 0.98-1.01 | 0.94 / 0.32 / 0.69 / 0.89-0.93 | 0.67 / 0.99 / 0.61 / 1.00 |
+
+No cell has the team above 1.02 times the held row (SVD values 128 and Cholesky 128 at 8 threads, within the
+spread); the row-position spread is at most 1.09 except Cholesky 128 at 4 threads (1.19). `diag-gemm`: no CPU time
+outside the team in any team cell. Idle traces unchanged (condition 3). Downstream break-even on a team at width 8:
+`exp` 2048 elements (11.7 us serial; plain in pool 8192, outside 32768), copy 65536, map and `sum` 32768, tcontract
+matmul and the cpueinsum chain `n = 48` (plain 96), tlinalg batched QR `n32xb8` (plain `n128xb8`).
+
+Dispatch cost after the parker fix (pool of 8, 10 us shares, us): team 0.57 / 0.70 / 0.87 / 0.98 at widths 2/4/6/8,
+after a 1 ms gap 0.82-1.26; in pool 3.0-3.6; outside 6.7-10.1; a team after 300 ms parked 73-90 (C-state exit of
+the parked cores: C2 18 us, C3 300 us declared).
+
+### Recommendation per condition (final)
+
+| # | condition | recommendation |
+| --- | --- | --- |
+| 1 | `Par<'team>` carries team authority | **accept** with the fixes above: no thread outside the team in any cell; recorded-thread test in faer |
+| 2 | thresholds from the token's dispatch cost | **accept**: measured Linux row in `host_default()`, flat width model (8% optimistic at width 8), cheapest-width rejection via `min_cost`. Open: serial rates are still the M5's (Linux 2.0 GHz rates are 1.4-3.7x larger), so gates are conservative here |
+| 3 | no spinning beyond the idle spin | **accept** (unchanged) |
+| 4 | fork's process-wide parallelism removed | **not met**; the svd/eigh harness bug shows why it matters: high-level solvers silently run outside the caller's team. Three harness ops (`qr` with thin Q, `full_piv_lu`, `solve`) still go through it |
+| 5 | quiet Linux run incl. the x86 product path | **accept**: the team row is at or below the held spindle row in every measured cell |
+
+## First run: acceptance conditions as measured before the fixes
 
 | # | condition | result on Linux x86_64 | recommendation |
 | --- | --- | --- | --- |

@@ -1,0 +1,24 @@
+[package]
+name = "qr128-fix"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# QR 128 region trace, section counters and gate-mode timings on the Linux host (tensor4all-meta#51).
+# Standalone: not a member of the fbench workspace. faer and threadteam are linked by path from the worktrees.
+[workspace]
+
+[[bin]]
+name = "qr128-fix"
+path = "src/main.rs"
+
+[dependencies]
+faer = { package = "t4a-faer", path = "../../../../../../faer-teamgemm/faer", default-features = false, features = ["std", "linalg", "rand", "rayon", "threadteam", "par-trace"] }
+threadteam = { path = "../../../../../../threadteam-rs", default-features = false, features = ["parallel"] }
+
+[profile.release]
+opt-level = 3
+debug = false
+
+[patch."https://github.com/tensor4all/threadteam-rs"]
+threadteam = { path = "../../../../../../threadteam-rs" }

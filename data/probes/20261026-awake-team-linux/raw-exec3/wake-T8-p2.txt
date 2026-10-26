@@ -1,0 +1,22 @@
+load average at start [2.228515625, 2.87060546875, 2.640625]; caller thread QoS: n/a
+
+raw park/unpark on plain threads (serial unpark), microseconds
+    n   unpark calls     first runs      last runs
+    1           15.5           69.6           69.6
+    2           18.9           69.2           70.4
+    4           26.0           70.0           74.5
+    8           47.5           71.3           93.2
+
+microseconds; total = call to return, slowest = call to the last share starting
+width variant                state        total   slowest late>1ms        max
+    2 team qos=builder-default spinning       0.6       0.5       0%        1.1
+    2 team qos=builder-default parked        75.0      74.2       0%       99.2
+    2 plain Exec::fork       idle          97.2      86.6       0%      121.8
+    4 team qos=builder-default spinning       0.8       0.6       0%        1.3
+    4 team qos=builder-default parked        78.4      77.5       0%      110.0
+    4 plain Exec::fork       idle         104.0      93.3       0%      119.2
+    8 team qos=builder-default spinning       1.2       1.0       0%       19.3
+    8 team qos=builder-default parked        88.8      87.9       0%      727.1
+    8 plain Exec::fork       idle         120.4     106.5       0%      131.2
+
+load average at end [1.8076171875, 2.74609375, 2.60302734375]

@@ -1,0 +1,9 @@
+team of 4, idle_spin 200 ms; members m1..m3 (the pool has 4 workers, one is unused)
+A seq 120 ms (no section)          wall   120.0 ms  cpu/wall 4.00  | m0: spin 100% park   0% run   0% m1: spin 100% park   0% run   0% m2: spin 100% park   0% run   0%
+B seq 800 ms (no section)          wall   800.0 ms  cpu/wall 1.30  | m0: spin  10% park  90% run   0% m1: spin  10% park  90% run   0% m2: spin  10% park  90% run   0%
+C 2000 sections back to back       wall    41.4 ms  cpu/wall 3.98  | m0: spin   2% park   0% run  98% m1: spin   2% park   0% run  98% m2: spin   2% park   0% run  98%
+D seq 150 ms after sections        wall   150.0 ms  cpu/wall 4.02  | m0: spin 100% park   0% run   0% m1: spin 100% park   0% run   0% m2: spin 100% park   0% run   0%
+E seq 800 ms after D               wall   800.0 ms  cpu/wall 1.18  | m0: spin   6% park  94% run   0% m1: spin   6% park  94% run   0% m2: spin   6% park  94% run   0%
+F 1 section, then seq 150 ms       wall   150.0 ms  cpu/wall 4.00  | m0: spin 100% park   0% run   0% m1: spin 100% park   0% run   0% m2: spin 100% park   0% run   0%
+G 10 sections, 100 ms gaps         wall  1000.2 ms  cpu/wall 4.00  | m0: spin 100% park   0% run   0% m1: spin 100% park   0% run   0% m2: spin 100% park   0% run   0%
+H seq 800 ms (no section)          wall   800.0 ms  cpu/wall 1.37  | m0: spin  12% park  88% run   0% m1: spin  12% park  88% run   0% m2: spin  12% park  88% run   0%
