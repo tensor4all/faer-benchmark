@@ -22,6 +22,7 @@ mod lapack;
 mod op;
 mod qos;
 mod dispatch;
+mod gemmdiag;
 mod smallops;
 mod shared;
 mod team;
@@ -276,7 +277,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             csv: None,
         });
     }
-    if command != "run" && command != "verify" && command != "dispatch" && command != "smallops" {
+    if command != "run" && command != "verify" && command != "dispatch" && command != "smallops" && command != "diag-gemm" {
         return Err(USAGE.to_owned());
     }
     let mut a = Args {
@@ -606,6 +607,13 @@ fn main() -> ExitCode {
     qos::report("before");
     if args.command == "smallops" {
         let code = smallops::main(&args.rows, threads, args.reps, args.csv.as_deref());
+        qos::report("after");
+        return code;
+    }
+    if args.command == "diag-gemm" {
+        // `--n` sizes (square GEMM), `--reps` seconds per cell
+        let sizes: Vec<usize> = args.shapes.iter().map(|s| s.n).collect();
+        let code = gemmdiag::main(&args.rows, threads, &args.families.iter().filter(|f| ALL_FAMILIES.contains(&f.as_str())).cloned().collect::<Vec<_>>(), &sizes, args.reps as f64);
         qos::report("after");
         return code;
     }

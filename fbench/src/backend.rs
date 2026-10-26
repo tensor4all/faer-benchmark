@@ -251,18 +251,10 @@ macro_rules! define_backend {
             ) -> Result<Op, String> {
                 let a = fill_seeded::<T>(m * k * batch, seed(m, k, n));
                 let b = fill_seeded::<T>(k * n * batch, seed(k, n, m));
-                let mut c_ref = vec![T::zero(); m * n * batch];
-                for bi in 0..batch {
-                    mul(
-                        m,
-                        k,
-                        n,
-                        order,
-                        &a[bi * m * k..(bi + 1) * m * k],
-                        &b[bi * k * n..(bi + 1) * k * n],
-                        &mut c_ref[bi * m * n..(bi + 1) * m * n],
-                    );
-                }
+                // The naive reference product is built when `check` first needs it, not at construction:
+                // above `--check-max-dim` no check runs and the O(m*n*k) triple loop (minutes at 2048)
+                // would otherwise be paid per row and per process before anything is timed.
+                let c_ref: Vec<T> = Vec::new();
                 struct S<T> {
                     a: Vec<T>,
                     b: Vec<T>,
@@ -303,6 +295,21 @@ macro_rules! define_backend {
                         Ok(())
                     },
                     |s| {
+                        if s.c_ref.is_empty() {
+                            let mut c_ref = vec![T::zero(); s.m * s.n * s.batch];
+                            for bi in 0..s.batch {
+                                mul(
+                                    s.m,
+                                    s.k,
+                                    s.n,
+                                    s.order,
+                                    &s.a[bi * s.m * s.k..(bi + 1) * s.m * s.k],
+                                    &s.b[bi * s.k * s.n..(bi + 1) * s.k * s.n],
+                                    &mut c_ref[bi * s.m * s.n..(bi + 1) * s.m * s.n],
+                                );
+                            }
+                            s.c_ref = c_ref;
+                        }
                         let diff = max_diff(&s.c, &s.c_ref);
                         within::<T>(diff, frob(&s.c_ref), s.n.max(s.m), "gemm")
                     },

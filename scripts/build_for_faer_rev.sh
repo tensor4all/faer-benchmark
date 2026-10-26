@@ -56,6 +56,7 @@ OUT_FILE=""
 VENDOR="${BENCH_VENDOR:-}"
 PROFILE="${BENCH_BUILD_PROFILE:-release}"
 BINS=()
+EXTRA_FEATURES="${BENCH_EXTRA_FEATURES:-}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --checkout) FORK_DIR="${2:?--checkout needs a path}"; shift 2 ;;
@@ -64,6 +65,7 @@ while [[ $# -gt 0 ]]; do
         --out) OUT_FILE="${2:?--out needs a file}"; shift 2 ;;
         --bin) BINS+=("${2:?--bin needs a name}"); shift 2 ;;
         --profile) PROFILE="${2:?--profile needs a name}"; shift 2 ;;
+        --features) EXTRA_FEATURES="${2:?--features needs a list}"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "ERROR: unknown argument '$1'" >&2; usage; exit 2 ;;
     esac
@@ -113,7 +115,7 @@ up_ref="$(git -C "$UPSTREAM_DIR" describe --tags --exact-match 2>/dev/null || gi
 # Keyed by the fork revision and the vendor as well as the dirty state: the two arms are different
 # feature sets, and a shared target directory would have the second build replace the first binary
 # while the manifest still named the first.
-target="$PROJECT_DIR/target/faer-rev/${fork_rev:0:12}-${VENDOR}${suffix}"
+target="${BENCH_TARGET_DIR:-$PROJECT_DIR/target/faer-rev/${fork_rev:0:12}-${VENDOR}${suffix}}"
 profile_flag=(); subdir=debug
 if [[ "$PROFILE" == release ]]; then profile_flag=(--release); subdir=release; fi
 
@@ -122,6 +124,11 @@ if [[ "$PROFILE" == release ]]; then profile_flag=(--release); subdir=release; f
 newest_dir() { ls -d $1 2>/dev/null | sort -V | tail -1; }
 
 case "$VENDOR" in
+  none)
+    # No vendor library: the faer-only comparisons (`fbench/faer-only`, tensor4all/faer-benchmark#24).
+    FEATURES="fbench/faer-only"
+    VENDOR_BUILD_ENV=""
+    ;;
   openblas)
     FEATURES="fbench/link-openblas"
     # Declared, not inherited. `openblas-src` reads `OPENBLAS_DYNAMIC_ARCH` at build time; without
@@ -240,6 +247,11 @@ for name, expected in (('t4a-faer', expected_fork), ('faer', expected_upstream))
         raise SystemExit(1)
 PYEOF
 rm -f "$patch_meta"
+
+# Extra harness features (e.g. `team` for the `faer-fork-team` row), comma separated.
+if [[ -n "$EXTRA_FEATURES" ]]; then
+    for f in ${EXTRA_FEATURES//,/ }; do FEATURES="$FEATURES,fbench/$f"; done
+fi
 
 bin_args=()
 for bin in "${BINS[@]}"; do bin_args+=(--bin "$bin"); done

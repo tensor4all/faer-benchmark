@@ -1,0 +1,34 @@
+[package]
+name = "tt-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Linux ports of threadteam-rs benches/{dispatch_cost,wake_probe,idle_trace}.rs, built against the worktree
+# at the handoff revision (d08b3e7). Standalone, not an fbench member.
+# `dispatch_cost` and `wake_probe` are timing probes and are built WITHOUT `trace` (the member trace ring is
+# compiled in by the feature); `idle_trace` needs it and is built separately into its own target directory.
+[features]
+trace = ["threadteam/trace"]
+
+[dependencies]
+threadteam = { path = "../../../../../../threadteam-rs", features = ["parallel"] }
+libc = "0.2"
+
+[[bin]]
+name = "dispatch_cost"
+path = "src/bin/dispatch_cost.rs"
+
+[[bin]]
+name = "wake_probe"
+path = "src/bin/wake_probe.rs"
+
+[[bin]]
+name = "idle_trace"
+path = "src/bin/idle_trace.rs"
+required-features = ["trace"]
+
+[workspace]
+
+[profile.release]
+debug = 0
