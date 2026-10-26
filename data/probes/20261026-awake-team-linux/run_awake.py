@@ -16,6 +16,7 @@ before and after, no other build/test process, boost off, scrubbed thread enviro
 Run it under the observer mask:  taskset -c 0-3,12-15 python3 run_awake.py c
 
 `--bins exec2`: the same for the *-exec2 binaries (build_exec2.sh: faer 7e0f98f, threadteam 7095893, kernel 212cacf) and raw-exec2/.
+`--bins exec3`: the same for the *-exec3 binaries (build_exec3.sh: faer 9f92e5c, threadteam 0036264, kernel 212cacf, strided-rs 5da0ef3, fbench svd_values/eigh/svd_thin/triangular_solve on the explicit Par) and raw-exec3/.
 `--bins exec`: the *-exec binaries (target-bench/{fbench,tt,tt-trace,consts,stack}-exec) and raw-exec/ instead of raw/.
 
 Resume: a process whose tag is already in raw/processes.log with busy=false is skipped.
@@ -202,7 +203,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", default="", help="run only processes whose tag contains this text")
     ap.add_argument("--out", default=str(HERE))
-    ap.add_argument("--bins", default=os.environ.get("AWAKE_BINS", ""), choices=["", "exec", "exec2"],
+    ap.add_argument("--bins", default=os.environ.get("AWAKE_BINS", ""), choices=["", "exec", "exec2", "exec3"],
                     help="binary set: '' = target-bench/<dir> (acceptance run, output raw/); exec = target-bench/<dir>-exec "
                          "(team-gemm-executor build, output raw-exec/; log it with `| tee run-exec.log`)")
     a = ap.parse_args()

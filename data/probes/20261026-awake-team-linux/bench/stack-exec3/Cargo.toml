@@ -1,0 +1,61 @@
+[package]
+name = "stack-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Confirmation sweeps of the dispatch-cost gates of the downstream stack (strided copy/map/exp/sum, tcontract
+# matmul, cpueinsum chain: `thr-confirm`; tlinalg batched small LU/QR: `tl-probe`) against the worktrees at the
+# handoff revisions: threadteam-rs d08b3e7, strided-rs 6821b53, tcontract-rs 597ef0f4, cpueinsum-rs 38360c8,
+# tlinalg-rs cf6fa84 and faer 2107b81 (the downstream locks pin faer 9cd64f0; this probe patches the fork to the
+# worktree like thresholds-data's thr-stack did). Standalone.
+[lib]
+name = "stack_probe"
+path = "../stack/src/lib.rs"
+
+[[bin]]
+name = "thr-confirm"
+path = "../stack/src/bin/thr_confirm.rs"
+
+[[bin]]
+name = "tl-probe"
+path = "../stack/src/bin/tl_probe.rs"
+
+[[bin]]
+name = "tl-team-diag"
+path = "../stack/src/bin/tl_team_diag.rs"
+
+[features]
+# gate-decision log of faer (`utils::cost::trace`); keep it out of timing builds
+trace = ["faer/par-trace"]
+
+[dependencies]
+faer = { package = "t4a-faer", path = "../../../../../../faer-teamgemm-pin/faer", default-features = false, features = ["std", "rayon", "threadteam"] }
+threadteam = { path = "../../../../../../threadteam-rs", default-features = false, features = ["parallel"] }
+strided-basic = { path = "../../../../../../extern-build/strided-rs-5da0ef3/strided-basic", features = ["parallel"] }
+strided-view = { path = "../../../../../../extern-build/strided-rs-5da0ef3/strided-view" }
+tcontract = { path = "../../../../../../tcontract-rs/crates/tcontract" }
+tcontract-exec = { path = "../../../../../../tcontract-rs/crates/tcontract-exec" }
+tcontract-kernel = { path = "../../../../../../tcontract-rs/crates/tcontract-kernel", features = ["std"] }
+cpueinsum = { path = "../../../../../../cpueinsum-rs/crates/cpueinsum" }
+tlinalg = { path = "../../../../../../tlinalg-rs/crates/tlinalg" }
+tlinalg-bench = { path = "../../../../../../tlinalg-rs/crates/tlinalg-bench" }
+
+[patch.crates-io]
+threadteam = { path = "../../../../../../threadteam-rs" }
+strided-traits = { path = "../../../../../../extern-build/strided-rs-5da0ef3/strided-traits" }
+strided-view = { path = "../../../../../../extern-build/strided-rs-5da0ef3/strided-view" }
+strided-perm = { path = "../../../../../../extern-build/strided-rs-5da0ef3/strided-perm" }
+strided-basic = { path = "../../../../../../extern-build/strided-rs-5da0ef3/strided-basic" }
+tcontract = { path = "../../../../../../tcontract-rs/crates/tcontract" }
+tcontract-exec = { path = "../../../../../../tcontract-rs/crates/tcontract-exec" }
+t4a-faer = { path = "../../../../../../faer-teamgemm-pin/faer" }
+t4a-faer-traits = { path = "../../../../../../faer-teamgemm-pin/faer-traits" }
+
+[patch."https://github.com/tensor4all/threadteam-rs"]
+threadteam = { path = "../../../../../../threadteam-rs" }
+
+[workspace]
+
+[profile.release]
+debug = 0

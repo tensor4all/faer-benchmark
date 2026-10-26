@@ -2,6 +2,7 @@
 //! strided copy/map/exp/sum, a tcontract matmul and a small cpueinsum chain, serial vs plain token (outside and
 //! inside the pool) vs team token at width `W`. `thr-confirm ROUNDS W` prints CSV: family,shape,mode,round,ns.
 use stack_probe::{sweep, Work};
+use strided_basic::execution::KernelClass;
 use strided_basic::{copy_into, map_into, sum};
 use strided_view::{StridedView, StridedViewMut};
 use tcontract::api::{CSpec, DType, Labels, LayoutSpec, Op, OperandSpec, Problem};
@@ -21,12 +22,12 @@ fn strided(kind: &'static str, n: usize) -> Work {
         "map" => Box::new(move |exec| {
             let s: StridedView<f64> = StridedView::new(&src, &[n], &[1], 0).unwrap();
             let mut d = StridedViewMut::new(&mut dst, &[n], &[1], 0).unwrap();
-            map_into(&mut d, &s, |x| x * 2.0 + 1.0, exec).unwrap();
+            map_into(&mut d, &s, |x: f64| x * 2.0 + 1.0, exec).unwrap();
         }),
         "exp" => Box::new(move |exec| {
             let s: StridedView<f64> = StridedView::new(&src, &[n], &[1], 0).unwrap();
             let mut d = StridedViewMut::new(&mut dst, &[n], &[1], 0).unwrap();
-            map_into(&mut d, &s, |x| x.exp(), exec).unwrap();
+            map_into(&mut d, &s, KernelClass::Transcendental.with(|x: f64| x.exp()), exec).unwrap();
         }),
         "sum" => Box::new(move |exec| {
             let s: StridedView<f64> = StridedView::new(&src, &[n], &[1], 0).unwrap();
