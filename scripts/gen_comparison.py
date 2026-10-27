@@ -101,9 +101,7 @@ def main(argv=None):
     ap.add_argument('--mkl', required=True, help='run directory of the three-engine arm')
     ap.add_argument('--openblas', required=True, help='run directory of the two-engine arm')
     ap.add_argument('--out', required=True)
-    ap.add_argument('--index', help='also write a landing page listing every page under this directory')
     ap.add_argument('--control-mkl', help='an earlier MKL arm to state the unchanged row against')
-    ap.add_argument('--repo-ref', default='main', help='the branch the site is published from (default main)')
     args = ap.parse_args(argv)
 
     mkl, mkl_cells = load(args.mkl)
@@ -207,30 +205,9 @@ against <code>lapack-openblas</code>. Median baseline/fork ratio (above 1.00 mea
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text('\n'.join(parts))
-    if args.index:
-        write_index(pathlib.Path(args.index), out, len(rows), args.repo_ref)
     print(f'wrote {out} from {len(rows)} cells '
           f'({len(mkl_pairs)} with an upstream row, {len(ob_pairs)} with an OpenBLAS row)')
     return 0
-
-
-def write_index(index_path, comparison, cells, repo_ref='main'):
-    """Use the shared landing-page generator, with the comparison as its extra section."""
-    from campaign_toolkit import site
-    root = index_path.parent.parent                 # result/<index.html> -> campaign root
-    rel = comparison.relative_to(index_path.parent)
-    extra = ('<h2>The four-way view</h2>\n'
-             f'<p><a href="{rel}">The same recording against upstream, OpenBLAS and MKL in one '
-             f'table ({cells} cells)</a>, with the unchanged row\'s control in its header.</p>')
-    return site.write_site(index_path.parent, pins=['pins/t4a-faer.rev'], repo_ref=repo_ref,
-                           title='faer benchmark results',
-                           intro=('The latest generation of results: for each suite and vendor arm, the '
-                                  'page recorded at the pinned fork revision, the joined four-way view '
-                                  'of that recording and its throughput charts. Earlier recordings are '
-                                  'not listed here; they stay in the git history of '
-                                  '<code>result/</code>.'),
-                           extra_html=extra, root=root)
-
 
 
 if __name__ == '__main__':

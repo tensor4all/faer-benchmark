@@ -22,8 +22,7 @@ PREV=$(ls -1dt data/results/zen5-cpu/faer-kernels/*-mkl | grep -v "$LABEL-mkl" |
 CONTROL=""
 [ -n "$PREV" ] && CONTROL="--control-mkl $PREV"
 python3 scripts/gen_comparison.py --mkl "$MKL" --openblas "$OPENBLAS" $CONTROL \
-    --out "result/zen5-cpu/faer-kernels/$(echo "$REV" | cut -c1-12)-comparison.html" \
-    --index result/index.html
+    --out "result/zen5-cpu/faer-kernels/$(echo "$REV" | cut -c1-12)-comparison.html"
 
 # The throughput charts: the daily runs of this publication, plus the newest large-tier run of each
 # arm only when it was recorded at this publication's fork revision (otherwise that line stops at 768).
