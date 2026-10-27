@@ -38,8 +38,7 @@ def main(argv=None):
     site.write_site(index.parent, pins=[PIN], repo_ref=args.repo_ref, title='faer benchmark results',
                     intro=('The latest generation of results: for each suite and vendor arm, the '
                            'page recorded at the pinned fork revision, the joined four-way view '
-                           'of that recording and its throughput charts. Earlier recordings are '
-                           'not listed here; they stay in the git history of this repository.'),
+                           'of that recording and its throughput charts.'),
                     extra_html=extra, root=ROOT)
     return 0
 
