@@ -224,10 +224,11 @@ def write_index(index_path, comparison, cells, repo_ref='main'):
              f'table ({cells} cells)</a>, with the unchanged row\'s control in its header.</p>')
     return site.write_site(index_path.parent, pins=['pins/t4a-faer.rev'], repo_ref=repo_ref,
                            title='faer benchmark results',
-                           intro=('One page per (suite, hardware profile, fork revision, upstream '
-                                  'revision, vendor arm), generated from the recorded data, plus the '
-                                  'joined four-way view and the throughput charts. The pages at the '
-                                  'pinned revision come first.'),
+                           intro=('The latest generation of results: for each suite and vendor arm, the '
+                                  'page recorded at the pinned fork revision, the joined four-way view '
+                                  'of that recording and its throughput charts. Earlier recordings are '
+                                  'not listed here; they stay in the git history of '
+                                  '<code>result/</code>.'),
                            extra_html=extra, root=root)
 
 
