@@ -926,7 +926,7 @@ mod imp {
                 s.c.fill(T::zero());
                 Ok(())
             },
-            |s| {
+            |s, _tk| {
                 for bi in 0..s.batch {
                     T::gemm(
                         layout(s.order),
@@ -1011,7 +1011,7 @@ mod imp {
                 }
                 Ok(())
             },
-            |s| {
+            |s, _tk| {
                 let r = s.m.min(s.n);
                 for bi in 0..s.batch {
                     if s.with_q {
@@ -1142,7 +1142,7 @@ mod imp {
                 s.outputs.clear();
                 Ok(())
             },
-            |s| {
+            |s, _tk| {
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
                     let mut ipiv = vec![0i32; s.size];
@@ -1230,7 +1230,7 @@ mod imp {
                 s.outputs.clear();
                 Ok(())
             },
-            |s| {
+            |s, _tk| {
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n].to_vec();
                     let info = T::potrf(layout(s.order), s.n, &mut a, leading(s.n, s.n, s.order));
@@ -1289,7 +1289,7 @@ mod imp {
                 s.b.copy_from_slice(&s.b0);
                 Ok(())
             },
-            |s| {
+            |s, _tk| {
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n].to_vec();
                     let mut ipiv = vec![0i32; s.n];
@@ -1357,7 +1357,7 @@ mod imp {
                 s.outputs.clear();
                 Ok(())
             },
-            |s| {
+            |s, _tk| {
                 let r = s.m.min(s.n);
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n].to_vec();
@@ -1487,7 +1487,7 @@ mod imp {
                 s.outputs.clear();
                 Ok(())
             },
-            |s| {
+            |s, _tk| {
                 for bi in 0..s.batch {
                     let mut a = s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n].to_vec();
                     let mut w = vec![0.0f64; s.n];

@@ -17,10 +17,12 @@ The fork side of the same rules is `t4a-faer/docs/adoption-protocol.md`.
 `--prime-ms 250 --reps 5 --aa 3 --statistic median`, CPU boost off (the recorder refuses otherwise),
 the observing side pinned off the measured L3 domains (refused otherwise), an idle guard that watches
 every CPU sharing the measured cache (3 s window, 5% busy, 8 admission retries), one campaign lock,
-the two faer rows timed with the spindle worker group held around the whole loop when the budget is
-more than one thread (`spindle::with_lock(threads, ..)`, the way a caller with a thread budget is meant
-to call faer; since the `blocked-dqds-caller-lock` runs, which is why earlier runs are not paired with
-later ones by the comparator),
+the two faer rows timed with the row's parallelism held around the whole loop when the budget is more
+than one thread: the fork row through `faer::team::with_team(threads, ..)` (its team is the only
+parallel route since tensor4all/faer#85, and the token it lends is what every measured call uses),
+the unchanged upstream row through the spindle worker group (`spindle::with_lock(threads, ..)`, which
+is how it has always been measured). Runs before the fork's team row was measured this way are not
+paired with later ones by the comparator,
 build then verify then time, and a published page only from a validated run.
 
 ## Optimization loop: target 64, guard 32
