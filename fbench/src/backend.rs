@@ -1315,8 +1315,12 @@ macro_rules! explicit_ops {
             }
         }
 
+        /// The factorization a timed call measures, so it runs on the row's token: `verify_par`
+        /// is `Par::Seq` under `fork-team`, and handing it here made the fork `lu` and `solve`
+        /// rows sequential at every thread count.
         fn partial_lu_of<T: ComplexField>(
             a: MatRef<'_, T>,
+            tk: &mut crate::op::Token<'_>,
             cfg: ParCfg,
         ) -> (fk::Mat<T>, fk::Mat<T>, Vec<usize>, Vec<usize>) {
             let mut lu = a.to_owned();
@@ -1328,7 +1332,7 @@ macro_rules! explicit_ops {
                 lu.as_mut(),
                 &mut fwd,
                 &mut bwd,
-                parmod::verify_par(cfg),
+                parmod::mk_from(tk, cfg),
                 MemStack::new(&mut MemBuffer::new(req)),
                 Default::default(),
             );
@@ -1462,10 +1466,10 @@ macro_rules! explicit_ops {
                     s.lus.clear();
                     Ok(())
                 },
-                |s, _tk| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
-                        s.lus.push(partial_lu_of(mref(a0, s.m, s.n, s.order), s.par));
+                        s.lus.push(partial_lu_of(mref(a0, s.m, s.n, s.order), &mut tk, s.par));
                     }
                     Ok(())
                 },
@@ -1704,7 +1708,7 @@ macro_rules! explicit_ops {
                 |s, mut tk| {
                     for bi in 0..s.batch {
                         let a = mref(&s.a0[bi * s.n * s.n..], s.n, s.n, s.order);
-                        let (l, u, fwd, bwd) = partial_lu_of(a, s.par);
+                        let (l, u, fwd, bwd) = partial_lu_of(a, &mut tk, s.par);
                         let rhs = mmut(&mut s.b[bi * s.n..], s.n, 1, s.order);
                         plu_solve::solve_in_place_with_conj(
                             l.as_ref(),
