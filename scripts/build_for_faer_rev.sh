@@ -214,6 +214,16 @@ if grep -q '^pub enum ParShape' "$FORK_DIR/faer/src/lib.rs"; then
 else
     FORK_API="par"
 fi
+# The parallelism API generation: from tensor4all/faer#85 on the only route is a threadteam team the
+# caller owns (`faer::team::with_team`), and the fork's `Par` cannot be built from a budget (it is
+# exclusive authority, not `Copy`). Read from the checkout like the generation above, so the harness
+# cannot disagree with the revision it links; a checkout without `with_team` keeps the old path.
+if grep -q 'pub fn with_team' "$FORK_DIR/faer/src/utils/team.rs"; then
+    TEAM_API="threadteam"
+    FEATURES="$FEATURES,fbench/fork-team"
+else
+    TEAM_API="rayon"
+fi
 # ------------------------------------------------------------------------------
 
 # --------------------------------------------------------------- path injection
@@ -301,6 +311,7 @@ lock_sha="$(sha256sum "$target/Cargo.lock.resolved" | cut -d' ' -f1)"
     printf 'BUILD_ENV=%q\n' "$VENDOR_BUILD_ENV"
     printf 'BUILD_VENDOR=%q\n' "$VENDOR"
     printf 'BUILD_FORK_API=%q\n' "$FORK_API"
+    printf 'BUILD_TEAM_API=%q\n' "$TEAM_API"
     printf 'BUILD_LOCK_SHA256=%q\n' "$lock_sha"
 } > "$OUT_FILE"
 echo "built ${BINS[*]} for fork $fork_rev and upstream $up_rev (dirty=$fork_dirty/$up_dirty) in $bin_dir" >&2

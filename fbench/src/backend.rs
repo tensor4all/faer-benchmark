@@ -42,12 +42,16 @@ pub mod fork_par {
     #[cfg(feature = "fork-par-shape")]
     pub type Run = Par<'static>;
     #[cfg(not(feature = "fork-par-shape"))]
-    pub type Run = Par;
+    pub type Run = Par<'static>;
     #[cfg(feature = "fork-par-shape")]
     pub type Shape = faer_fork::ParShape;
     #[cfg(not(feature = "fork-par-shape"))]
-    pub type Shape = Par;
+    pub type Shape = Par<'static>;
 
+    /// The old generations (before tensor4all/faer#85) build a `Par` from the row's budget; with
+    /// the team API there is no such constructor, because a token is exclusive authority over
+    /// reserved members and only the timing loop's team hands one out.
+    #[cfg(not(feature = "fork-team"))]
     pub fn mk(c: ParCfg) -> Run {
         match c {
             ParCfg::Seq => Par::Seq,
@@ -55,7 +59,48 @@ pub mod fork_par {
         }
     }
 
-    #[cfg(feature = "fork-par-shape")]
+    /// The parallelism of one measured call, from the row's token.
+    ///
+    /// With the team API (`fork-team`, detected by `scripts/build_for_faer_rev.sh`) the row's
+    /// parallelism is the team the timing loop owns: the token borrows it, so every call reuses the
+    /// same reservation and nothing is acquired inside a clocked region. A budget of one thread, or
+    /// a row whose op is not the fork, hands out `Par::Seq`. Without the team API the fork's `Par`
+    /// is `Copy` and is built from the row's budget per call, as it was before #85.
+    #[cfg(feature = "fork-team")]
+    pub fn mk_from<'a>(tk: &'a mut crate::op::Token<'_>, _c: ParCfg) -> Par<'a> {
+        match tk {
+            crate::op::Token::None(_) => Par::Seq,
+            crate::op::Token::Fork(par) => par.reborrow(),
+        }
+    }
+    #[cfg(not(feature = "fork-team"))]
+    pub fn mk_from(_tk: &mut crate::op::Token<'_>, c: ParCfg) -> Run {
+        mk(c)
+    }
+
+    /// The parallelism of the *verification* code (`check` closures, reference factorizations): the
+    /// clock is not running there, and with the team API a token exists only inside the team the
+    /// timing loop owns, so the reconstruction runs on the caller.
+    #[cfg(feature = "fork-team")]
+    pub fn verify_par(_c: ParCfg) -> Par<'static> {
+        Par::Seq
+    }
+    #[cfg(not(feature = "fork-team"))]
+    pub fn verify_par(c: ParCfg) -> Run {
+        mk(c)
+    }
+
+    /// The shape the workspace queries take. With the team API it is the shape of the team of the
+    /// row's budget (`ParShape::team`), which is what the token will be; the sizes only need the
+    /// width, not the authority.
+    #[cfg(all(feature = "fork-par-shape", feature = "fork-team"))]
+    pub fn shape(c: ParCfg) -> Shape {
+        match c {
+            ParCfg::Seq => faer_fork::ParShape::Seq,
+            ParCfg::Rayon(n) => faer_fork::ParShape::team(n),
+        }
+    }
+    #[cfg(all(feature = "fork-par-shape", not(feature = "fork-team")))]
     pub fn shape(c: ParCfg) -> Shape {
         match c {
             ParCfg::Seq => faer_fork::ParShape::Seq,
@@ -94,7 +139,16 @@ pub mod upstream_par {
             ParCfg::Rayon(n) => Par::rayon(n),
         }
     }
+
+    /// Upstream's `Par` is `Copy` and comes from its own global setting, which the row sets before
+    /// the loop: the token carries nothing for it.
+    pub fn mk_from(_tk: &mut crate::op::Token<'_>, c: ParCfg) -> Par {
+        mk(c)
+    }
     pub fn shape(c: ParCfg) -> Par {
+        mk(c)
+    }
+    pub fn verify_par(c: ParCfg) -> Par {
         mk(c)
     }
     pub fn degree() -> usize {
@@ -299,12 +353,12 @@ macro_rules! define_backend {
                         s.c.fill(T::zero());
                         Ok(())
                     },
-                    move |s| {
+                    move |s, mut tk| {
                         for bi in 0..s.batch {
                             let dst = mmut(&mut s.c[bi * s.m * s.n..], s.m, s.n, s.order);
                             let lhs = mref(&s.a[bi * s.m * s.k..], s.m, s.k, s.order);
                             let rhs = mref(&s.b[bi * s.k * s.n..], s.k, s.n, s.order);
-                            $krate::linalg::matmul::matmul(dst, Accum::Replace, lhs, rhs, T::one(), parmod::mk(par));
+                            $krate::linalg::matmul::matmul(dst, Accum::Replace, lhs, rhs, T::one(), parmod::mk_from(&mut tk, par));
                         }
                         Ok(())
                     },
@@ -387,7 +441,7 @@ macro_rules! define_backend {
                         s.qc.fill(T::zero());
                         Ok(())
                     },
-                    |s| {
+                    |s, mut tk| {
                         for bi in 0..s.batch {
                             let a = mmut(&mut s.a[bi * s.m * s.n..], s.m, s.n, s.order);
                             let qc = mmut(
@@ -399,7 +453,7 @@ macro_rules! define_backend {
                             qrf::qr_in_place(
                                 a,
                                 qc,
-                                parmod::mk(s.par),
+                                parmod::mk_from(&mut tk, s.par),
                                 MemStack::new(&mut s.mem),
                                 Default::default(),
                             );
@@ -436,7 +490,7 @@ macro_rules! define_backend {
                                 mref(qc, s.block_size, s.size, Order::F),
                                 Conj::No,
                                 mmut(&mut q, s.m, s.size, s.order),
-                                parmod::mk(s.par),
+                                parmod::verify_par(s.par),
                                 MemStack::new(&mut s.mem),
                             );
                             let mut recon = vec![T::zero(); s.m * s.n];
@@ -556,21 +610,21 @@ macro_rules! define_backend {
                         for bi in 0..s.batch {
                             let a = mmut(&mut s.a[bi * s.m * s.n..], s.m, s.n, s.order);
                             let qc = mmut(&mut s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
-                            qrf::qr_in_place(a, qc, parmod::mk(s.par), MemStack::new(&mut s.mem), Default::default());
+                            qrf::qr_in_place(a, qc, parmod::verify_par(s.par), MemStack::new(&mut s.mem), Default::default());
                         }
                         Ok(())
                     },
-                    move |s| {
+                    move |s, mut tk| {
                         for bi in 0..s.batch {
                             let basis = mref(&s.a[bi * s.m * s.n..], s.m, s.n, s.order).get(.., ..s.size);
                             let factor = mref(&s.qc[bi * s.size * s.size..], s.size, s.size, Order::F);
                             let dst = mmut(&mut s.c[bi * s.m * s.target..], s.m, s.target, s.order);
                             if sequence {
                                 householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
+                                    basis, factor, Conj::No, dst, parmod::mk_from(&mut tk, s.par), MemStack::new(&mut s.mem));
                             } else {
                                 householder::apply_block_householder_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
+                                    basis, factor, Conj::No, dst, parmod::mk_from(&mut tk, s.par), MemStack::new(&mut s.mem));
                             }
                         }
                         Ok(())
@@ -583,7 +637,7 @@ macro_rules! define_backend {
                             qrf::qr_in_place(
                                 mmut(&mut a, s.m, s.n, s.order),
                                 mmut(&mut qc, s.size, s.size, Order::F),
-                                parmod::mk(s.par),
+                                parmod::verify_par(s.par),
                                 MemStack::new(&mut s.mem),
                                 Default::default(),
                             );
@@ -593,10 +647,10 @@ macro_rules! define_backend {
                             let dst = mmut(&mut reference, s.m, s.target, s.order);
                             if sequence {
                                 householder::apply_block_householder_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
+                                    basis, factor, Conj::No, dst, parmod::verify_par(s.par), MemStack::new(&mut s.mem));
                             } else {
                                 householder::apply_block_householder_sequence_on_the_left_in_place_with_conj(
-                                    basis, factor, Conj::No, dst, parmod::mk(s.par), MemStack::new(&mut s.mem));
+                                    basis, factor, Conj::No, dst, parmod::verify_par(s.par), MemStack::new(&mut s.mem));
                             }
                             let got = &s.c[bi * s.m * s.target..(bi + 1) * s.m * s.target];
                             within::<T>(
@@ -704,7 +758,7 @@ macro_rules! highlevel_ops {
                         s.outputs.clear();
                         Ok(())
                     },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             // The composite the vendor route's `orgqr` arm matches:
@@ -773,7 +827,7 @@ macro_rules! highlevel_ops {
                         s.lus.clear();
                         Ok(())
                     },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let lu = mref(a0, s.m, s.n, s.order).partial_piv_lu();
@@ -824,7 +878,7 @@ macro_rules! highlevel_ops {
                         s.lus.clear();
                         Ok(())
                     },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let lu = mref(a0, s.m, s.n, s.order).full_piv_lu();
@@ -874,7 +928,7 @@ macro_rules! highlevel_ops {
                     state,
                     String::new(),
                     |s| { s.outputs.clear(); Ok(()) },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
                             let llt = mref(a0, s.n, s.n, s.order)
@@ -925,7 +979,7 @@ macro_rules! highlevel_ops {
                         s.b.copy_from_slice(&s.b0);
                         Ok(())
                     },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let a = mref(&s.a0[bi * s.n * s.n..], s.n, s.n, s.order);
                             let lu = a.partial_piv_lu();
@@ -983,7 +1037,7 @@ macro_rules! highlevel_ops {
                         s.b.copy_from_slice(&s.b0);
                         Ok(())
                     },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let u = mref(&s.u0[bi * s.n * s.n..], s.n, s.n, s.order);
                             let rhs = mmut(&mut s.b[bi * s.n..], s.n, 1, s.order);
@@ -1038,7 +1092,7 @@ macro_rules! highlevel_ops {
                     state,
                     String::new(),
                     |s| { s.outputs.clear(); Ok(()) },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let sv = mref(a0, s.m, s.n, s.order)
@@ -1116,7 +1170,7 @@ macro_rules! highlevel_ops {
                     state,
                     String::new(),
                     |s| { s.outputs.clear(); Ok(()) },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                             let svd = mref(a0, s.m, s.n, s.order)
@@ -1170,7 +1224,7 @@ macro_rules! highlevel_ops {
                     state,
                     String::new(),
                     |s| { s.outputs.clear(); Ok(()) },
-                    |s| {
+                    |s, _tk| {
                         for bi in 0..s.batch {
                             let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
                             let evd = mref(a0, s.n, s.n, s.order)
@@ -1274,7 +1328,7 @@ macro_rules! explicit_ops {
                 lu.as_mut(),
                 &mut fwd,
                 &mut bwd,
-                parmod::mk(cfg),
+                parmod::verify_par(cfg),
                 MemStack::new(&mut MemBuffer::new(req)),
                 Default::default(),
             );
@@ -1319,7 +1373,7 @@ macro_rules! explicit_ops {
                     s.outputs.clear();
                     Ok(())
                 },
-                |s| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                         // `Qr::new` then `compute_thin_Q`, with the row's parallelism.
@@ -1336,7 +1390,7 @@ macro_rules! explicit_ops {
                         qrf::qr_in_place(
                             qr.as_mut(),
                             coeff.as_mut(),
-                            parmod::mk(s.par),
+                            parmod::mk_from(&mut tk, s.par),
                             MemStack::new(&mut MemBuffer::new(req)),
                             Default::default(),
                         );
@@ -1347,7 +1401,7 @@ macro_rules! explicit_ops {
                             coeff.as_ref(),
                             Conj::No,
                             q.as_mut(),
-                            parmod::mk(s.par),
+                            parmod::mk_from(&mut tk, s.par),
                             MemStack::new(&mut MemBuffer::new(
                                 householder::apply_block_householder_sequence_on_the_left_in_place_scratch::<T>(
                                     s.m, block_size, s.size,
@@ -1408,7 +1462,7 @@ macro_rules! explicit_ops {
                     s.lus.clear();
                     Ok(())
                 },
-                |s| {
+                |s, _tk| {
                     for bi in 0..s.batch {
                         let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                         s.lus.push(partial_lu_of(mref(a0, s.m, s.n, s.order), s.par));
@@ -1428,7 +1482,7 @@ macro_rules! explicit_ops {
                             l.as_ref(),
                             u.as_ref(),
                             PermRef::new_checked(fwd, bwd, s.m),
-                            parmod::mk(seq),
+                            parmod::verify_par(seq),
                             MemStack::new(&mut MemBuffer::new(
                                 plu_rec::reconstruct_scratch::<usize, T>(s.m, s.n, parmod::shape(seq)),
                             )),
@@ -1473,7 +1527,7 @@ macro_rules! explicit_ops {
                     s.lus.clear();
                     Ok(())
                 },
-                |s| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                         let mut lu = mref(a0, s.m, s.n, s.order).to_owned();
@@ -1494,7 +1548,7 @@ macro_rules! explicit_ops {
                             &mut rb,
                             &mut cf,
                             &mut cb,
-                            parmod::mk(s.par),
+                            parmod::mk_from(&mut tk, s.par),
                             MemStack::new(&mut MemBuffer::new(req)),
                             Default::default(),
                         );
@@ -1515,7 +1569,7 @@ macro_rules! explicit_ops {
                             u.as_ref(),
                             PermRef::new_checked(rf, rb, s.m),
                             PermRef::new_checked(cf, cb, s.n),
-                            parmod::mk(seq),
+                            parmod::verify_par(seq),
                             MemStack::new(&mut MemBuffer::new(
                                 flu_rec::reconstruct_scratch::<usize, T>(s.m, s.n, parmod::shape(seq)),
                             )),
@@ -1559,7 +1613,7 @@ macro_rules! explicit_ops {
                     s.outputs.clear();
                     Ok(())
                 },
-                |s| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
                         // `Llt::new(A, Side::Lower)`: copy the lower triangle, factor, clear the upper.
@@ -1573,7 +1627,7 @@ macro_rules! explicit_ops {
                         llt_factor::cholesky_in_place(
                             l.as_mut(),
                             Default::default(),
-                            parmod::mk(s.par),
+                            parmod::mk_from(&mut tk, s.par),
                             MemStack::new(&mut MemBuffer::new(req)),
                             Default::default(),
                         )
@@ -1595,7 +1649,7 @@ macro_rules! explicit_ops {
                         llt_rec::reconstruct(
                             out.as_mut(),
                             s.outputs[bi].as_ref(),
-                            parmod::mk(seq),
+                            parmod::verify_par(seq),
                             MemStack::new(&mut MemBuffer::new(
                                 llt_rec::reconstruct_scratch::<T>(s.n, parmod::shape(seq)),
                             )),
@@ -1647,7 +1701,7 @@ macro_rules! explicit_ops {
                     s.b.copy_from_slice(&s.b0);
                     Ok(())
                 },
-                |s| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let a = mref(&s.a0[bi * s.n * s.n..], s.n, s.n, s.order);
                         let (l, u, fwd, bwd) = partial_lu_of(a, s.par);
@@ -1658,7 +1712,7 @@ macro_rules! explicit_ops {
                             PermRef::new_checked(&fwd, &bwd, s.n),
                             Conj::No,
                             rhs,
-                            parmod::mk(s.par),
+                            parmod::mk_from(&mut tk, s.par),
                             MemStack::new(&mut MemBuffer::new(
                                 plu_solve::solve_in_place_scratch::<usize, T>(s.n, 1, parmod::shape(s.par)),
                             )),
@@ -1717,11 +1771,11 @@ macro_rules! explicit_ops {
                     s.b.copy_from_slice(&s.b0);
                     Ok(())
                 },
-                |s| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let u = mref(&s.u0[bi * s.n * s.n..], s.n, s.n, s.order);
                         let rhs = mmut(&mut s.b[bi * s.n..], s.n, 1, s.order);
-                        fk::linalg::triangular_solve::solve_upper_triangular_in_place(u, rhs, parmod::mk(s.par));
+                        fk::linalg::triangular_solve::solve_upper_triangular_in_place(u, rhs, parmod::mk_from(&mut tk, s.par));
                         acc(&mut s.sink, s.b[bi * s.n].clone());
                     }
                     Ok(())
@@ -1777,7 +1831,7 @@ macro_rules! explicit_ops {
                     s.outputs.clear();
                     Ok(())
                 },
-                |s| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                         // `MatRef::singular_values`, with the row's parallelism.
@@ -1796,7 +1850,7 @@ macro_rules! explicit_ops {
                             sv.as_mut(),
                             None,
                             None,
-                            parmod::mk(s.par),
+                            parmod::mk_from(&mut tk, s.par),
                             MemStack::new(&mut MemBuffer::new(req)),
                             Default::default(),
                         )
@@ -1850,7 +1904,7 @@ macro_rules! explicit_ops {
                     s.outputs.clear();
                     Ok(())
                 },
-                |s| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let a0 = &s.a0[bi * s.m * s.n..(bi + 1) * s.m * s.n];
                         // `MatRef::thin_svd`, with the row's parallelism.
@@ -1872,7 +1926,7 @@ macro_rules! explicit_ops {
                             sv.as_mut(),
                             Some(u.as_mut()),
                             Some(v.as_mut()),
-                            parmod::mk(s.par),
+                            parmod::mk_from(&mut tk, s.par),
                             MemStack::new(&mut MemBuffer::new(req)),
                             Default::default(),
                         )
@@ -1930,7 +1984,7 @@ macro_rules! explicit_ops {
                     s.outputs.clear();
                     Ok(())
                 },
-                |s| {
+                |s, mut tk| {
                     for bi in 0..s.batch {
                         let a0 = &s.a0[bi * s.n * s.n..(bi + 1) * s.n * s.n];
                         // `MatRef::self_adjoint_eigen(Side::Lower)`, with the row's parallelism.
@@ -1947,7 +2001,7 @@ macro_rules! explicit_ops {
                             a,
                             sv.as_mut(),
                             Some(u.as_mut()),
-                            parmod::mk(s.par),
+                            parmod::mk_from(&mut tk, s.par),
                             MemStack::new(&mut MemBuffer::new(req)),
                             Default::default(),
                         )

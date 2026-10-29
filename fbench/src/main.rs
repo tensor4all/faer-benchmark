@@ -138,12 +138,17 @@ enum Statistic {
 
 /// The timed loop of one row.
 ///
-/// The two faer rows run it with the spindle worker group held (`spindle::with_lock`) when the
-/// budget is more than one thread: that is how a caller with a thread budget is meant to call faer
-/// (the fork's crate docs, *parallelism*), and without it every parallel region inside the call is a
-/// plain rayon fork/join that wakes the workers and partitions the work afresh. The lock is taken
-/// once around priming, every repetition and the check, as a session would, so its setup is outside
-/// every clocked region. The vendor rows own their threading and are not touched.
+/// The two faer rows run it with the row's parallelism held around the whole loop, once, so that
+/// priming, every repetition and the check reuse one reservation and its setup is outside every
+/// clocked region. The vendor rows own their threading and are not touched.
+///
+/// * `faer-fork` with the team API (`fork-team`): `faer::team::with_team(threads, ..)` owns a
+///   `threadteam` team for the loop and its `Par::Team` is lent to each call - that is how a caller
+///   with a thread budget calls this library now (the crate docs, *parallelism*), and the token can
+///   only be borrowed, never copied, from 0.25 on.
+/// * `faer-fork` without it (0.24/0.25 with the Rayon route): the spindle worker group, as before.
+/// * `faer-upstream`: the spindle worker group, which is how the unchanged row has always been
+///   measured.
 fn measure_row(
     row: &str,
     threads: usize,
@@ -151,10 +156,19 @@ fn measure_row(
     prime_ms: u64,
     reps: usize,
 ) -> Result<Vec<f64>, String> {
+    #[cfg(feature = "fork-team")]
+    if threads > 1 && row == "faer-fork" {
+        return faer_fork::team::with_team(threads, |par| {
+            let mut token = op::Token::Fork(par);
+            timing::measure(ops, prime_ms, reps, &mut token)
+        });
+    }
     if threads > 1 && (row == "faer-fork" || row == "faer-upstream") {
-        spindle::with_lock(threads, || timing::measure(ops, prime_ms, reps))
+        spindle::with_lock(threads, || {
+            timing::measure(ops, prime_ms, reps, &mut op::Token::none())
+        })
     } else {
-        timing::measure(ops, prime_ms, reps)
+        timing::measure(ops, prime_ms, reps, &mut op::Token::none())
     }
 }
 
@@ -638,7 +652,11 @@ fn main() -> ExitCode {
                                     );
                                     let outcome = ops
                                         .prepare()
-                                        .and_then(|()| ops.run())
+                                        .and_then(|()| {
+                                            // the verification pass runs each op once, outside any
+                                            // budget: a sequential token
+                                            ops.run(op::Token::none())
+                                        })
                                         .and_then(|()| ops.check());
                                     match outcome {
                                         Ok(()) => {

@@ -5,11 +5,19 @@
 
 use std::time::{Duration, Instant};
 
-use crate::op::Op;
+use crate::op::{Op, Token};
 
 /// Prime for `prime_ms`, then return all `reps` times in milliseconds.
 /// The op's `check` runs once afterwards, outside the clock.
-pub fn measure(op: &mut Op, prime_ms: u64, reps: usize) -> Result<Vec<f64>, String> {
+///
+/// `token` is the row's parallelism, lent to every `run`: the measured library's `Par` is exclusive
+/// authority from 0.25 on, so the loop owns it and reborrows per call.
+pub fn measure(
+    op: &mut Op,
+    prime_ms: u64,
+    reps: usize,
+    token: &mut Token<'_>,
+) -> Result<Vec<f64>, String> {
     if reps == 0 {
         return Err("--reps must be positive".to_owned());
     }
@@ -17,12 +25,12 @@ pub fn measure(op: &mut Op, prime_ms: u64, reps: usize) -> Result<Vec<f64>, Stri
     let until = Instant::now() + Duration::from_millis(prime_ms);
     while Instant::now() < until {
         op.prepare()?;
-        op.run()?;
+        op.run(token.reborrow())?;
     }
     for _ in 0..reps {
         op.prepare()?;
         let start = Instant::now();
-        op.run()?;
+        op.run(token.reborrow())?;
         let elapsed = start.elapsed();
         samples.push(elapsed.as_secs_f64() * 1e3);
     }
@@ -47,7 +55,7 @@ mod tests {
                 e.lock().unwrap().push("prepare");
                 Ok(())
             },
-            |e| {
+            |e, _tk| {
                 e.lock().unwrap().push("run");
                 Ok(())
             },
@@ -56,9 +64,9 @@ mod tests {
                 Ok(())
             },
         );
-        assert!(measure(&mut op, 0, 0).is_err());
+        assert!(measure(&mut op, 0, 0, &mut Token::none()).is_err());
         assert!(events.lock().unwrap().is_empty());
-        let samples = measure(&mut op, 0, 3).unwrap();
+        let samples = measure(&mut op, 0, 3, &mut Token::none()).unwrap();
         assert_eq!(samples.len(), 3);
         assert!(samples.iter().all(|v| v.is_finite() && *v >= 0.0));
         assert_eq!(
@@ -69,9 +77,12 @@ mod tests {
             (),
             String::new(),
             |_| Ok(()),
-            |_| Ok(()),
+            |_, _tk| Ok(()),
             |_| Err("bad result".to_owned()),
         );
-        assert_eq!(measure(&mut failed, 0, 3).unwrap_err(), "bad result");
+        assert_eq!(
+            measure(&mut failed, 0, 3, &mut Token::none()).unwrap_err(),
+            "bad result"
+        );
     }
 }

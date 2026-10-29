@@ -53,10 +53,13 @@ the value it was asked for.
 
 ## Thread budget
 
-`--threads N` is required. At `N=1` both faer adapters select `Par::Seq`.
-At larger budgets they select `Par::rayon(N)`, which is a splitting hint, not a
-host-owned pool; the v1 harness did not create or measure an N-worker
-Rayon pool. Do not treat its threaded faer labels as verified worker counts.
+`--threads N` is required. At `N=1` both faer adapters select `Par::Seq`. At larger
+budgets the fork row owns a `threadteam` team of `N` members for the whole measured loop
+(`faer::team::with_team` since tensor4all/faer#85, where a team token is the only parallel
+route and cannot be built from a number), and the upstream row holds the spindle worker group
+as it always has. A fork checkout from before the team API still selects `Par::rayon(N)`,
+which was a splitting hint rather than a host-owned pool, so its threaded labels are not
+verified worker counts.
 The vendor budget is set and read back once at startup (`openblas_*num_threads`
 for OpenBLAS, OpenMP setter plus `mkl_get_max_threads` for MKL); a mismatch is an
 error. This is the reported maximum budget, not a trace of active worker usage. The ambient `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`,
