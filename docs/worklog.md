@@ -2,6 +2,18 @@
 
 Decisions, fixed failures and open items for this campaign. Newest first.
 
+## 2026-10-29 — the fork `lu` and `solve` rows ran sequentially under `fork-team` (#36)
+
+Since #35, the timed `lu` call ignored its token. `partial_lu_of` handed `lu_in_place` the result of
+`verify_par`, which is `Par::Seq` under `fork-team`, so the fork `lu` row measured a sequential
+factorization at every thread count. The `solve` row factors through the same helper and was also
+sequential. broccoli showed it: `lu` 1024 stayed at 45 ms from 1T to 64T, while `qr_factor` sped up
+3.9x at 8T in the same binary (tensor4all/faer#99).
+
+The helper now takes the token. A `fork-team` test runs every fork family on a team of two and
+asserts that faer's team counters moved. It fails on the old helper. No recorded run was built with
+`fork-team`, so no page changes.
+
 ## 2026-10-19 — the large tier: 1024 and the boundary shapes, and why 1536+ is not here
 
 `faer-kernels-large` had no current record at all. The estimate (faer-benchmark#22) scaled the 512

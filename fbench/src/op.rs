@@ -133,12 +133,66 @@ pub fn op_from<S: Send + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use super::Token;
     use crate::{
         backend,
         shared::{Case, Dtype, Order},
         vendor,
     };
     use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    /// Every fork family's timed call runs on the token it is lent. A call that builds its own
+    /// `Par` instead (`verify_par` is `Par::Seq` under `fork-team`) measures a sequential call at
+    /// every thread count, which the fork `lu` and `solve` rows did until this test.
+    #[cfg(feature = "fork-team")]
+    #[test]
+    fn fork_calls_run_on_the_lent_team() {
+        use faer_fork::utils::team::stats;
+        let threads = 2;
+        backend::fork::set_threads(threads);
+        for family in [
+            "gemm",
+            "qr_factor",
+            "qr",
+            "lu",
+            "full_piv_lu",
+            "cholesky",
+            "solve",
+            "triangular_solve",
+            "svd_values",
+            "svd_thin",
+            "eigh",
+            "householder_apply",
+        ] {
+            for order in [Order::C, Order::F] {
+                // a one-column triangular solve is a matvec, which faer keeps sequential at 256
+                let n = if family == "triangular_solve" { 2048 } else { 256 };
+                let case = Case {
+                    m: n,
+                    n,
+                    k: if family == "gemm" { Some(n) } else { None },
+                    batch: 1,
+                };
+                for mut op in crate::ops_for("faer-fork", Dtype::F64, family, case, order).unwrap() {
+                    op.prepare().unwrap();
+                    let s = faer_fork::team::with_team(threads, |par| {
+                        stats::enable(true);
+                        let _ = stats::take();
+                        op.run(Token::Fork(par)).unwrap();
+                        stats::enable(false);
+                        stats::take()
+                    });
+                    op.check().unwrap();
+                    let team = s.run[2..].iter().sum::<usize>()
+                        + s.split[2..].iter().sum::<usize>()
+                        + s.gemm_tiled
+                        + s.gemm_team_kernel;
+                    assert!(team > 0, "faer-fork {family} {} {}: no team dispatch ({s:?})", order.label(), op.note);
+                }
+            }
+        }
+        backend::fork::set_threads(1);
+    }
 
     #[test]
     fn checks_reject_a_missing_execution() {
