@@ -1,11 +1,12 @@
 # `faer-benchmark`
 
-> ## 📈 [Throughput charts — nominal GFLOP/s vs problem size](result/zen5-cpu/faer-kernels/throughput/README.md)
+> ## 📈 [Results, charts and trends](http://tensor4all.org/faer-benchmark/)
 >
-> One chart per family (GEMM, LU, full-pivot LU, Cholesky, QR factor, QR with Q, SVD values, thin
-> SVD, self-adjoint EVD), with 1T / 4T / 8T panels, error bars from the between-start spread, and the
-> plotted numbers in a table beside every chart. The measured tables with per-cell spreads and
-> `vs upstream` / `vs BLAS` verdicts are in [`result/INDEX.md`](result/INDEX.md).
+> The site shows the pages at the pinned revisions, one section per hardware profile, with the
+> throughput charts (one per family, 1T / 4T / 8T panels, between-start error bars, the plotted
+> numbers beside every chart), the joined four-way view, and the gemm / lu n = 1024 trend across
+> pins. It is built from `data/` on every deploy; nothing on it is committed. The current pages are
+> listed in [`result/INDEX.md`](result/INDEX.md), older ones in [`result/HISTORY.md`](result/HISTORY.md).
 
 The benchmark campaign for the tensor4all [faer](https://github.com/tensor4all/faer)
 fork: results keyed by **library commit × hardware profile**, measured at faer's
