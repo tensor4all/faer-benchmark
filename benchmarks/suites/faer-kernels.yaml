@@ -167,7 +167,7 @@ engines_doc:
 # .github/workflows/ci.yml).
 runs:
   - threads: [1, 4, 8]
-    cpu_sets: ["4", "4-7", "4-11"]
+    cpu_sets: {zen5-cpu: ["4", "4-7", "4-11"]}
     # All four native dtypes: `f32`/`c32` reach the same kernels and the harness can
     # measure them since `docs/harness-dtype-axis.md`. The optimization loop selects the
     # 64 and 32 cells explicitly; a full run measures the whole grid for every dtype.
