@@ -6,13 +6,21 @@ this file is what the generator produces.
 Every page not selected for the index's Cells table, newest first and grouped by the
 revisions it measured. The current pages are in [INDEX.md](INDEX.md).
 
-- Reference fork revision (`pins/t4a-faer.rev`): `0e15729ad011e3813a41c168167ec61ed11a9dbb`
+- Reference fork revision (`pins/t4a-faer.rev`): `3a8edf02b82eb6c69362799591e0a970c4ceb8d3`
 - Reference upstream revision (`pins/upstream-faer.rev`): `faer-v0.24.4`
 - Newest recorded run: `2026-10-27T04:37:44.357994Z`
 - Every page below is one `(suite, hardware profile, fork revision, upstream revision,
   vendor arm)` and carries its commits, its hardware and the vendor library it linked.
 
 ## Older pages
+
+### `0e15729ad011/0539947ffb75`: version 0.25.0, upstream faer-v0.24.4
+
+| suite | profile | vendor | fork/upstream | version | date | coverage | status | page |
+|---|---|---|---|---|---|---|---|---|
+| `faer-kernels` | `zen5-cpu` | `mkl` | `0e15729ad011/0539947ffb75` | 0.25.0 | 2026-10-27 | partial | stale | [result/zen5-cpu/faer-kernels/0e15729ad011-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels/0e15729ad011-0539947ffb75-mkl-timing-v2.md) |
+| `faer-kernels` | `zen5-cpu` | `openblas` | `0e15729ad011/0539947ffb75` | 0.25.0 | 2026-10-27 | partial | stale | [result/zen5-cpu/faer-kernels/0e15729ad011-0539947ffb75-openblas-timing-v2.md](zen5-cpu/faer-kernels/0e15729ad011-0539947ffb75-openblas-timing-v2.md) |
+| `faer-kernels-large` | `zen5-cpu` | `mkl` | `0e15729ad011/0539947ffb75` | 0.25.0 | 2026-10-26 | partial | stale | [result/zen5-cpu/faer-kernels-large/0e15729ad011-0539947ffb75-mkl-timing-v2.md](zen5-cpu/faer-kernels-large/0e15729ad011-0539947ffb75-mkl-timing-v2.md) |
 
 ### `50c2b989484f/0539947ffb75`: version 0.24.4, upstream faer-v0.24.4
 

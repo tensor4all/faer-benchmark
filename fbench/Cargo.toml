@@ -31,8 +31,9 @@ default = []
 # setting). Set by `scripts/build_for_faer_rev.sh` from the fork checkout; see `backend::fork_par`.
 fork-par-shape = []
 # The measured fork has the team API (tensor4all/faer#85: `faer::team::with_team`, the only
-# parallel route). Set by `scripts/build_for_faer_rev.sh` when the checkout declares `with_team`;
-# a checkout that still has `Par::rayon` is measured through the spindle group as before.
+# parallel route; from 0.26 `Par::rayon` is gone, from 0.27 on threadteam 0.2). Set by
+# `scripts/build_for_faer_rev.sh` when the checkout declares `with_team`; a checkout that still
+# has `Par::rayon` is measured through the spindle group as before.
 fork-team = ["faer_fork/threadteam"]
 link-openblas = [
     "dep:blas-src",
@@ -50,12 +51,15 @@ link-mkl = [
 ]
 
 [dependencies]
-faer_fork = { package = "t4a-faer", version = ">=0.24, <0.26", default-features = false, features = ["std", "rayon"] }
+# The range spans every fork generation the build script can detect (0.24.x, 0.25 `ParShape`,
+# 0.26/0.27 team-only); the pinned checkout is what is linked.
+faer_fork = { package = "t4a-faer", version = ">=0.24, <0.28", default-features = false, features = ["std", "rayon"] }
 faer_upstream = { package = "faer", version = "0.24", default-features = false, features = ["std", "rayon"] }
-# The thread-pool helper both faer crates issue their parallel regions through, the same
-# crate instance as theirs (one 0.2.x resolves for all three): the harness holds the worker
-# group around a faer row's timed loop when the budget is more than one thread, the way a
-# caller with a thread budget is meant to call faer (`t4a-faer`'s crate docs, *parallelism*).
+# The thread-pool helper upstream `faer` issues its parallel regions through, the same crate
+# instance as its own (one 0.2.x resolves for both): the harness holds the worker group around
+# the upstream row's timed loop when the budget is more than one thread. A fork checkout without
+# the team API (before 0.26) used it the same way; with `fork-team` the fork row runs on a
+# threadteam team of the same budget instead (`main.rs` `measure_row`).
 spindle = "0.2.6"
 # The complex scalar type the two faer crates also re-export. Declared directly so
 # the provider-independent reference math in `src/shared.rs` does not have to name
