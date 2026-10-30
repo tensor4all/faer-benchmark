@@ -140,6 +140,19 @@ mod tests {
         vendor,
     };
     use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::sync::{Mutex, MutexGuard};
+
+    /// The thread budget is process-wide (`backend::fork::set_threads`), and the test runner runs
+    /// tests on several threads: a test that sets it holds this for its whole body, or another
+    /// test's `set_threads(1)` lands between this test's workspace query and its call (a scratch
+    /// sized for one thread handed to a two-member team).
+    static BUDGET: Mutex<()> = Mutex::new(());
+
+    fn hold_budget() -> MutexGuard<'static, ()> {
+        BUDGET
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     /// Every fork family's timed call runs on the token it is lent. A call that builds its own
     /// `Par` instead (`verify_par` is `Par::Seq` under `fork-team`) measures a sequential call at
@@ -148,6 +161,7 @@ mod tests {
     #[test]
     fn fork_calls_run_on_the_lent_team() {
         use faer_fork::utils::team::stats;
+        let _budget = hold_budget();
         let threads = 2;
         backend::fork::set_threads(threads);
         for family in [
@@ -196,6 +210,7 @@ mod tests {
 
     #[test]
     fn checks_reject_a_missing_execution() {
+        let _budget = hold_budget();
         backend::fork::set_threads(1);
         backend::upstream::set_threads(1);
         if vendor::NAME != "none" {
