@@ -167,3 +167,31 @@ report:
     row; with more than one complete set repeat the table shows the best repeat, and the
     A/A spread is reported at its foot. C and F order are separate cells, because the order
     decides which path each provider takes.
+
+# Charts the Pages site draws at deploy time from the runs behind the current pages (not committed;
+# campaign_toolkit.figures). The throughput config numbers its runs 0-3: the daily MKL and OpenBLAS
+# arms, then the large-tier MKL and OpenBLAS arms; a position with no run at the pin is left out and
+# its series stops at 768.
+figures:
+  throughput:
+    config: benchmarks/throughput.yaml
+    runs:
+      - {suite: faer-kernels, vendor: mkl}
+      - {suite: faer-kernels, vendor: openblas}
+      - {suite: faer-kernels-large, vendor: mkl}
+      - {suite: faer-kernels-large, vendor: openblas}
+
+# Representative cases followed across pins (tensor4all-meta#76 D4: gemm and lu at n = 1024, f64).
+# n = 1024 is recorded only by the large tier, at 4T and 8T, on the MKL arm (which also carries
+# upstream); there is no 1T row at that size.
+trend:
+  - suite: faer-kernels-large
+    case: gemm-large:gemm/1024x1024x1024/b1 f64 c
+    vendor: mkl
+    engines: [faer-fork, faer-upstream, lapack-mkl]
+    threads: [4, 8]
+  - suite: faer-kernels-large
+    case: linalg-large:lu/n1024/b1 f64 c
+    vendor: mkl
+    engines: [faer-fork, faer-upstream, lapack-mkl]
+    threads: [4, 8]
